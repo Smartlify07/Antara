@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
+import { Route as WorkspacesNewRouteImport } from './routes/workspaces/new'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +37,16 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WWorkspaceSlugRoute = WWorkspaceSlugRouteImport.update({
+  id: '/w/$workspaceSlug',
+  path: '/w/$workspaceSlug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkspacesNewRoute = WorkspacesNewRouteImport.update({
+  id: '/workspaces/new',
+  path: '/workspaces/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -46,6 +58,8 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +67,8 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -61,14 +77,38 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/login' | '/signup' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/signup'
+    | '/w/$workspaceSlug'
+    | '/workspaces/new'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/login' | '/signup' | '/api/auth/$'
-  id: '__root__' | '/' | '/dashboard' | '/login' | '/signup' | '/api/auth/$'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/signup'
+    | '/w/$workspaceSlug'
+    | '/workspaces/new'
+    | '/api/auth/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/signup'
+    | '/w/$workspaceSlug'
+    | '/workspaces/new'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +116,8 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
+  WWorkspaceSlugRoute: typeof WWorkspaceSlugRoute
+  WorkspacesNewRoute: typeof WorkspacesNewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -109,6 +151,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/w/$workspaceSlug': {
+      id: '/w/$workspaceSlug'
+      path: '/w/$workspaceSlug'
+      fullPath: '/w/$workspaceSlug'
+      preLoaderRoute: typeof WWorkspaceSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workspaces/new': {
+      id: '/workspaces/new'
+      path: '/workspaces/new'
+      fullPath: '/workspaces/new'
+      preLoaderRoute: typeof WorkspacesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -124,6 +180,8 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
+  WWorkspaceSlugRoute: WWorkspaceSlugRoute,
+  WorkspacesNewRoute: WorkspacesNewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
