@@ -11,7 +11,7 @@ export const SYSTEM_ROLE_LEAD = "lead"
  * Permission checks key on `isSystem + scope`, never on title strings.
  */
 export async function seedWorkspaceRoles(
-  database: typeof db,
+  database: Pick<typeof db, "insert">,
   workspaceId: string
 ) {
   const [admin, member, lead] = await database

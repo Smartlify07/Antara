@@ -10,11 +10,41 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
+import { Route as WorkspacesNewRouteImport } from './routes/workspaces/new'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WWorkspaceSlugRoute = WWorkspaceSlugRouteImport.update({
+  id: '/w/$workspaceSlug',
+  path: '/w/$workspaceSlug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkspacesNewRoute = WorkspacesNewRouteImport.update({
+  id: '/workspaces/new',
+  path: '/workspaces/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -25,27 +55,69 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/signup'
+    | '/w/$workspaceSlug'
+    | '/workspaces/new'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/auth/$'
-  id: '__root__' | '/' | '/api/auth/$'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/signup'
+    | '/w/$workspaceSlug'
+    | '/workspaces/new'
+    | '/api/auth/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/signup'
+    | '/w/$workspaceSlug'
+    | '/workspaces/new'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRoute
+  LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
+  WWorkspaceSlugRoute: typeof WWorkspaceSlugRoute
+  WorkspacesNewRoute: typeof WorkspacesNewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -56,6 +128,41 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/w/$workspaceSlug': {
+      id: '/w/$workspaceSlug'
+      path: '/w/$workspaceSlug'
+      fullPath: '/w/$workspaceSlug'
+      preLoaderRoute: typeof WWorkspaceSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workspaces/new': {
+      id: '/workspaces/new'
+      path: '/workspaces/new'
+      fullPath: '/workspaces/new'
+      preLoaderRoute: typeof WorkspacesNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -70,6 +177,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRoute,
+  LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
+  WWorkspaceSlugRoute: WWorkspaceSlugRoute,
+  WorkspacesNewRoute: WorkspacesNewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
