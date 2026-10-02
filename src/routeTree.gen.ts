@@ -16,6 +16,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
 import { Route as WorkspacesNewRouteImport } from './routes/workspaces/new'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as WWorkspaceSlugTeamRouteImport } from './routes/w.$workspaceSlug.team'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,24 +53,31 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WWorkspaceSlugTeamRoute = WWorkspaceSlugTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => WWorkspaceSlugRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,9 +85,10 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/w/$workspaceSlug': typeof WWorkspaceSlugRoute
+  '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
+    | '/w/$workspaceSlug/team'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
+    | '/w/$workspaceSlug/team'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
+    | '/w/$workspaceSlug/team'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -116,7 +128,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
-  WWorkspaceSlugRoute: typeof WWorkspaceSlugRoute
+  WWorkspaceSlugRoute: typeof WWorkspaceSlugRouteWithChildren
   WorkspacesNewRoute: typeof WorkspacesNewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -172,15 +184,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/w/$workspaceSlug/team': {
+      id: '/w/$workspaceSlug/team'
+      path: '/team'
+      fullPath: '/w/$workspaceSlug/team'
+      preLoaderRoute: typeof WWorkspaceSlugTeamRouteImport
+      parentRoute: typeof WWorkspaceSlugRoute
+    }
   }
 }
+
+interface WWorkspaceSlugRouteChildren {
+  WWorkspaceSlugTeamRoute: typeof WWorkspaceSlugTeamRoute
+}
+
+const WWorkspaceSlugRouteChildren: WWorkspaceSlugRouteChildren = {
+  WWorkspaceSlugTeamRoute: WWorkspaceSlugTeamRoute,
+}
+
+const WWorkspaceSlugRouteWithChildren = WWorkspaceSlugRoute._addFileChildren(
+  WWorkspaceSlugRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
-  WWorkspaceSlugRoute: WWorkspaceSlugRoute,
+  WWorkspaceSlugRoute: WWorkspaceSlugRouteWithChildren,
   WorkspacesNewRoute: WorkspacesNewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
