@@ -78,7 +78,7 @@ export function WorkspaceSearch({
             {results.map((item) => (
               <Link
                 key={item.workspace.id}
-                to="/w/$workspaceSlug"
+                to="/w/$workspaceSlug/projects"
                 params={{ workspaceSlug: item.workspace.slug }}
                 onClick={() => {
                   setOpen(false)

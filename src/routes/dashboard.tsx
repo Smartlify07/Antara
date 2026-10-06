@@ -41,7 +41,7 @@ function DashboardRedirect() {
           )[0]!.workspace.slug
 
     void navigate({
-      to: "/w/$workspaceSlug",
+      to: "/w/$workspaceSlug/projects",
       params: { workspaceSlug: target },
       replace: true,
     })

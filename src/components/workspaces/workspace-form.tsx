@@ -140,7 +140,7 @@ export function WorkspaceForm() {
         data: { name: values.name, slug: values.slug, avatarUrl },
       })
       await navigate({
-        to: "/w/$workspaceSlug",
+        to: "/w/$workspaceSlug/projects",
         params: { workspaceSlug: workspace.slug },
       })
     } catch (error) {

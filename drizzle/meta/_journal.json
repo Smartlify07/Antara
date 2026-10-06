@@ -15,6 +15,27 @@
       "when": 1790766598130,
       "tag": "0001_freezing_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790929227966,
+      "tag": "0002_overconfident_nemesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791043262347,
+      "tag": "0003_handy_retro_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791046922651,
+      "tag": "0004_hot_the_phantom",
+      "breakpoints": true
     }
   ]
 }

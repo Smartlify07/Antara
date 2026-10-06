@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm"
 import {
   index,
   pgTable,
@@ -31,6 +32,10 @@ export const tasks = pgTable(
   (t) => [
     index("tasks_project_status_idx").on(t.projectId, t.status),
     index("tasks_project_idx").on(t.projectId),
+    // Workspace-wide due-soon sorting across projects.
+    index("tasks_due_date_idx")
+      .on(t.dueDate)
+      .where(sql`${t.dueDate} IS NOT NULL`),
   ]
 )
 
