@@ -129,7 +129,7 @@ function ProjectCard({ project, workspaceId, canManage }: CardProps) {
                 size="icon-sm"
                 disabled={pending}
                 aria-label={`Actions for ${project.title}`}
-                className="absolute top-3 right-3 bg-background/90 text-foreground hover:bg-background"
+                className="absolute top-3 right-3 text-background"
               >
                 {pending ? (
                   <Loader2 className="animate-spin" />
