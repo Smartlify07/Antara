@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { ArrowLeft } from "lucide-react"
+import { ArrowRightIcon, FolderKanbanIcon, UsersIcon } from "lucide-react"
+import { AppShell } from "@/components/app-shell"
 import {
   Card,
   CardContent,
@@ -11,7 +12,6 @@ import {
   getWorkspaceFn,
   listWorkspaceMembersFn,
 } from "@/server/functions/workspaces"
-import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/w/$workspaceSlug")({
   loader: async ({ params }) => {
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/w/$workspaceSlug")({
     const members = await listWorkspaceMembersFn({
       data: { workspaceId: access.workspace.id },
     })
-    return { access, members }
+    return { access, memberCount: members.length }
   },
   component: WorkspaceHomePage,
 })
@@ -53,20 +53,12 @@ function WorkspaceAvatar({
 }
 
 function WorkspaceHomePage() {
-  const { access, members } = Route.useLoaderData()
+  const { access, memberCount } = Route.useLoaderData()
   const { workspace, role, isOwner } = access
 
   return (
-    <main className="min-h-svh bg-muted/40 p-4 sm:p-8">
+    <AppShell crumbs={[{ label: workspace.title }]}>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <Link
-          to="/dashboard"
-          className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          All workspaces
-        </Link>
-
         <Card>
           <CardHeader className="flex-row items-center gap-4 space-y-0">
             <WorkspaceAvatar
@@ -87,63 +79,48 @@ function WorkspaceHomePage() {
           </CardHeader>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium tracking-tight">
-              Getting started
-            </CardTitle>
-            <CardDescription>
-              Projects and team invites arrive in the next milestones.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 text-sm">
-            <p className="text-muted-foreground">
-              Create your first project to start assigning tasks and uploading
-              assets.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium tracking-tight">
+                Projects
+              </CardTitle>
+              <CardDescription>
+                Create projects to organize briefs, tasks, and assets.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FolderKanbanIcon className="size-4" />
+                Coming soon
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium tracking-tight">
-              Members ({members.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {members.map((member) => (
-              <div key={member.id} className="flex items-center gap-3">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground",
-                    member.status === "suspended" && "opacity-50"
-                  )}
-                >
-                  {(
-                    member.name?.trim()[0] ??
-                    member.email?.[0] ??
-                    "?"
-                  ).toUpperCase()}
-                </span>
-                <div className="flex flex-1 flex-col">
-                  <span className="text-sm font-medium">
-                    {member.name ?? member.email}
-                  </span>
-                  {member.name && (
-                    <span className="text-xs text-muted-foreground">
-                      {member.email ?? "Invited — no account yet"}
-                    </span>
-                  )}
-                </div>
-                <span className="rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {member.isOwner ? "owner" : member.role}
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium tracking-tight">
+                Team
+              </CardTitle>
+              <CardDescription>
+                {memberCount} {memberCount === 1 ? "member" : "members"} in this
+                workspace.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link
+                to="/w/$workspaceSlug/team"
+                params={{ workspaceSlug: workspace.slug }}
+                className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
+              >
+                <UsersIcon className="size-4" />
+                Manage team
+                <ArrowRightIcon className="size-3.5" />
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </main>
+    </AppShell>
   )
 }
