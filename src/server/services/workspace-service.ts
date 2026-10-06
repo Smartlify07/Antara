@@ -2,7 +2,13 @@ import { and, eq, isNull, ne } from "drizzle-orm"
 import { db } from "@/db"
 import type { MembershipStatus } from "@/db/enums"
 import { seedWorkspaceRoles } from "@/db/seed"
-import { roles, team, user, workspaces, type Workspace } from "@/db/schema/index"
+import {
+  roles,
+  team,
+  user,
+  workspaces,
+  type Workspace,
+} from "@/db/schema/index"
 
 /**
  * Workspace domain logic. Pure DB operations only — no HTTP, no session.

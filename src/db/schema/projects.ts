@@ -7,7 +7,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core"
-import { membershipStatus } from "../enums"
+import { membershipStatus, projectStatus } from "../enums"
 import { user } from "./auth"
 import { id } from "./shared"
 import { roles, workspaces } from "./workspaces"
@@ -22,6 +22,12 @@ export const projects = pgTable(
     slug: text("slug").notNull(),
     title: text("title").notNull(),
     description: text("description"),
+    status: projectStatus("status").notNull().default("planning"),
+    deadline: timestamp("deadline"),
+    // CSS-ready oklch stops for the card artwork. Null falls back to the
+    // slug-derived monochrome treatment.
+    gradientStart: text("gradient_start"),
+    gradientEnd: text("gradient_end"),
     createdBy: text("created_by").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -36,6 +42,10 @@ export const projects = pgTable(
       .on(t.workspaceId, t.slug)
       .where(sql`${t.deletedAt} IS NULL`),
     index("projects_workspace_idx").on(t.workspaceId),
+    // Backs the overview "active projects" count and future list filters.
+    index("projects_workspace_status_idx")
+      .on(t.workspaceId, t.status)
+      .where(sql`${t.deletedAt} IS NULL`),
   ]
 )
 

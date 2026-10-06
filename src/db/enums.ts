@@ -32,9 +32,18 @@ export const deletionJobStatus = pgEnum("deletion_job_status", [
   "failed",
 ])
 
+export const projectStatus = pgEnum("project_status", [
+  "planning",
+  "active",
+  "on_hold",
+  "completed",
+  "archived",
+])
+
 export type TaskStatus = (typeof taskStatus.enumValues)[number]
 export type TaskPriority = (typeof taskPriority.enumValues)[number]
 export type AssetProvider = (typeof assetProvider.enumValues)[number]
 export type RoleScope = (typeof roleScope.enumValues)[number]
 export type MembershipStatus = (typeof membershipStatus.enumValues)[number]
 export type DeletionJobStatus = (typeof deletionJobStatus.enumValues)[number]
+export type ProjectStatus = (typeof projectStatus.enumValues)[number]

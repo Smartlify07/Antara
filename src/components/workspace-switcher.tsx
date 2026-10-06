@@ -144,7 +144,7 @@ export function WorkspaceSwitcher({
                 onClick={() => {
                   setOpen(false)
                   void navigate({
-                    to: "/w/$workspaceSlug",
+                    to: "/w/$workspaceSlug/projects",
                     params: { workspaceSlug: item.workspace.slug },
                   })
                 }}

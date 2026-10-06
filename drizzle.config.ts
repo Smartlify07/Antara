@@ -10,6 +10,8 @@ export default defineConfig({
     "./src/db/schema/assets.ts",
     "./src/db/enums.ts",
   ],
+  // Enums are declared in a separate file; keep it listed so drizzle-kit
+  // emits CREATE TYPE instead of silently dropping them.
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {

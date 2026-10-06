@@ -15,7 +15,6 @@ import {
   FolderKanbanIcon,
   ImagesIcon,
   InboxIcon,
-  LayoutDashboardIcon,
   SquareCheckBigIcon,
   UsersIcon,
 } from "lucide-react"
@@ -37,25 +36,11 @@ export function AppSidebar({
     ...(inWorkspace && activeSlug
       ? [
           {
-            title: "Overview",
-            url: `/w/${activeSlug}`,
-            icon: <LayoutDashboardIcon />,
-            active: location.pathname === `/w/${activeSlug}`,
+            title: "Projects",
+            url: `/w/${activeSlug}/projects`,
+            icon: <FolderKanbanIcon />,
+            active: !location.pathname.includes("/team"),
           },
-        ]
-      : []),
-    {
-      title: "Projects",
-      icon: <FolderKanbanIcon />,
-      badge: "Soon",
-      items: [
-        { title: "All projects", badge: "Soon" },
-        { title: "Active", badge: "Soon" },
-        { title: "Archived", badge: "Soon" },
-      ],
-    },
-    ...(inWorkspace && activeSlug
-      ? [
           {
             title: "Team",
             url: `/w/${activeSlug}/team`,

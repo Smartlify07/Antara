@@ -6,7 +6,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core"
-import { projectMembers } from "./projects"
+import { projectMembers, projects } from "./projects"
 import { id } from "./shared"
 import { workspaces } from "./workspaces"
 
@@ -41,6 +41,21 @@ export const memberTags = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.tagId, t.projectMemberId] })]
+)
+
+// Projects reuse the workspace tag vocabulary (e.g. Branding, Motion).
+export const projectTags = pgTable(
+  "project_tags",
+  {
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tagId, t.projectId] })]
 )
 
 export type Tag = typeof tags.$inferSelect

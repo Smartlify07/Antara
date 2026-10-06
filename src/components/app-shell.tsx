@@ -15,7 +15,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { useParams } from "@tanstack/react-router"
+import { Link, useParams } from "@tanstack/react-router"
 import { rememberWorkspace } from "@/lib/last-workspace"
 import type { WorkspaceListItem } from "@/server/services/workspace-service"
 import {
@@ -26,7 +26,9 @@ import {
 
 export interface Crumb {
   label: string
-  href?: string
+  /** Typed router destination. Use `to`/`params` for client-side navigation. */
+  to?: string
+  params?: Record<string, string>
 }
 
 export function AppShell({
@@ -97,11 +99,17 @@ export function AppShell({
                 return (
                   <span key={crumb.label} className="contents">
                     <BreadcrumbItem>
-                      {last || !crumb.href ? (
+                      {last || !crumb.to ? (
                         <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
                       ) : (
-                        <BreadcrumbLink href={crumb.href}>
-                          {crumb.label}
+                        <BreadcrumbLink asChild>
+                          <Link
+                            to={crumb.to}
+                            params={crumb.params}
+                            className="hover:text-foreground"
+                          >
+                            {crumb.label}
+                          </Link>
                         </BreadcrumbLink>
                       )}
                     </BreadcrumbItem>
