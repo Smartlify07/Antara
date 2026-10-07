@@ -65,7 +65,8 @@ export function ProjectCard({
     project.status !== "completed" &&
     !archived
 
-  // Nothing can be mutated until the row exists server-side.
+  // Nothing can be mutated until the row exists server-side, so the action
+  // menu stays hidden for an optimistic row.
   const actionsEnabled = canManage && !optimistic
 
   async function run(action: () => Promise<unknown>) {
@@ -83,9 +84,7 @@ export function ProjectCard({
   }
 
   return (
-    <Card
-      className={cn("group/card h-full gap-0 py-0", optimistic && "opacity-70")}
-    >
+    <Card className="group/card h-full gap-0 py-0">
       <ProjectCoverArt
         seed={project.slug}
         gradient={{
@@ -102,10 +101,6 @@ export function ProjectCard({
           </CardTitle>
 
           <div className="flex shrink-0 items-center gap-1">
-            {optimistic && (
-              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-            )}
-
             <span
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
