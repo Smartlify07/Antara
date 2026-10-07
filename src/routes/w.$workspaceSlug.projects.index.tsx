@@ -22,10 +22,21 @@ function ProjectsPage() {
   const canManage = isWorkspaceOwner || workspaceRole === "admin"
 
   // Real rows win: once the server has the project the placeholder is
-  // dropped by slug, so the swap happens without the card jumping.
+  // dropped by slug, so the swap happens without the card jumping. The
+  // combined list is sorted with the same rule the service uses (soonest
+  // deadline first, nulls last, then newest first) so an optimistic card
+  // lands in its final position immediately instead of jumping on arrival.
   const merged = useMemo(() => {
     const realSlugs = new Set(loaded.map((project) => project.slug))
-    return [...loaded, ...optimistic.filter((p) => !realSlugs.has(p.slug))]
+    return [
+      ...loaded,
+      ...optimistic.filter((p) => !realSlugs.has(p.slug)),
+    ].sort((a, b) => {
+      const aDue = a.deadline ? new Date(a.deadline).getTime() : Infinity
+      const bDue = b.deadline ? new Date(b.deadline).getTime() : Infinity
+      if (aDue !== bDue) return aDue - bDue
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
   }, [loaded, optimistic])
 
   return (
