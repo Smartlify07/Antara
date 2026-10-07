@@ -36,6 +36,20 @@
       "when": 1791046922651,
       "tag": "0004_hot_the_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791299953166,
+      "tag": "0005_steady_shen",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791336321562,
+      "tag": "0006_greedy_beyonder",
+      "breakpoints": true
     }
   ]
 }

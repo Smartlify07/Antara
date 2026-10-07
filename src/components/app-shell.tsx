@@ -120,7 +120,9 @@ export function AppShell({
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">{children}</div>
+        <div className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-4 py-4 sm:py-6">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

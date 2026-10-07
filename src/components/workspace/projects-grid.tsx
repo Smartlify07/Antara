@@ -19,60 +19,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ProjectCoverArt } from "@/components/workspace/project-cover-art"
+import { TagDot } from "@/components/projects/tags-chip"
 import type { ProjectListItem } from "@/server/services/project-service"
-import type { ProjectStatus } from "@/db/enums"
 import { setProjectStatusFn, trashProjectFn } from "@/server/functions/projects"
 import { formatDueDate, isOverdue } from "@/lib/time"
+import { PROJECT_STATUS_META } from "@/lib/status-meta"
 import {
   AlarmClockIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
-  CircleCheckBigIcon,
   ClockIcon,
   ListTodoIcon,
   Loader2,
   MessageCircleIcon,
   MoreHorizontalIcon,
-  PauseCircleIcon,
-  SparklesIcon,
   Trash2Icon,
   UsersIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-const STATUS_META: Record<
-  ProjectStatus,
-  { label: string; icon: typeof ClockIcon; className: string }
-> = {
-  planning: {
-    label: "Planning",
-    icon: SparklesIcon,
-    className:
-      "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
-  },
-  active: {
-    label: "Active",
-    icon: ClockIcon,
-    className:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-  },
-  on_hold: {
-    label: "On hold",
-    icon: PauseCircleIcon,
-    className:
-      "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-  },
-  completed: {
-    label: "Completed",
-    icon: CircleCheckBigIcon,
-    className: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  },
-  archived: {
-    label: "Archived",
-    icon: ArchiveIcon,
-    className: "bg-muted text-muted-foreground",
-  },
-}
 
 interface CardProps {
   project: ProjectListItem
@@ -86,7 +50,7 @@ function ProjectCard({ project, workspaceId, canManage }: CardProps) {
   const [trashOpen, setTrashOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const meta = STATUS_META[project.status]
+  const meta = PROJECT_STATUS_META[project.status]
   const StatusIcon = meta.icon
   const archived = project.status === "archived"
   const overdue =
@@ -111,78 +75,79 @@ function ProjectCard({ project, workspaceId, canManage }: CardProps) {
 
   return (
     <Card className="group/card gap-0 py-0">
-      <div className="relative">
-        <ProjectCoverArt
-          seed={project.slug}
-          gradient={{
-            start: project.gradientStart,
-            end: project.gradientEnd,
-          }}
-          className="h-32"
-        />
-
-        {canManage && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                disabled={pending}
-                aria-label={`Actions for ${project.title}`}
-                className="absolute top-3 right-3 text-background"
-              >
-                {pending ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <MoreHorizontalIcon />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                disabled={pending}
-                onSelect={() =>
-                  void run(() =>
-                    setProjectStatusFn({
-                      data: {
-                        workspaceId,
-                        projectId: project.id,
-                        status: archived ? "active" : "archived",
-                      },
-                    })
-                  )
-                }
-              >
-                {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
-                {archived ? "Unarchive" : "Archive"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={pending}
-                onSelect={() => setTrashOpen(true)}
-              >
-                <Trash2Icon />
-                Move to trash
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+      <ProjectCoverArt
+        seed={project.slug}
+        gradient={{
+          start: project.gradientStart,
+          end: project.gradientEnd,
+        }}
+        className="h-44"
+      />
 
       <CardHeader className="gap-3 px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="line-clamp-2 text-lg leading-snug font-medium tracking-tight">
             {project.title}
           </CardTitle>
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-              meta.className
+
+          <div className="flex shrink-0 items-center gap-1">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                meta.badgeClass
+              )}
+            >
+              <StatusIcon className="size-3" />
+              {meta.label}
+            </span>
+
+            {canManage && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={pending}
+                    aria-label={`Actions for ${project.title}`}
+                    className="text-muted-foreground"
+                  >
+                    {pending ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <MoreHorizontalIcon />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={pending}
+                    onSelect={() =>
+                      void run(() =>
+                        setProjectStatusFn({
+                          data: {
+                            workspaceId,
+                            projectId: project.id,
+                            status: archived ? "active" : "archived",
+                          },
+                        })
+                      )
+                    }
+                  >
+                    {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+                    {archived ? "Unarchive" : "Archive"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={pending}
+                    onSelect={() => setTrashOpen(true)}
+                  >
+                    <Trash2Icon />
+                    Move to trash
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
-          >
-            <StatusIcon className="size-3" />
-            {meta.label}
-          </span>
+          </div>
         </div>
 
         {project.tags.length > 0 && (
@@ -190,8 +155,9 @@ function ProjectCard({ project, workspaceId, canManage }: CardProps) {
             {project.tags.map((tag) => (
               <span
                 key={tag.id}
-                className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground"
               >
+                <TagDot color={tag.color} />
                 {tag.label}
               </span>
             ))}

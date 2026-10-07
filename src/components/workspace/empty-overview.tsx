@@ -1,12 +1,19 @@
+import { Link } from "@tanstack/react-router"
 import { PlusIcon } from "lucide-react"
 import { EmptyStateGraphic } from "@/components/empty-state-graphic"
 import { Button } from "@/components/ui/button"
 
 /**
- * Zero-project state. The primary action stays disabled until project
- * creation ships, so the screen never shows a dead link.
+ * Zero-project state for a workspace. The CTA is live once project
+ * creation ships.
  */
-export function EmptyOverview({ workspaceTitle }: { workspaceTitle: string }) {
+export function EmptyOverview({
+  workspaceTitle,
+  workspaceSlug,
+}: {
+  workspaceTitle: string
+  workspaceSlug: string
+}) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16 text-center">
       <EmptyStateGraphic />
@@ -21,15 +28,12 @@ export function EmptyOverview({ workspaceTitle }: { workspaceTitle: string }) {
         </p>
       </div>
 
-      <div className="flex flex-col items-center gap-2">
-        <Button disabled>
+      <Button asChild>
+        <Link to="/w/$workspaceSlug/projects/new" params={{ workspaceSlug }}>
           <PlusIcon />
           Create project
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          Project creation is coming soon
-        </span>
-      </div>
+        </Link>
+      </Button>
     </div>
   )
 }

@@ -23,6 +23,7 @@ export const projects = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     status: projectStatus("status").notNull().default("planning"),
+    startDate: timestamp("start_date"),
     deadline: timestamp("deadline"),
     // CSS-ready oklch stops for the card artwork. Null falls back to the
     // slug-derived monochrome treatment.

@@ -21,7 +21,7 @@ function TeamPage() {
   const canManage = workspaceRole === "admin" || isWorkspaceOwner
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-medium tracking-tighter">Team</h1>
         <p className="text-sm tracking-tight text-muted-foreground">
