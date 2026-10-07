@@ -34,6 +34,15 @@ export function LoginForm() {
       password: values.password,
     })
     if (error) {
+      // Safe to special-case here, unlike signup: this code is only ever
+      // returned once the password has already been proven correct, so it
+      // reveals nothing an attacker didn't already have.
+      if (error.code === "EMAIL_NOT_VERIFIED") {
+        setServerError(
+          "Check your inbox for a verification link — this address isn't confirmed yet."
+        )
+        return
+      }
       // Generic message: don't reveal whether the email is registered.
       setServerError("Invalid email or password. Please try again.")
       return
