@@ -8,6 +8,13 @@ import { LeadChip, MembersChip } from "@/components/projects/member-chip"
 import { StatusChip } from "@/components/projects/status-chip"
 import { TagsChip, type SelectedTag } from "@/components/projects/tags-chip"
 import { createProjectFn } from "@/server/functions/projects"
+import { navigateWithTransition } from "@/lib/navigate-with-transition"
+import {
+  addOptimisticProject,
+  buildOptimisticProject,
+  clearOptimisticProject,
+  setOptimisticError,
+} from "@/lib/optimistic-projects"
 import type {
   AssignableMember,
   ProjectTagOption,
@@ -62,6 +69,30 @@ export function ProjectCreateForm({
     setPending(true)
     setError(null)
 
+    // Render the project locally first, then navigate straight to the list
+    // so the new card animates in without waiting on the server.
+    const placeholder = buildOptimisticProject({
+      title: title.trim(),
+      description: description.trim(),
+      status,
+      startDate: dates.startDate,
+      deadline: dates.deadline,
+      memberCount: memberIds.length + (leadId ? 1 : 0) + 1 /* creator */,
+      tags: tags.map((tag, index) => ({
+        id: tag.id ?? `optimistic-tag-${index}`,
+        label: tag.label,
+        color: tag.color,
+      })),
+    })
+    addOptimisticProject(placeholder)
+
+    await navigateWithTransition(() =>
+      router.navigate({
+        to: "/w/$workspaceSlug/projects",
+        params: { workspaceSlug },
+      })
+    )
+
     try {
       await createProjectFn({
         data: {
@@ -77,13 +108,25 @@ export function ProjectCreateForm({
           newTagLabels: tags.flatMap((tag) => (tag.id ? [] : [tag.label])),
         },
       })
+      // Refresh first so the real row is present, then drop the placeholder;
+      // the grid de-dupes by slug, so the card swaps without jumping.
       await router.invalidate()
-      await router.navigate({
-        to: "/w/$workspaceSlug/projects",
-        params: { workspaceSlug },
-      })
+      clearOptimisticProject(placeholder.id)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.")
+      // Rollback: drop the card and surface why on the list.
+      clearOptimisticProject(placeholder.id)
+      setOptimisticError(
+        e instanceof Error
+          ? `Could not create "${title.trim()}". ${e.message}`
+          : "Could not create the project."
+      )
+      await navigateWithTransition(() =>
+        router.navigate({
+          to: "/w/$workspaceSlug/projects/new",
+          params: { workspaceSlug },
+        })
+      )
+    } finally {
       setPending(false)
     }
   }
