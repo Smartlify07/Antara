@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useEffect, useRef } from "react"
 import { Loader2 } from "lucide-react"
 import { readLastWorkspace } from "@/lib/last-workspace"
+import { navigateWithTransition } from "@/lib/navigate-with-transition"
 import { listWorkspacesFn } from "@/server/functions/workspaces"
 
 export const Route = createFileRoute("/dashboard")({
@@ -40,11 +41,13 @@ function DashboardRedirect() {
               b.workspace.createdAt.getTime() - a.workspace.createdAt.getTime()
           )[0]!.workspace.slug
 
-    void navigate({
-      to: "/w/$workspaceSlug/projects",
-      params: { workspaceSlug: target },
-      replace: true,
-    })
+    void navigateWithTransition(() =>
+      navigate({
+        to: "/w/$workspaceSlug/projects",
+        params: { workspaceSlug: target },
+        replace: true,
+      })
+    )
   }, [navigate, workspaces])
 
   return (

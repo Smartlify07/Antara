@@ -23,6 +23,7 @@ import {
   type WorkspaceInput,
 } from "@/lib/workspace-schemas"
 import { checkSlugFn, createWorkspaceFn } from "@/server/functions/workspaces"
+import { navigateWithTransition } from "@/lib/navigate-with-transition"
 import { cn } from "@/lib/utils"
 
 type SlugState = "idle" | "checking" | "available" | "taken"
@@ -139,10 +140,12 @@ export function WorkspaceForm() {
       const workspace = await createWorkspaceFn({
         data: { name: values.name, slug: values.slug, avatarUrl },
       })
-      await navigate({
-        to: "/w/$workspaceSlug/projects",
-        params: { workspaceSlug: workspace.slug },
-      })
+      await navigateWithTransition(() =>
+        navigate({
+          to: "/w/$workspaceSlug/projects",
+          params: { workspaceSlug: workspace.slug },
+        })
+      )
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong."
