@@ -3,6 +3,7 @@ import { PlusIcon, SearchIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { avatarTint } from "@/lib/avatar-tint"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,7 +63,9 @@ export function TeamMembers({
           <div key={member.id} className="flex items-center gap-3 p-3">
             <Avatar className="size-9">
               <AvatarImage src={member.image ?? undefined} alt="" />
-              <AvatarFallback className="text-xs font-medium">
+              <AvatarFallback
+                className={`text-xs font-medium ${avatarTint(member.id)}`}
+              >
                 {initials(member)}
               </AvatarFallback>
             </Avatar>

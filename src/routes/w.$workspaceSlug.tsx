@@ -21,7 +21,13 @@ export const Route = createFileRoute("/w/$workspaceSlug")({
     // The workspace root has no page of its own; projects is the landing.
     // Keeps old bookmarks and stale links from dead-ending on an empty shell.
     const root = `/w/${params.workspaceSlug}`
-    if (location.pathname === root || location.pathname === `${root}/`) {
+    const rootWithSlash = `${root}/`
+    if (
+      location.pathname === root ||
+      location.pathname === rootWithSlash ||
+      // Trailing slash on the nested projects route, e.g. /w/acme/projects/
+      location.pathname === `${root}/projects/`
+    ) {
       throw redirect({
         to: "/w/$workspaceSlug/projects",
         params: { workspaceSlug: params.workspaceSlug },
@@ -51,6 +57,9 @@ function useWorkspaceCrumbs(slug: string, title: string): Crumb[] {
     ]
     const tail = location.pathname.slice(`/w/${slug}`.length)
     if (tail.startsWith("/team")) return [...base, { label: "Team" }]
+    if (tail.startsWith("/projects/new")) {
+      return [...base, { label: "Projects" }, { label: "New project" }]
+    }
     return [...base, { label: "Projects" }]
   }, [location.pathname, slug, title])
 }

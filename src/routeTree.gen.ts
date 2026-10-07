@@ -18,6 +18,8 @@ import { Route as WorkspacesNewRouteImport } from './routes/workspaces/new'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as WWorkspaceSlugProjectsRouteImport } from './routes/w.$workspaceSlug.projects'
 import { Route as WWorkspaceSlugTeamRouteImport } from './routes/w.$workspaceSlug.team'
+import { Route as WWorkspaceSlugProjectsIndexRouteImport } from './routes/w.$workspaceSlug.projects.index'
+import { Route as WWorkspaceSlugProjectsNewRouteImport } from './routes/w.$workspaceSlug.projects.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +66,18 @@ const WWorkspaceSlugTeamRoute = WWorkspaceSlugTeamRouteImport.update({
   path: '/team',
   getParentRoute: () => WWorkspaceSlugRoute,
 } as any)
+const WWorkspaceSlugProjectsIndexRoute =
+  WWorkspaceSlugProjectsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => WWorkspaceSlugProjectsRoute,
+  } as any)
+const WWorkspaceSlugProjectsNewRoute =
+  WWorkspaceSlugProjectsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => WWorkspaceSlugProjectsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,8 +87,10 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRoute
+  '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRouteWithChildren
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
+  '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
+  '/w/$workspaceSlug/projects/': typeof WWorkspaceSlugProjectsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,8 +100,9 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
+  '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
+  '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -96,8 +113,10 @@ export interface FileRoutesById {
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRoute
+  '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRouteWithChildren
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
+  '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
+  '/w/$workspaceSlug/projects/': typeof WWorkspaceSlugProjectsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +130,8 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/team'
+    | '/w/$workspaceSlug/projects/new'
+    | '/w/$workspaceSlug/projects/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -120,8 +141,9 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
-    | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/team'
+    | '/w/$workspaceSlug/projects/new'
+    | '/w/$workspaceSlug/projects'
   id:
     | '__root__'
     | '/'
@@ -133,6 +155,8 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/team'
+    | '/w/$workspaceSlug/projects/new'
+    | '/w/$workspaceSlug/projects/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,16 +234,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WWorkspaceSlugTeamRouteImport
       parentRoute: typeof WWorkspaceSlugRoute
     }
+    '/w/$workspaceSlug/projects/': {
+      id: '/w/$workspaceSlug/projects/'
+      path: '/'
+      fullPath: '/w/$workspaceSlug/projects/'
+      preLoaderRoute: typeof WWorkspaceSlugProjectsIndexRouteImport
+      parentRoute: typeof WWorkspaceSlugProjectsRoute
+    }
+    '/w/$workspaceSlug/projects/new': {
+      id: '/w/$workspaceSlug/projects/new'
+      path: '/new'
+      fullPath: '/w/$workspaceSlug/projects/new'
+      preLoaderRoute: typeof WWorkspaceSlugProjectsNewRouteImport
+      parentRoute: typeof WWorkspaceSlugProjectsRoute
+    }
   }
 }
 
+interface WWorkspaceSlugProjectsRouteChildren {
+  WWorkspaceSlugProjectsNewRoute: typeof WWorkspaceSlugProjectsNewRoute
+  WWorkspaceSlugProjectsIndexRoute: typeof WWorkspaceSlugProjectsIndexRoute
+}
+
+const WWorkspaceSlugProjectsRouteChildren: WWorkspaceSlugProjectsRouteChildren =
+  {
+    WWorkspaceSlugProjectsNewRoute: WWorkspaceSlugProjectsNewRoute,
+    WWorkspaceSlugProjectsIndexRoute: WWorkspaceSlugProjectsIndexRoute,
+  }
+
+const WWorkspaceSlugProjectsRouteWithChildren =
+  WWorkspaceSlugProjectsRoute._addFileChildren(
+    WWorkspaceSlugProjectsRouteChildren,
+  )
+
 interface WWorkspaceSlugRouteChildren {
-  WWorkspaceSlugProjectsRoute: typeof WWorkspaceSlugProjectsRoute
+  WWorkspaceSlugProjectsRoute: typeof WWorkspaceSlugProjectsRouteWithChildren
   WWorkspaceSlugTeamRoute: typeof WWorkspaceSlugTeamRoute
 }
 
 const WWorkspaceSlugRouteChildren: WWorkspaceSlugRouteChildren = {
-  WWorkspaceSlugProjectsRoute: WWorkspaceSlugProjectsRoute,
+  WWorkspaceSlugProjectsRoute: WWorkspaceSlugProjectsRouteWithChildren,
   WWorkspaceSlugTeamRoute: WWorkspaceSlugTeamRoute,
 }
 

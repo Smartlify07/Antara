@@ -19,6 +19,9 @@ export const tags = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
+    // Hex tint for the tag's dot. Null means "not chosen by a user yet",
+    // in which case a stable colour is derived from the label.
+    color: text("color"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

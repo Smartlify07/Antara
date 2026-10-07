@@ -10,6 +10,7 @@
  */
 import { and, eq } from "drizzle-orm"
 import { db, pool } from "@/db"
+import { tagColorFor } from "@/lib/tag-colors"
 import { seedWorkspaceRoles } from "@/db/seed"
 import {
   projectMembers,
@@ -254,9 +255,18 @@ async function ensureWorkspaceTags(workspaceId: string) {
     if (byLabel.has(label)) continue
     const [created] = await db
       .insert(tags)
-      .values({ workspaceId, label })
+      .values({ workspaceId, label, color: tagColorFor(label) })
       .returning()
     if (created) byLabel.set(label, created)
+  }
+
+  // Backfill tags seeded before colours existed.
+  for (const row of existing) {
+    if (row.color) continue
+    await db
+      .update(tags)
+      .set({ color: tagColorFor(row.label) })
+      .where(eq(tags.id, row.id))
   }
 
   return byLabel

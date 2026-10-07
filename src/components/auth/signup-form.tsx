@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
+import { navigateWithTransition } from "@/lib/navigate-with-transition"
 import { signupSchema, type SignupInput } from "@/lib/auth-schemas"
 
 function serverMessage(code: string | undefined, fallback: string) {
@@ -49,7 +50,7 @@ export function SignupForm() {
       )
       return
     }
-    await navigate({ to: "/dashboard" })
+    await navigateWithTransition(() => navigate({ to: "/dashboard" }))
   }
 
   const { errors, isSubmitting } = form.formState
