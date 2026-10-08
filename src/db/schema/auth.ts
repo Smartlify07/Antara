@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import {
+  bigint,
   boolean,
   integer,
   pgTable,
@@ -72,10 +73,16 @@ export const verification = pgTable("verification", {
 // Rate limit counters for better-auth (storage: "database"). Counters must
 // be shared across serverless instances, so they live in Postgres rather
 // than process memory.
-export const rateLimit = pgTable("rateLimit", {
-  key: text("key").primaryKey(),
+//
+// Shape is dictated by better-auth (verified with
+// `npx @better-auth/cli generate`): table name `rate_limit`, an `id` PK,
+// `key` uniquely constrained rather than being the PK, and `lastRequest`
+// as bigint. Deviating from this trips SCHEMA_MISMATCH at runtime.
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
   count: integer("count").notNull(),
-  lastRequest: integer("last_request").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 })
 
 export type User = typeof user.$inferSelect
