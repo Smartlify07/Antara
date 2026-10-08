@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2 } from "lucide-react"
 import { useState } from "react"
@@ -17,11 +17,9 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
-import { navigateWithTransition } from "@/lib/navigate-with-transition"
 import { loginSchema, type LoginInput } from "@/lib/auth-schemas"
 
 export function LoginForm() {
-  const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
   // Set only when sign-in fails because the address is unverified. It gates
   // the inline resend: re-sending is only useful once we know the password
@@ -55,7 +53,11 @@ export function LoginForm() {
       setServerError("Invalid email or password. Please try again.")
       return
     }
-    await navigateWithTransition(() => navigate({ to: "/dashboard" }))
+
+    // No navigation here on purpose. The session atom updating is what
+    // triggers the redirect, and `LoginPage` owns it so there's a single
+    // navigation to animate. Navigating from here as well raced that and
+    // left one of the two untransitioned.
   }
 
   const { errors, isSubmitting } = form.formState

@@ -39,8 +39,7 @@ interface ResendVerificationProps {
  * Failures report the same neutral message as successes. That isn't only
  * caution: when the email provider is misconfigured the endpoint throws for a
  * real address and returns 200 for a nonexistent one, so branching on the
- * error here would leak which addresses exist precisely when delivery is
- * broken.
+ * error would leak which addresses exist precisely when delivery is broken.
  */
 export function ResendVerification({
   defaultEmail = "",
@@ -78,14 +77,20 @@ export function ResendVerification({
   const busy = isSubmitting || sending
   const shown = isSubmitSuccessful || sent
 
+  // The status line is always present, not conditionally inserted. Rendering
+  // it on demand pushed everything below it down the moment the send
+  // resolved, which reads as a flash; a reserved line keeps the button and
+  // surrounding copy exactly where they were.
+  const status = (
+    <p role="status" className="min-h-5 text-sm text-muted-foreground">
+      {shown ? RESEND_MESSAGE : null}
+    </p>
+  )
+
   if (hideInput) {
     return (
       <div className={className}>
-        {shown && (
-          <p role="status" className="mb-2 text-sm text-muted-foreground">
-            {RESEND_MESSAGE}
-          </p>
-        )}
+        {status}
         <Button
           type="button"
           variant="outline"
@@ -106,11 +111,7 @@ export function ResendVerification({
       className={className}
       noValidate
     >
-      {shown && (
-        <p role="status" className="mb-3 rounded-lg bg-muted px-3 py-2 text-sm">
-          {RESEND_MESSAGE}
-        </p>
-      )}
+      {status}
 
       <Field data-invalid={!!errors.email}>
         <FieldLabel htmlFor="resend-email">Email</FieldLabel>
