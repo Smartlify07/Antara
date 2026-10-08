@@ -1,16 +1,34 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
+import {
+  bigint,
+  boolean,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core"
 
 // Better Auth tables (managed by better-auth, do not edit by hand).
 
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").notNull().default(false),
-  image: text("image"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-})
+export const user = pgTable(
+  "user",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    image: text("image"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    // Case-insensitive uniqueness. A plain UNIQUE on `email` would let
+    // "Ada@x.com" and "ada@x.com" register as separate accounts, which
+    // breaks invite backfill matching.
+    uniqueIndex("user_email_lower_unique").on(sql`lower(${t.email})`),
+  ]
+)
 
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
@@ -50,6 +68,21 @@ export const verification = pgTable("verification", {
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+})
+
+// Rate limit counters for better-auth (storage: "database"). Counters must
+// be shared across serverless instances, so they live in Postgres rather
+// than process memory.
+//
+// Shape is dictated by better-auth (verified with
+// `npx @better-auth/cli generate`): table name `rate_limit`, an `id` PK,
+// `key` uniquely constrained rather than being the PK, and `lastRequest`
+// as bigint. Deviating from this trips SCHEMA_MISMATCH at runtime.
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 })
 
 export type User = typeof user.$inferSelect

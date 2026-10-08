@@ -89,6 +89,9 @@ export const team = pgTable(
     uniqueIndex("team_workspace_user_unique")
       .on(t.workspaceId, t.userId)
       .where(sql`${t.userId} IS NOT NULL`),
+    // Emails are normalized on write; the case-insensitive lookup is what
+    // the signup backfill matches on.
+    index("team_email_lower_idx").on(sql`lower(${t.email})`),
     uniqueIndex("team_workspace_email_unique")
       .on(t.workspaceId, t.email)
       .where(sql`${t.userId} IS NULL AND ${t.email} IS NOT NULL`),
@@ -117,7 +120,7 @@ export const workspaceInvites = pgTable(
   },
   (t) => [
     index("workspace_invites_workspace_idx").on(t.workspaceId),
-    index("workspace_invites_email_idx").on(t.email),
+    index("workspace_invites_email_idx").on(sql`lower(${t.email})`),
   ]
 )
 
