@@ -1,11 +1,12 @@
-import { Link, createFileRoute } from "@tanstack/react-router"
-import { CircleCheck, MailWarning } from "lucide-react"
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
+import { MailWarning } from "lucide-react"
+import { useEffect } from "react"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { AuthPending } from "@/components/auth/auth-pending"
 import { ResendVerification } from "@/components/auth/resend-verification"
-import { Button } from "@/components/ui/button"
-import { useAuthStatus } from "@/lib/use-auth-status"
 import { useSession } from "@/lib/auth-client"
+import { navigateWithTransition } from "@/lib/navigate-with-transition"
+import { useAuthStatus } from "@/lib/use-auth-status"
 
 export const Route = createFileRoute("/verify-email")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -37,19 +38,26 @@ const GENERIC_ERROR = {
 }
 
 /**
- * The landing page the emailed link redirects to once its token is consumed.
+ * The page the emailed link redirects to once its token is consumed.
  *
  * better-auth performs the verification itself and then redirects here, so
  * this page never sees a token. It receives either nothing at all (success)
  * or `?error=SLUG` (failure).
  *
- * That makes the bare URL ambiguous — it looks the same whether someone just
- * clicked a working link or typed the address in. So the state is resolved
- * from the *session*, not from the absence of a parameter: on success
- * better-auth has already set a cookie for a now-verified user, which
- * `useSession` reports as `emailVerified: true`. A bare visit from someone
- * unverified correctly falls through to the neutral state instead of claiming
- * a confirmation that never happened.
+ * This route exists only for the failure branch. On success it continues
+ * straight to /dashboard instead of rendering anything — a link that already
+ * did the thing doesn't need a page confirming it did. The redirect is a
+ * second 302, so nobody perceives this route at all.
+ *
+ * `callbackURL` can't just be /dashboard, by the way. It's a single value used
+ * for *both* outcomes, so failures would land on /dashboard?error=TOKEN_EXPIRED,
+ * where the loader bounces an unauthenticated visitor to /login and the error
+ * disappears. Keeping the redirect here is what lets a dead link explain itself.
+ *
+ * The bare URL is ambiguous — identical whether someone just clicked a working
+ * link or typed the address in — so success is resolved from the session rather
+ * than the absence of a parameter. better-auth has already set a cookie for a
+ * now-verified user by the time we're asked.
  */
 function VerifyEmailPage() {
   const { error } = Route.useSearch()
@@ -58,8 +66,22 @@ function VerifyEmailPage() {
   // confirmed user back to a spinner.
   const status = useAuthStatus()
   const { data } = useSession()
+  const navigate = useNavigate()
 
   const errorCopy = error ? (ERROR_COPY[error] ?? GENERIC_ERROR) : null
+  const verified =
+    status === "authenticated" && data?.user?.emailVerified === true
+
+  useEffect(() => {
+    if (!verified) return
+    void navigateWithTransition(() =>
+      navigate({ to: "/dashboard", replace: true })
+    )
+  }, [verified, navigate])
+
+  // Spinner while the session resolves, and again for the moment it takes to
+  // hand off to the app on success.
+  const settling = status === "pending" || verified
 
   return (
     <AuthLayout>
@@ -73,19 +95,8 @@ function VerifyEmailPage() {
             />
             <ResendVerification />
           </>
-        ) : status === "pending" ? (
+        ) : settling ? (
           <AuthPending />
-        ) : data?.user?.emailVerified ? (
-          <>
-            <Header
-              icon={<CircleCheck className="size-10 text-primary" />}
-              title="Email confirmed"
-              body="Your address is verified and you're signed in. Pick up where you left off."
-            />
-            <Button asChild className="w-full">
-              <Link to="/dashboard">Continue to Antara</Link>
-            </Button>
-          </>
         ) : (
           <>
             <Header
@@ -97,12 +108,14 @@ function VerifyEmailPage() {
           </>
         )}
 
-        <p className="text-sm tracking-tight text-balance text-muted-foreground">
-          Already verified?{" "}
-          <Link to="/login" className="font-medium">
-            Log in
-          </Link>
-        </p>
+        {!settling && (
+          <p className="text-sm tracking-tight text-balance text-muted-foreground">
+            Already verified?{" "}
+            <Link to="/login" className="font-medium">
+              Log in
+            </Link>
+          </p>
+        )}
       </div>
     </AuthLayout>
   )
