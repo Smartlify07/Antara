@@ -1,8 +1,10 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { CircleCheck, Loader2, MailWarning } from "lucide-react"
+import { CircleCheck, MailWarning } from "lucide-react"
 import { AuthLayout } from "@/components/auth/auth-layout"
+import { AuthPending } from "@/components/auth/auth-pending"
 import { ResendVerification } from "@/components/auth/resend-verification"
 import { Button } from "@/components/ui/button"
+import { useAuthStatus } from "@/lib/use-auth-status"
 import { useSession } from "@/lib/auth-client"
 
 export const Route = createFileRoute("/verify-email")({
@@ -51,7 +53,11 @@ const GENERIC_ERROR = {
  */
 function VerifyEmailPage() {
   const { error } = Route.useSearch()
-  const { data, isPending } = useSession()
+  // Latched, because `useSession().isPending` also goes true on background
+  // refetches — focusing the window mid-flow would otherwise bounce a
+  // confirmed user back to a spinner.
+  const status = useAuthStatus()
+  const { data } = useSession()
 
   const errorCopy = error ? (ERROR_COPY[error] ?? GENERIC_ERROR) : null
 
@@ -67,10 +73,8 @@ function VerifyEmailPage() {
             />
             <ResendVerification />
           </>
-        ) : isPending ? (
-          <div className="flex min-h-40 items-center justify-center">
-            <Loader2 className="animate-spin text-muted-foreground" />
-          </div>
+        ) : status === "pending" ? (
+          <AuthPending />
         ) : data?.user?.emailVerified ? (
           <>
             <Header

@@ -1,27 +1,27 @@
 import { Navigate, createFileRoute } from "@tanstack/react-router"
-import { Loader2 } from "lucide-react"
 import { AuthLayout } from "@/components/auth/auth-layout"
+import { AuthPending } from "@/components/auth/auth-pending"
 import { SignupForm } from "@/components/auth/signup-form"
-import { useSession } from "@/lib/auth-client"
+import { useAuthStatus } from "@/lib/use-auth-status"
 
 export const Route = createFileRoute("/signup")({
   component: SignupPage,
 })
 
 function SignupPage() {
-  const { data, isPending } = useSession()
+  // Latched status, not `useSession().isPending`. Gating on the raw flag let a
+  // background refetch swap this subtree for a spinner and remount it, which
+  // discarded the completed-signup state and put an empty form back on
+  // screen. See `useAuthStatus`.
+  const status = useAuthStatus()
 
-  // Keep the shell while the session resolves rather than returning null —
-  // see the note in `login.tsx`. Signup never navigates from inside the
-  // form (no session is created until the address is verified), so the
-  // redirect below only ever fires for someone arriving already signed in.
+  // Signup never navigates from inside the form — no session exists until the
+  // address is verified — so this only fires for someone arriving signed in.
   return (
     <AuthLayout>
-      {isPending ? (
-        <div className="flex min-h-40 items-center justify-center">
-          <Loader2 className="animate-spin text-muted-foreground" />
-        </div>
-      ) : data?.session ? (
+      {status === "pending" ? (
+        <AuthPending />
+      ) : status === "authenticated" ? (
         <Navigate to="/dashboard" />
       ) : (
         <SignupForm />
