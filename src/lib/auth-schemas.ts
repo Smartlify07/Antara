@@ -26,3 +26,9 @@ export const signupSchema = z
 
 export type LoginInput = z.infer<typeof loginSchema>
 export type SignupInput = z.infer<typeof signupSchema>
+
+export const resendSchema = z.object({
+  email: emailSchema,
+})
+
+export type ResendInput = z.infer<typeof resendSchema>

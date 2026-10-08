@@ -43,6 +43,10 @@ export const auth = betterAuth({
       // The signup endpoint is an enumeration vector, so keep it tight.
       "/sign-up/email": { window: 60, max: 5 },
       "/sign-in/email": { window: 60, max: 10 },
+      // Tighter than sign-in because every hit costs an outbound send. Keyed
+      // per-IP by better-auth, which bounds how much mail one caller can
+      // trigger but not how many distinct recipients they can aim it at.
+      "/send-verification-email": { window: 60, max: 3 },
     },
   },
 

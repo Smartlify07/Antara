@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/logo"
 import { GoogleButton } from "@/components/auth/google-button"
+import { ResendVerification } from "@/components/auth/resend-verification"
 import {
   Field,
   FieldDescription,
@@ -22,6 +23,11 @@ import { loginSchema, type LoginInput } from "@/lib/auth-schemas"
 export function LoginForm() {
   const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
+  // Set only when sign-in fails because the address is unverified. It gates
+  // the inline resend: re-sending is only useful once we know the password
+  // was correct, and showing it unconditionally would invite mail traffic
+  // from anyone with an address.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -29,6 +35,7 @@ export function LoginForm() {
 
   async function onSubmit(values: LoginInput) {
     setServerError(null)
+    setUnverifiedEmail(null)
     const { error } = await authClient.signIn.email({
       email: values.email.trim(),
       password: values.password,
@@ -39,8 +46,9 @@ export function LoginForm() {
       // reveals nothing an attacker didn't already have.
       if (error.code === "EMAIL_NOT_VERIFIED") {
         setServerError(
-          "Check your inbox for a verification link — this address isn't confirmed yet."
+          "This address isn't confirmed yet. Check your inbox for the verification link."
         )
+        setUnverifiedEmail(values.email.trim())
         return
       }
       // Generic message: don't reveal whether the email is registered.
@@ -76,6 +84,10 @@ export function LoginForm() {
           >
             {serverError}
           </p>
+        )}
+
+        {unverifiedEmail && (
+          <ResendVerification defaultEmail={unverifiedEmail} hideInput />
         )}
 
         <Field data-invalid={!!errors.email}>
