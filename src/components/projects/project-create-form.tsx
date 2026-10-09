@@ -108,10 +108,12 @@ export function ProjectCreateForm({
           newTagLabels: tags.flatMap((tag) => (tag.id ? [] : [tag.label])),
         },
       })
-      // Refresh first so the real row is present, then drop the placeholder;
-      // the grid de-dupes by slug, so the card swaps without jumping.
+      // Refresh so the real row reaches the list. The placeholder is NOT
+      // cleared here: this promise resolves when the loader has refetched,
+      // not when React has committed the new data, so clearing immediately
+      // left a render with neither card. The projects route now prunes it
+      // from the loader data instead.
       await router.invalidate()
-      clearOptimisticProject(placeholder.id)
     } catch (e) {
       // Rollback: drop the card and surface why on the list.
       clearOptimisticProject(placeholder.id)

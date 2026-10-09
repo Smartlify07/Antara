@@ -1,11 +1,14 @@
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { EmptyOverview } from "@/components/workspace/empty-overview"
 import { ProjectsGrid } from "@/components/workspace/projects-grid"
 import { listProjectsFn } from "@/server/functions/projects"
-import { useOptimisticProjects } from "@/lib/optimistic-projects"
+import {
+  clearOptimisticProject,
+  useOptimisticProjects,
+} from "@/lib/optimistic-projects"
 
 export const Route = createFileRoute("/w/$workspaceSlug/projects/")({
   loader: ({ context }) =>
@@ -21,8 +24,26 @@ function ProjectsPage() {
 
   const canManage = isWorkspaceOwner || workspaceRole === "admin"
 
+  // Drop each placeholder once the real row is in the loader data.
+  //
+  // This used to be an imperative `clearOptimisticProject()` right after
+  // `await router.invalidate()` in the create form. That promise resolves once
+  // the loader has refetched, not once React has committed the new data — so
+  // clearing there produced a render with neither the placeholder nor the real
+  // row, and the card vanished for a frame before reappearing.
+  //
+  // Reconciling from the data instead removes the ordering entirely. The merge
+  // below already hides a placeholder whose slug is present, so the visible
+  // result is the same whether or not the store has been pruned yet.
+  useEffect(() => {
+    const realSlugs = new Set(loaded.map((project) => project.slug))
+    for (const project of optimistic) {
+      if (realSlugs.has(project.slug)) clearOptimisticProject(project.id)
+    }
+  }, [loaded, optimistic])
+
   // Real rows win: once the server has the project the placeholder is
-  // dropped by slug, so the swap happens without the card jumping. The
+  // hidden by slug, so the swap happens without the card jumping. The
   // combined list is sorted with the same rule the service uses (soonest
   // deadline first, nulls last, then newest first) so an optimistic card
   // lands in its final position immediately instead of jumping on arrival.

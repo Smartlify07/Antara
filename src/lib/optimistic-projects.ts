@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 import type { ProjectStatus } from "@/db/enums"
+import { slugifyTitle } from "@/lib/project-schemas"
 import type {
   ProjectListItem,
   ProjectTagOption,
@@ -88,7 +89,7 @@ export function buildOptimisticProject(input: {
   return {
     id: makeId(),
     title: input.title,
-    slug: input.title.toLowerCase().trim().replace(/\s+/g, "-"),
+    slug: slugifyTitle(input.title),
     description: input.description || null,
     status: input.status,
     startDate: input.startDate,
