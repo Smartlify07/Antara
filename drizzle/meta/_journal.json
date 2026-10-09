@@ -64,6 +64,13 @@
       "when": 1791443466524,
       "tag": "0008_fix_rate_limit_table",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791533355564,
+      "tag": "0009_team_last_opened_at",
+      "breakpoints": true
     }
   ]
 }

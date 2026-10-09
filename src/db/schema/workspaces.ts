@@ -75,6 +75,11 @@ export const team = pgTable(
       .notNull()
       .references(() => roles.id, { onDelete: "restrict" }),
     status: membershipStatus("status").notNull().default("active"),
+    // When this person last had this workspace open. NULL = never opened.
+    // Server-authoritative, so the landing target follows the account across
+    // devices. Coalesced client-side by a debounce, so rapid switching
+    // doesn't emit a write per hop.
+    lastOpenedAt: timestamp("last_opened_at"),
     invitedAt: timestamp("invited_at"),
     // NULL = invited, hasn't joined yet.
     joinedAt: timestamp("joined_at"),
@@ -96,6 +101,10 @@ export const team = pgTable(
       .on(t.workspaceId, t.email)
       .where(sql`${t.userId} IS NULL AND ${t.email} IS NOT NULL`),
     index("team_workspace_idx").on(t.workspaceId),
+    // Resolving the landing workspace and listing the switcher both filter on
+    // user_id alone. team_workspace_user_unique leads with workspace_id, so it
+    // can't serve those lookups.
+    index("team_user_idx").on(t.userId),
   ]
 )
 

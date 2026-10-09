@@ -56,6 +56,30 @@ export const listWorkspacesFn = createServerFn({ method: "GET" }).handler(
   async () => service.listWorkspaces(await requireUserId())
 )
 
+/**
+ * Which workspace this person should land on, or null if they have none.
+ * Consumed by /dashboard's loader and by the post-auth redirects, so it must
+ * be cheap and session-gated like the rest.
+ */
+export const resolveLandingFn = createServerFn({ method: "GET" }).handler(
+  async () => service.resolveLandingWorkspace(await requireUserId())
+)
+
+/**
+ * Records a visit. Fire-and-forget from the client, so it returns nothing the
+ * caller needs to render.
+ */
+export const touchWorkspaceFn = createServerFn({ method: "POST" })
+  .validator(z.object({ slug: z.string() }))
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    const access = await service.getWorkspaceBySlug(userId, data.slug)
+    // Unknown or inaccessible slug: nothing to record, and not an error the
+    // caller acts on. Resolving it first means a bogus slug can't write.
+    if (!access) return
+    await service.touchWorkspace(userId, access.workspace.id)
+  })
+
 export const getWorkspaceFn = createServerFn({ method: "GET" })
   .validator(z.object({ slug: z.string() }))
   .handler(async ({ data }) => {

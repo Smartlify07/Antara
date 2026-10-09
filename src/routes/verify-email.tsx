@@ -5,7 +5,7 @@ import { AuthLayout } from "@/components/auth/auth-layout"
 import { AuthPending } from "@/components/auth/auth-pending"
 import { ResendVerification } from "@/components/auth/resend-verification"
 import { useSession } from "@/lib/auth-client"
-import { navigateWithTransition } from "@/lib/navigate-with-transition"
+import { enterApp } from "@/lib/enter-app"
 import {
   clearPendingVerification,
   readPendingVerification,
@@ -86,9 +86,9 @@ function VerifyEmailPage() {
   useEffect(() => {
     if (!verified) return
     clearPendingVerification()
-    void navigateWithTransition(() =>
-      navigate({ to: "/dashboard", replace: true })
-    )
+    // Straight to the workspace, not via /dashboard — enterApp resolves the
+    // same target the dashboard would have, without the intermediate route.
+    void enterApp(navigate)
   }, [verified, navigate])
 
   // Spinner while the session resolves, and again for the moment it takes to

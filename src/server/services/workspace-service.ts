@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne } from "drizzle-orm"
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm"
 import { db } from "@/db"
 import type { MembershipStatus } from "@/db/enums"
 import { seedWorkspaceRoles } from "@/db/seed"
@@ -122,6 +122,64 @@ export interface WorkspaceAccess {
   workspace: Workspace
   role: string
   isOwner: boolean
+}
+
+/**
+ * The workspace this person should land on after signing in or verifying:
+ * whichever they opened most recently. Returns null when they have none, which
+ * the caller turns into the create-workspace form.
+ *
+ * Single query by design — this sits on the post-auth path, so it shouldn't
+ * cost a second round trip after the session check.
+ *
+ * `nullsLast` is load-bearing. A workspace that has never been opened has a
+ * NULL `lastOpenedAt`, and Postgres sorts nulls FIRST on `desc` by default, so
+ * without it every never-opened workspace would outrank the ones actually
+ * visited. The `createdAt` tiebreak preserves the old "newest wins" behaviour
+ * for a fresh install where nothing has been opened yet.
+ *
+ * Mirrors `listWorkspaces`' filters so both agree on what counts as reachable:
+ * soft-deleted workspaces and memberships that have been left are excluded.
+ */
+export async function resolveLandingWorkspace(
+  userId: string
+): Promise<string | null> {
+  const rows = await db
+    .select({ slug: workspaces.slug })
+    .from(team)
+    .innerJoin(workspaces, eq(team.workspaceId, workspaces.id))
+    .where(
+      and(
+        eq(team.userId, userId),
+        ne(team.status, "left"),
+        isNull(workspaces.deletedAt)
+      )
+    )
+    // Written as a raw fragment rather than `desc(...)`: this Drizzle version
+    // has no `nullsLast()` helper, and the clause has to be explicit anyway —
+    // it's the whole reason the ordering is correct.
+    .orderBy(
+      sql`${team.lastOpenedAt} desc nulls last`,
+      desc(workspaces.createdAt)
+    )
+    .limit(1)
+
+  return rows[0]?.slug ?? null
+}
+
+/**
+ * Records that this person has a workspace open. Unconditional — the caller
+ * debounces, which coalesces rapid switching into a single write without the
+ * staleness a server-side time guard would introduce.
+ */
+export async function touchWorkspace(
+  userId: string,
+  workspaceId: string
+): Promise<void> {
+  await db
+    .update(team)
+    .set({ lastOpenedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(team.userId, userId), eq(team.workspaceId, workspaceId)))
 }
 
 /**

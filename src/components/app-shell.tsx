@@ -16,12 +16,12 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Link, useParams } from "@tanstack/react-router"
-import { rememberWorkspace } from "@/lib/last-workspace"
 import type { WorkspaceListItem } from "@/server/services/workspace-service"
 import {
   getWorkspaceFn,
   listWorkspaceMembersFn,
   listWorkspacesFn,
+  touchWorkspaceFn,
 } from "@/server/functions/workspaces"
 
 export interface Crumb {
@@ -64,9 +64,22 @@ export function AppShell({
       setTeamCount(null)
       return
     }
-    // Every workspace route funnels through the shell, so this is the
-    // single place that records "last opened workspace".
-    rememberWorkspace(workspaceSlug)
+
+    // Every workspace route funnels through the shell, so this is the single
+    // place that records "last opened workspace".
+    //
+    // Debounced rather than written straight away. Switching A → B → A quickly
+    // should record A, but two immediate writes would leave B as the most
+    // recent and drop the user into the workspace they left. The timer is
+    // cleared on every slug change, so only the final destination survives and
+    // rapid switching costs one write rather than one per hop.
+    //
+    // A server-side time guard was rejected for the same reason: it would skip
+    // the write on the way back and reintroduce exactly that staleness.
+    const touchTimer = setTimeout(() => {
+      void touchWorkspaceFn({ data: { slug: workspaceSlug } })
+    }, 400)
+
     let cancelled = false
     setTeamCount(null)
     ;(async () => {
@@ -82,6 +95,7 @@ export function AppShell({
     })()
     return () => {
       cancelled = true
+      clearTimeout(touchTimer)
     }
   }, [workspaceSlug])
 

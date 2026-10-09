@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useSession } from "@/lib/auth-client"
 
 export type AuthStatus = "pending" | "anonymous" | "authenticated"
@@ -19,17 +19,21 @@ export type AuthStatus = "pending" | "anonymous" | "authenticated"
  * fetch settles the children are *remounted* — which discards their state.
  * That is what turned a completed signup back into an empty form.
  *
- * Latching on the first settled result means a route that has already resolved
- * never un-resolves, so whatever it rendered stays mounted.
+ * The latch is set during render rather than in an effect. An effect always
+ * runs a tick after mount, which painted a spinner for a frame even when the
+ * session was already known — the common case when arriving directly at
+ * /login. Adjusting state during render re-renders before painting, so a
+ * resolved status is available on the very first frame.
  */
 export function useAuthStatus(): AuthStatus {
   const { data, isPending } = useSession()
-  const [settled, setSettled] = useState(false)
+  const [status, setStatus] = useState<AuthStatus | null>(() =>
+    isPending ? null : data?.session ? "authenticated" : "anonymous"
+  )
 
-  useEffect(() => {
-    if (!isPending) setSettled(true)
-  }, [isPending])
+  if (status === null && !isPending) {
+    setStatus(data?.session ? "authenticated" : "anonymous")
+  }
 
-  if (!settled) return "pending"
-  return data?.session ? "authenticated" : "anonymous"
+  return status ?? "pending"
 }
