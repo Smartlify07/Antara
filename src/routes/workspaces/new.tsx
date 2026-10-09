@@ -1,28 +1,23 @@
-import { Navigate, createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { AuthPending } from "@/components/auth/auth-pending"
 import { WorkspaceForm } from "@/components/workspaces/workspace-form"
-import { useAuthStatus } from "@/lib/use-auth-status"
+import { authLandingFn } from "@/server/functions/workspaces"
 
 export const Route = createFileRoute("/workspaces/new")({
+  // Anonymous visitors are turned away before the form renders. Previously
+  // this rendered `null` while the session resolved, which blanked the page,
+  // and swapped to a spinner on any background refetch.
+  beforeLoad: async () => {
+    const landing = await authLandingFn()
+    if (!landing) throw redirect({ to: "/login" })
+  },
   component: NewWorkspacePage,
 })
 
 function NewWorkspacePage() {
-  // Latched status, not `useSession().isPending` — the raw flag swaps this
-  // subtree for a spinner on any background refetch, which unmounts the form
-  // and blanks it. See `useAuthStatus`.
-  const status = useAuthStatus()
-
   return (
     <AuthLayout>
-      {status === "pending" ? (
-        <AuthPending />
-      ) : status === "anonymous" ? (
-        <Navigate to="/login" />
-      ) : (
-        <WorkspaceForm />
-      )}
+      <WorkspaceForm />
     </AuthLayout>
   )
 }

@@ -1,37 +1,42 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router"
 import { useEffect } from "react"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { AuthPending } from "@/components/auth/auth-pending"
 import { LoginForm } from "@/components/auth/login-form"
+import { useSession } from "@/lib/auth-client"
 import { enterApp } from "@/lib/enter-app"
-import { useAuthStatus } from "@/lib/use-auth-status"
+import { authLandingFn, landingRedirect } from "@/server/functions/workspaces"
 
 export const Route = createFileRoute("/login")({
+  // Redirects before the route renders, so someone who already has a session
+  // never sees the form — not even for a frame. Previously this was an effect,
+  // which meant rendering the form (or a spinner) and then navigating away.
+  //
+  // `beforeLoad` runs once per navigation, so it cannot observe a session
+  // created *by* signing in on this page. That one case is handled in the
+  // component below.
+  beforeLoad: async () => {
+    const landing = await authLandingFn()
+    if (!landing) return
+    throw redirect(landingRedirect(landing.slug))
+  },
   component: LoginPage,
 })
 
-/**
- * Owns *all* post-auth navigation. It used to be split between this route and
- * `LoginForm`, which both navigated on a successful sign-in: this page's
- * `<Navigate>` fired the instant the session atom updated, racing the
- * navigation in the form. Whichever lost, one of the two was untransitioned, so
- * the hand-off jumped instead of animating.
- *
- * `LoginForm` no longer navigates — the session atom updating is the trigger,
- * and this route is the only thing that reacts to it.
- */
 function LoginPage() {
-  const status = useAuthStatus()
   const navigate = useNavigate()
+  const { data } = useSession()
 
+  // Signs-in that happen on this page never re-run `beforeLoad`, so this is
+  // the one path left to cover. The form is already on screen and this
+  // navigates away from it — no pending state, nothing to flash.
   useEffect(() => {
-    if (status !== "authenticated") return
+    if (!data?.session) return
     void enterApp(navigate)
-  }, [status, navigate])
+  }, [data?.session, navigate])
 
   return (
     <AuthLayout>
-      {status === "pending" ? <AuthPending /> : <LoginForm />}
+      <LoginForm />
     </AuthLayout>
   )
 }

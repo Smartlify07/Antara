@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { resendVerificationEmail } from "@/lib/auth-client"
 import { resendSchema, type ResendInput } from "@/lib/auth-schemas"
+import { clearPendingVerification } from "@/lib/pending-verification"
 
 /**
  * Shown after every send attempt, whether or not it worked. This must never
@@ -61,6 +62,10 @@ export function ResendVerification({
     const { error } = await resendVerificationEmail(email)
     // Swallowed on purpose — see the note above.
     void error
+    // The stored copy has done its job once a fresh link is out. Clearing it
+    // bounds how long a stale address lingers, which matters because the
+    // button variant can't be corrected by hand once shown.
+    clearPendingVerification()
   }
 
   async function onSubmit(values: ResendInput) {

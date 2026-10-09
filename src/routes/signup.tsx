@@ -1,31 +1,27 @@
-import { Navigate, createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { AuthPending } from "@/components/auth/auth-pending"
 import { SignupForm } from "@/components/auth/signup-form"
-import { useAuthStatus } from "@/lib/use-auth-status"
+import { authLandingFn, landingRedirect } from "@/server/functions/workspaces"
 
 export const Route = createFileRoute("/signup")({
+  // Signed-in visitors are turned away before the form renders. The old
+  // version rendered the form (or a spinner) and redirected from an effect.
+  beforeLoad: async () => {
+    const landing = await authLandingFn()
+    if (!landing) return
+    throw redirect(landingRedirect(landing.slug))
+  },
   component: SignupPage,
 })
 
 function SignupPage() {
-  // Latched status, not `useSession().isPending`. Gating on the raw flag let a
-  // background refetch swap this subtree for a spinner and remount it, which
-  // discarded the completed-signup state and put an empty form back on
-  // screen. See `useAuthStatus`.
-  const status = useAuthStatus()
-
-  // Signup never navigates from inside the form — no session exists until the
-  // address is verified — so this only fires for someone arriving signed in.
+  // No pending state and no client-side redirect: signup never creates a
+  // session (verification gates it), and the Google button does a full-page
+  // redirect via callbackURL rather than a client-side one. So the only way a
+  // session can appear here is `beforeLoad`, which already handled it.
   return (
     <AuthLayout>
-      {status === "pending" ? (
-        <AuthPending />
-      ) : status === "authenticated" ? (
-        <Navigate to="/dashboard" />
-      ) : (
-        <SignupForm />
-      )}
+      <SignupForm />
     </AuthLayout>
   )
 }

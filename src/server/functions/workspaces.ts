@@ -57,6 +57,41 @@ export const listWorkspacesFn = createServerFn({ method: "GET" }).handler(
 )
 
 /**
+ * Answers "should this visitor be somewhere other than the auth pages?"
+ *
+ * Returns null when there is no session — the caller renders as normal.
+ * Otherwise it returns enough for a `beforeLoad` to redirect: the workspace
+ * to go to, and whether the address is confirmed.
+ *
+ * Deliberately doesn't throw on a missing session the way `requireUserId`
+ * does. The authenticated routes need to tell "signed out, stay put" apart
+ * from "signed in, go elsewhere", and that distinction is the whole point.
+ */
+export const authLandingFn = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const session = await auth.api.getSession({
+      headers: await getRequestHeaders(),
+    })
+    if (!session?.user) return null
+    const slug = await service.resolveLandingWorkspace(session.user.id)
+    return { slug, emailVerified: session.user.emailVerified }
+  }
+)
+
+/**
+ * The redirect an auth route's `beforeLoad` throws once it knows a visitor
+ * belongs in the app rather than on the auth pages.
+ */
+export function landingRedirect(slug: string | null) {
+  return slug
+    ? {
+        to: "/w/$workspaceSlug/projects" as const,
+        params: { workspaceSlug: slug },
+      }
+    : { to: "/workspaces/new" as const }
+}
+
+/**
  * Which workspace this person should land on, or null if they have none.
  * Consumed by /dashboard's loader and by the post-auth redirects, so it must
  * be cheap and session-gated like the rest.

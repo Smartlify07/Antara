@@ -1,21 +1,24 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
+import { Link, createFileRoute, redirect } from "@tanstack/react-router"
 import { MailWarning } from "lucide-react"
 import { useEffect, useState } from "react"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { AuthPending } from "@/components/auth/auth-pending"
 import { ResendVerification } from "@/components/auth/resend-verification"
-import { useSession } from "@/lib/auth-client"
-import { enterApp } from "@/lib/enter-app"
-import {
-  clearPendingVerification,
-  readPendingVerification,
-} from "@/lib/pending-verification"
-import { useAuthStatus } from "@/lib/use-auth-status"
+import { readPendingVerification } from "@/lib/pending-verification"
+import { authLandingFn, landingRedirect } from "@/server/functions/workspaces"
 
 export const Route = createFileRoute("/verify-email")({
   validateSearch: (search: Record<string, unknown>) => ({
     error: typeof search.error === "string" ? search.error : undefined,
   }),
+  // Clicking a working link never renders this route. better-auth has already
+  // consumed the token and set the session cookie by the time we're asked, so
+  // a confirmed visitor is redirected straight into the app — the page is a
+  // dead link handler and a bare-visit landing, nothing more.
+  beforeLoad: async () => {
+    const landing = await authLandingFn()
+    if (!landing?.emailVerified) return
+    throw redirect(landingRedirect(landing.slug))
+  },
   component: VerifyEmailPage,
 })
 
@@ -42,39 +45,21 @@ const GENERIC_ERROR = {
 }
 
 /**
- * The page the emailed link redirects to once its token is consumed.
+ * Where a dead verification link lands.
  *
- * better-auth performs the verification itself and then redirects here, so
- * this page never sees a token. It receives either nothing at all (success)
- * or `?error=SLUG` (failure).
+ * better-auth consumes the token itself and redirects here, so this page never
+ * sees one. It receives either nothing at all (success) or `?error=SLUG`. The
+ * success branch no longer arrives — `beforeLoad` redirects confirmed visitors
+ * before this renders — so what remains is the explanation for a link that
+ * didn't work.
  *
- * This route exists only for the failure branch. On success it continues
- * straight to /dashboard instead of rendering anything — a link that already
- * did the thing doesn't need a page confirming it did. The redirect is a
- * second 302, so nobody perceives this route at all.
- *
- * `callbackURL` can't just be /dashboard, by the way. It's a single value used
- * for *both* outcomes, so failures would land on /dashboard?error=TOKEN_EXPIRED,
- * where the loader bounces an unauthenticated visitor to /login and the error
- * disappears. Keeping the redirect here is what lets a dead link explain itself.
- *
- * The bare URL is ambiguous — identical whether someone just clicked a working
- * link or typed the address in — so success is resolved from the session rather
- * than the absence of a parameter. better-auth has already set a cookie for a
- * now-verified user by the time we're asked.
+ * `callbackURL` can't just be the workspace, by the way. It's a single value
+ * used for *both* outcomes, so failures would land somewhere the loader
+ * bounces an unauthenticated visitor to /login, and the error would be
+ * swallowed. Keeping the redirect here is what lets a dead link say why.
  */
 function VerifyEmailPage() {
   const { error } = Route.useSearch()
-  // Latched, because `useSession().isPending` also goes true on background
-  // refetches — focusing the window mid-flow would otherwise bounce a
-  // confirmed user back to a spinner.
-  const status = useAuthStatus()
-  const { data } = useSession()
-  const navigate = useNavigate()
-
-  const errorCopy = error ? (ERROR_COPY[error] ?? GENERIC_ERROR) : null
-  const verified =
-    status === "authenticated" && data?.user?.emailVerified === true
 
   // Read after mount: the route is server-rendered, so touching localStorage
   // during render would mismatch on hydration.
@@ -83,17 +68,7 @@ function VerifyEmailPage() {
     setPendingEmail(readPendingVerification())
   }, [])
 
-  useEffect(() => {
-    if (!verified) return
-    clearPendingVerification()
-    // Straight to the workspace, not via /dashboard — enterApp resolves the
-    // same target the dashboard would have, without the intermediate route.
-    void enterApp(navigate)
-  }, [verified, navigate])
-
-  // Spinner while the session resolves, and again for the moment it takes to
-  // hand off to the app on success.
-  const settling = status === "pending" || verified
+  const errorCopy = error ? (ERROR_COPY[error] ?? GENERIC_ERROR) : null
 
   return (
     <AuthLayout>
@@ -110,8 +85,6 @@ function VerifyEmailPage() {
               hideInput={!!pendingEmail}
             />
           </>
-        ) : settling ? (
-          <AuthPending />
         ) : (
           <>
             <Header
@@ -126,14 +99,12 @@ function VerifyEmailPage() {
           </>
         )}
 
-        {!settling && (
-          <p className="text-sm tracking-tight text-balance text-muted-foreground">
-            Already verified?{" "}
-            <Link to="/login" className="font-medium">
-              Log in
-            </Link>
-          </p>
-        )}
+        <p className="text-sm tracking-tight text-balance text-muted-foreground">
+          Already verified?{" "}
+          <Link to="/login" className="font-medium">
+            Log in
+          </Link>
+        </p>
       </div>
     </AuthLayout>
   )
