@@ -40,10 +40,20 @@ export const projectStatus = pgEnum("project_status", [
   "archived",
 ])
 
+// One review decision per progress update, made by the project lead. Approval
+// attaches to the submission rather than to each file, so a post carrying four
+// attachments is one decision rather than four.
+export const updateReviewStatus = pgEnum("update_review_status", [
+  "pending",
+  "approved",
+  "changes_requested",
+])
+
 export type TaskStatus = (typeof taskStatus.enumValues)[number]
 export type TaskPriority = (typeof taskPriority.enumValues)[number]
 export type AssetProvider = (typeof assetProvider.enumValues)[number]
 export type RoleScope = (typeof roleScope.enumValues)[number]
 export type MembershipStatus = (typeof membershipStatus.enumValues)[number]
+export type UpdateReviewStatus = (typeof updateReviewStatus.enumValues)[number]
 export type DeletionJobStatus = (typeof deletionJobStatus.enumValues)[number]
 export type ProjectStatus = (typeof projectStatus.enumValues)[number]

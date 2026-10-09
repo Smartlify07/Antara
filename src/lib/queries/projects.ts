@@ -1,8 +1,11 @@
 import { queryOptions } from "@tanstack/react-query"
 import {
+  canReviewProjectUpdatesFn,
+  getProjectDetailFn,
   listAssignableMembersFn,
   listProjectTagsFn,
   listProjectsFn,
+  listProjectUpdatesFn,
 } from "@/server/functions/projects"
 import { slugifyTitle } from "@/lib/project-schemas"
 import type { CreateProjectInput } from "@/lib/project-schemas"
@@ -10,6 +13,7 @@ import type {
   ProjectListItem,
   ProjectTagOption,
 } from "@/server/services/project-service"
+import type { ProjectUpdateItem } from "@/server/services/project-update-service"
 
 /**
  * Query keys for projects.
@@ -24,6 +28,15 @@ export const projectKeys = {
   assignableMembers: (workspaceId: string) =>
     ["projects", "members", workspaceId] as const,
   tags: (workspaceId: string) => ["projects", "tags", workspaceId] as const,
+  // Keyed by slug, not id: the route resolves the project from the URL and
+  // only then learns its id, so an id-keyed query could not be declared until
+  // a second round trip had already happened.
+  detail: (workspaceId: string, slug: string) =>
+    ["projects", "detail", workspaceId, slug] as const,
+  updates: (workspaceId: string, projectId: string) =>
+    ["projects", "updates", workspaceId, projectId] as const,
+  canReview: (workspaceId: string, projectId: string) =>
+    ["projects", "can-review", workspaceId, projectId] as const,
 }
 
 export function projectsQuery(workspaceId: string) {
@@ -44,6 +57,36 @@ export function projectTagsQuery(workspaceId: string) {
   return queryOptions({
     queryKey: projectKeys.tags(workspaceId),
     queryFn: () => listProjectTagsFn({ data: { workspaceId } }),
+  })
+}
+
+/** Null when the slug no longer resolves — a soft-deleted project. */
+export function projectDetailQuery(workspaceId: string, slug: string) {
+  return queryOptions({
+    queryKey: projectKeys.detail(workspaceId, slug),
+    queryFn: () =>
+      getProjectDetailFn({ data: { workspaceId, projectSlug: slug } }),
+  })
+}
+
+export function projectUpdatesQuery(workspaceId: string, projectId: string) {
+  return queryOptions({
+    queryKey: projectKeys.updates(workspaceId, projectId),
+    queryFn: () => listProjectUpdatesFn({ data: { workspaceId, projectId } }),
+  })
+}
+
+/**
+ * Whether to render approve / request-changes controls. Fetched rather than
+ * derived client-side because the answer depends on the actor's workspace role
+ * *and* their project `lead` membership; the service enforces the same rule on
+ * write, so hiding the control is presentation, not the guard.
+ */
+export function canReviewUpdatesQuery(workspaceId: string, projectId: string) {
+  return queryOptions({
+    queryKey: projectKeys.canReview(workspaceId, projectId),
+    queryFn: () =>
+      canReviewProjectUpdatesFn({ data: { workspaceId, projectId } }),
   })
 }
 
@@ -109,6 +152,54 @@ export function buildOptimisticProject(
         color: NEUTRAL_TAG_COLOUR,
       })),
     ],
+    optimistic: true,
+  }
+}
+
+/**
+ * A placeholder update living in the feed alongside real ones.
+ *
+ * `optimistic` is not decoration: the card reads it to dim the row and to
+ * suppress the review controls, since a submission the server has not accepted
+ * has nothing to approve yet.
+ */
+export type OptimisticUpdate = ProjectUpdateItem & { optimistic: true }
+
+/**
+ * Builds the row rendered between the click and the server's response.
+ *
+ * `localUrl` is the browser object URL for each attachment. Those previews
+ * must be revoked by the caller when the placeholder is replaced or rolled
+ * back — the grid never made optimistic rows carry blob URLs, so nothing else
+ * in the app does this cleanup today.
+ */
+export function buildOptimisticUpdate(input: {
+  body: string
+  author: ProjectUpdateItem["author"]
+  attachments: { file: File; url: string }[]
+}): OptimisticUpdate {
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+  return {
+    id: `optimistic-${stamp}`,
+    body: input.body,
+    reviewStatus: "pending",
+    reviewNote: null,
+    createdAt: new Date(),
+    author: input.author,
+    reviewer: null,
+    versions: input.attachments.map((attachment, index) => ({
+      id: `optimistic-version-${stamp}-${index}`,
+      // Each pending file is its own asset for now: the real numbering only
+      // exists server-side, where filenames are matched against prior assets.
+      assetId: `optimistic-asset-${stamp}-${index}`,
+      filename: attachment.file.name,
+      label: "—",
+      versionNo: 0,
+      url: attachment.url,
+      mimeType: attachment.file.type || "application/octet-stream",
+      sizeBytes: attachment.file.size,
+    })),
     optimistic: true,
   }
 }

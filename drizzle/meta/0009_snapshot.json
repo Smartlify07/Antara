@@ -111,14 +111,20 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.rateLimit": {
-      "name": "rateLimit",
+    "public.rate_limit": {
+      "name": "rate_limit",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "key": {
           "name": "key",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "count": {
@@ -129,7 +135,7 @@
         },
         "last_request": {
           "name": "last_request",
-          "type": "integer",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         }
@@ -137,7 +143,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "rate_limit_key_unique": {
+          "name": "rate_limit_key_unique",
+          "columns": [
+            "key"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -54,6 +54,93 @@ export const createTagSchema = z.object({
   label: z.string().trim().min(1).max(40),
 })
 
+const projectStatusEnum = z.enum([
+  "planning",
+  "active",
+  "on_hold",
+  "completed",
+  "archived",
+])
+
+const scopedProject = z.object({
+  workspaceId: z.string(),
+  projectId: z.string(),
+})
+
+/** Body text for the progress-update composer. */
+export const projectUpdateSchema = z.object({
+  ...scopedProject.shape,
+  body: z
+    .string()
+    .trim()
+    .min(1, "Write something before sending")
+    .max(4000, "Update must be at most 4000 characters"),
+  /**
+   * Already-uploaded files. The browser uploads each attachment to the
+   * provider first, then posts the resulting metadata here — so the
+   * request carries URLs, never bytes.
+   */
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string().trim().min(1).max(255),
+        url: z.string().url(),
+        provider: z.enum(["cloudinary", "aws"]),
+        providerKey: z.string().trim().min(1).max(512),
+        mimeType: z.string().trim().min(1).max(255),
+        sizeBytes: z.number().int().nonnegative(),
+      })
+    )
+    .max(20)
+    .default([]),
+})
+
+export const updateProjectReviewSchema = z.object({
+  ...scopedProject.shape,
+  updateId: z.string(),
+  decision: z.enum(["approved", "changes_requested"]),
+  note: z.string().trim().max(1000).optional(),
+})
+
+export const setProjectLeadSchema = z.object({
+  ...scopedProject.shape,
+  /** `team.id` of the new lead, or null to clear the role. */
+  teamId: z.string().nullable(),
+})
+
+export const addProjectMembersSchema = z.object({
+  ...scopedProject.shape,
+  teamIds: z.array(z.string()).max(50),
+})
+
+export const setProjectDatesSchema = z
+  .object({
+    ...scopedProject.shape,
+    startDate: z.date().nullable(),
+    deadline: z.date().nullable(),
+  })
+  .refine(
+    (data) =>
+      !data.startDate || !data.deadline || data.deadline >= data.startDate,
+    {
+      message: "End date must be on or after the start date",
+      path: ["deadline"],
+    }
+  )
+
+export const setProjectTagsSchema = z.object({
+  ...scopedProject.shape,
+  tagIds: z.array(z.string()).max(20).default([]),
+  newTagLabels: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+})
+
+export const setProjectDescriptionSchema = z.object({
+  ...scopedProject.shape,
+  description: z.string().trim().max(2000).or(z.literal("")),
+})
+
+export { projectStatusEnum }
+
 /** Derives a URL-safe handle from a project title. */
 export function slugifyTitle(value: string): string {
   return value
