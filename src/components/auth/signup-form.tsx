@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/logo"
 import { GoogleButton } from "@/components/auth/google-button"
+import { ResendVerification } from "@/components/auth/resend-verification"
 import {
   Field,
   FieldDescription,
@@ -17,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
 import { signupSchema, type SignupInput } from "@/lib/auth-schemas"
+import { rememberPendingVerification } from "@/lib/pending-verification"
 
 /**
  * Shown for every signup outcome, whether or not the address was already
@@ -31,6 +33,7 @@ const SIGNUP_MESSAGE =
 
 export function SignupForm() {
   const [done, setDone] = useState(false)
+  const [sentTo, setSentTo] = useState("")
   const [serverError, setServerError] = useState<string | null>(null)
   const form = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
@@ -44,11 +47,22 @@ export function SignupForm() {
       name: values.name.trim(),
       email: values.email.trim(),
       password: values.password,
+      // Where the emailed link lands once its token is consumed. Without
+      // this better-auth defaults to "/", which drops the user on the
+      // marketing page with no confirmation that anything happened.
+      callbackURL: "/verify-email",
     })
 
     // Any outcome shows the same message. Branching on `error` would leak
     // which addresses are registered.
     void error
+    const email = values.email.trim()
+    // Remember it so a dead link doesn't send them back to an empty field.
+    // Store on every attempt, not just new accounts: signup returns the same
+    // response either way, and the person who typed it wants this address
+    // verified regardless of whether the row already existed.
+    rememberPendingVerification(email)
+    setSentTo(email)
     setDone(true)
   }
 
@@ -76,6 +90,7 @@ export function SignupForm() {
             <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm">
               {SIGNUP_MESSAGE}
             </p>
+            <ResendVerification defaultEmail={sentTo} hideInput />
             <FieldDescription className="px-6 text-center">
               Already verified?{" "}
               <Link to="/login" className="font-medium">

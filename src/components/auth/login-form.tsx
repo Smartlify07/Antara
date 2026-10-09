@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2 } from "lucide-react"
 import { useState } from "react"
@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/logo"
 import { GoogleButton } from "@/components/auth/google-button"
+import { ResendVerification } from "@/components/auth/resend-verification"
 import {
   Field,
   FieldDescription,
@@ -16,12 +17,15 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
-import { navigateWithTransition } from "@/lib/navigate-with-transition"
 import { loginSchema, type LoginInput } from "@/lib/auth-schemas"
 
 export function LoginForm() {
-  const navigate = useNavigate()
   const [serverError, setServerError] = useState<string | null>(null)
+  // Set only when sign-in fails because the address is unverified. It gates
+  // the inline resend: re-sending is only useful once we know the password
+  // was correct, and showing it unconditionally would invite mail traffic
+  // from anyone with an address.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -29,6 +33,7 @@ export function LoginForm() {
 
   async function onSubmit(values: LoginInput) {
     setServerError(null)
+    setUnverifiedEmail(null)
     const { error } = await authClient.signIn.email({
       email: values.email.trim(),
       password: values.password,
@@ -39,15 +44,20 @@ export function LoginForm() {
       // reveals nothing an attacker didn't already have.
       if (error.code === "EMAIL_NOT_VERIFIED") {
         setServerError(
-          "Check your inbox for a verification link — this address isn't confirmed yet."
+          "This address isn't confirmed yet. Check your inbox for the verification link."
         )
+        setUnverifiedEmail(values.email.trim())
         return
       }
       // Generic message: don't reveal whether the email is registered.
       setServerError("Invalid email or password. Please try again.")
       return
     }
-    await navigateWithTransition(() => navigate({ to: "/dashboard" }))
+
+    // No navigation here on purpose. The session atom updating is what
+    // triggers the redirect, and `LoginPage` owns it so there's a single
+    // navigation to animate. Navigating from here as well raced that and
+    // left one of the two untransitioned.
   }
 
   const { errors, isSubmitting } = form.formState
@@ -76,6 +86,10 @@ export function LoginForm() {
           >
             {serverError}
           </p>
+        )}
+
+        {unverifiedEmail && (
+          <ResendVerification defaultEmail={unverifiedEmail} hideInput />
         )}
 
         <Field data-invalid={!!errors.email}>

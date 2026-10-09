@@ -1,58 +1,21 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useEffect, useRef } from "react"
-import { Loader2 } from "lucide-react"
-import { readLastWorkspace } from "@/lib/last-workspace"
-import { navigateWithTransition } from "@/lib/navigate-with-transition"
-import { listWorkspacesFn } from "@/server/functions/workspaces"
+import { createFileRoute, redirect } from "@tanstack/react-router"
+import { resolveLandingFn } from "@/server/functions/workspaces"
 
 export const Route = createFileRoute("/dashboard")({
-  // listWorkspacesFn redirects to /login when there is no session.
-  loader: async () => listWorkspacesFn(),
-  component: DashboardRedirect,
-})
-
-/**
- * /dashboard is a router, not a page: it forwards to the last opened
- * workspace, falling back to the most recent one, and sends users with no
- * workspaces to the creation form. Navigating to /w/:slug always wins,
- * since that route renders the workspace directly.
- */
-function DashboardRedirect() {
-  const workspaces = Route.useLoaderData()
-  const navigate = useNavigate()
-  const started = useRef(false)
-
-  useEffect(() => {
-    if (started.current) return
-    started.current = true
-
-    if (workspaces.length === 0) {
-      void navigate({ to: "/workspaces/new", replace: true })
-      return
-    }
-
-    const last = readLastWorkspace()
-    const exists = workspaces.some((item) => item.workspace.slug === last)
-    const target =
-      last && exists
-        ? last
-        : [...workspaces].sort(
-            (a, b) =>
-              b.workspace.createdAt.getTime() - a.workspace.createdAt.getTime()
-          )[0]!.workspace.slug
-
-    void navigateWithTransition(() =>
-      navigate({
-        to: "/w/$workspaceSlug/projects",
-        params: { workspaceSlug: target },
-        replace: true,
-      })
+  // Resolves in the loader and bails out with a redirect, so this route never
+  // renders a component. That matters: it used to render a spinner and
+  // redirect from an effect, so every route through here — signing in, the
+  // Google callback, the "already have a workspace?" link — flashed a
+  // full-page loading state for a navigation that resolves immediately.
+  //
+  // The decision is server-side (team.last_opened_at) precisely so it can live
+  // here, before render.
+  loader: async () => {
+    const slug = await resolveLandingFn()
+    throw redirect(
+      slug
+        ? { to: "/w/$workspaceSlug/projects", params: { workspaceSlug: slug } }
+        : { to: "/workspaces/new" }
     )
-  }, [navigate, workspaces])
-
-  return (
-    <main className="flex min-h-svh items-center justify-center">
-      <Loader2 className="animate-spin text-muted-foreground" />
-    </main>
-  )
-}
+  },
+})
