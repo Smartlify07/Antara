@@ -28,6 +28,12 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     expiresIn: 60 * 60 * 48, // 48 hours
+    // Must be explicit. better-auth documents no default for this, and the
+    // handler is `if (options?.autoSignInAfterVerification)` — so leaving it
+    // unset means no session is created and the user is still anonymous after
+    // verifying. /verify-email decides where to send people by reading the
+    // session, so without this it can't tell a success from a bare visit.
+    autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
       // Deliberately not awaited and never allowed to throw: a provider
       // failure must not turn into a distinguishable signup response.

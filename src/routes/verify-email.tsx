@@ -1,11 +1,15 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import { MailWarning } from "lucide-react"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { AuthPending } from "@/components/auth/auth-pending"
 import { ResendVerification } from "@/components/auth/resend-verification"
 import { useSession } from "@/lib/auth-client"
 import { navigateWithTransition } from "@/lib/navigate-with-transition"
+import {
+  clearPendingVerification,
+  readPendingVerification,
+} from "@/lib/pending-verification"
 import { useAuthStatus } from "@/lib/use-auth-status"
 
 export const Route = createFileRoute("/verify-email")({
@@ -72,8 +76,16 @@ function VerifyEmailPage() {
   const verified =
     status === "authenticated" && data?.user?.emailVerified === true
 
+  // Read after mount: the route is server-rendered, so touching localStorage
+  // during render would mismatch on hydration.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null)
+  useEffect(() => {
+    setPendingEmail(readPendingVerification())
+  }, [])
+
   useEffect(() => {
     if (!verified) return
+    clearPendingVerification()
     void navigateWithTransition(() =>
       navigate({ to: "/dashboard", replace: true })
     )
@@ -93,7 +105,10 @@ function VerifyEmailPage() {
               title={errorCopy.title}
               body={errorCopy.body}
             />
-            <ResendVerification />
+            <ResendVerification
+              defaultEmail={pendingEmail ?? ""}
+              hideInput={!!pendingEmail}
+            />
           </>
         ) : settling ? (
           <AuthPending />
@@ -104,7 +119,10 @@ function VerifyEmailPage() {
               title="Check your inbox"
               body="If that address needs verifying, we've sent it a link. Open it to finish setting up your account."
             />
-            <ResendVerification />
+            <ResendVerification
+              defaultEmail={pendingEmail ?? ""}
+              hideInput={!!pendingEmail}
+            />
           </>
         )}
 

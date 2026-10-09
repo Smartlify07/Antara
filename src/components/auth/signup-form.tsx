@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
 import { signupSchema, type SignupInput } from "@/lib/auth-schemas"
+import { rememberPendingVerification } from "@/lib/pending-verification"
 
 /**
  * Shown for every signup outcome, whether or not the address was already
@@ -55,7 +56,13 @@ export function SignupForm() {
     // Any outcome shows the same message. Branching on `error` would leak
     // which addresses are registered.
     void error
-    setSentTo(values.email.trim())
+    const email = values.email.trim()
+    // Remember it so a dead link doesn't send them back to an empty field.
+    // Store on every attempt, not just new accounts: signup returns the same
+    // response either way, and the person who typed it wants this address
+    // verified regardless of whether the row already existed.
+    rememberPendingVerification(email)
+    setSentTo(email)
     setDone(true)
   }
 

@@ -53,6 +53,10 @@ export function ResendVerification({
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
 
+  // Never hide the field without an address to send to — a button that
+  // silently mails "" looks like it worked and isn't a button worth having.
+  const buttonOnly = hideInput && defaultEmail.trim().length > 0
+
   async function send(email: string) {
     const { error } = await resendVerificationEmail(email)
     // Swallowed on purpose — see the note above.
@@ -87,7 +91,7 @@ export function ResendVerification({
     </p>
   )
 
-  if (hideInput) {
+  if (buttonOnly) {
     return (
       <div className={className}>
         {status}
