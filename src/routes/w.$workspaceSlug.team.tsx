@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
+import { InviteDialog } from "@/components/team/invite-dialog"
+import { PendingInvites } from "@/components/team/pending-invites"
 import { TeamMembers } from "@/components/team/team-members"
 import {
   Card,
@@ -15,15 +17,16 @@ export const Route = createFileRoute("/w/$workspaceSlug/team")({
 })
 
 function TeamPage() {
-  const { workspaceId, workspaceRole, isWorkspaceOwner } =
+  const { workspace, workspaceId, workspaceRole, isWorkspaceOwner } =
     Route.useRouteContext()
 
-  // Cached under a key, so the upcoming invite/role/suspend mutations can
-  // invalidate this list without `router.invalidate()` refetching unrelated
-  // loaders across the app.
-  const { data: members = [], isPending, error } = useQuery(
-    teamMembersQuery(workspaceId),
-  )
+  // Cached under a key, so the invite mutations can invalidate this list
+  // without `router.invalidate()` refetching unrelated loaders across the app.
+  const {
+    data: members = [],
+    isPending,
+    error,
+  } = useQuery(teamMembersQuery(workspaceId))
 
   const canManage = workspaceRole === "admin" || isWorkspaceOwner
 
@@ -43,7 +46,9 @@ function TeamPage() {
             Members
           </CardTitle>
           <CardDescription>
-            Invitations, suspensions, and role changes arrive next.
+            {canManage
+              ? "Invite people, and manage who can see this workspace."
+              : "Invitations, suspensions, and role changes arrive next."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -56,10 +61,23 @@ function TeamPage() {
                 : "Could not load members."}
             </p>
           ) : (
-            <TeamMembers members={members} canManage={canManage} />
+            <TeamMembers
+              members={members}
+              canManage={canManage}
+              action={
+                canManage ? (
+                  <InviteDialog
+                    workspaceSlug={workspace.slug}
+                    workspaceId={workspaceId}
+                  />
+                ) : null
+              }
+            />
           )}
         </CardContent>
       </Card>
+
+      {canManage && <PendingInvites workspaceSlug={workspace.slug} />}
     </div>
   )
 }

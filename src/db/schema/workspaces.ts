@@ -87,9 +87,12 @@ export const team = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
+    // Exactly one of the two, not merely at least one. With an OR a row can
+    // carry both a user and an email, and the signup backfill then has no
+    // single identity to match on.
     check(
       "team_user_or_email",
-      sql`${t.userId} IS NOT NULL OR ${t.email} IS NOT NULL`
+      sql`num_nonnulls(${t.userId}, ${t.email}) = 1`
     ),
     uniqueIndex("team_workspace_user_unique")
       .on(t.workspaceId, t.userId)
@@ -115,12 +118,20 @@ export const workspaceInvites = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
+    // Normalised on write; the case-insensitive index below is what lookups
+    // and the signup backfill match on.
     email: text("email").notNull(),
+    // Must be a workspace-scope role. `roles` holds two scopes with duplicate
+    // titles, so this FK alone does not prove it — the service validates.
     roleId: text("role_id")
       .notNull()
       .references(() => roles.id, { onDelete: "restrict" }),
-    token: text("token").notNull().unique(),
+    // SHA-256 of the emailed token, never the token itself. Named for what it
+    // is so nobody logs or compares it in the clear.
+    tokenHash: text("token_hash").notNull().unique(),
     expiresAt: timestamp("expires_at").notNull(),
+    // Audit trail. Deliberately not surfaced in the workspace switcher — see
+    // the reconnaissance note in the handoff — and only ever sent to admins.
     invitedBy: text("invited_by").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -130,6 +141,12 @@ export const workspaceInvites = pgTable(
   (t) => [
     index("workspace_invites_workspace_idx").on(t.workspaceId),
     index("workspace_invites_email_idx").on(sql`lower(${t.email})`),
+    // One live invite per address per workspace. Without this, an admin can
+    // mint unlimited live tokens for one person. It also makes resend a plain
+    // replace: delete the pending row, insert a fresh one.
+    uniqueIndex("workspace_invites_pending_unique")
+      .on(t.workspaceId, sql`lower(${t.email})`)
+      .where(sql`${t.acceptedAt} IS NULL`),
   ]
 )
 

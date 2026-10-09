@@ -15,7 +15,8 @@ async function requireUserId(): Promise<string> {
   const session = await auth.api.getSession({
     headers: await getRequestHeaders(),
   })
-  if (!session?.user) throw redirect({ to: "/login" })
+  if (!session?.user)
+    throw redirect({ to: "/login", search: { callbackURL: undefined } })
   return session.user.id
 }
 

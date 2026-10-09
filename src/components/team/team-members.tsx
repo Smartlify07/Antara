@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { PlusIcon, SearchIcon } from "lucide-react"
+import { SearchIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -27,9 +27,12 @@ function initials(member: WorkspaceMemberItem) {
 export function TeamMembers({
   members,
   canManage,
+  action,
 }: {
   members: WorkspaceMemberItem[]
   canManage: boolean
+  /** Slot for the invite button, so it isn't duplicated per consumer. */
+  action?: React.ReactNode
 }) {
   const [query, setQuery] = useState("")
 
@@ -52,10 +55,7 @@ export function TeamMembers({
             className="pl-8"
           />
         </div>
-        <Button disabled>
-          <PlusIcon />
-          Invite member
-        </Button>
+        {action}
       </div>
 
       <div className="divide-y divide-border rounded-xl border">

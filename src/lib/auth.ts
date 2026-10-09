@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { db } from "@/db"
 import { sendVerificationEmail } from "@/lib/email/templates"
 import { normalizeEmail } from "@/lib/normalize-email"
+import { backfillSeatsForVerifiedUser } from "@/server/services/invite-service"
 
 /**
  * Production origin. Keep this explicit rather than letting better-auth
@@ -38,6 +39,28 @@ export const auth = betterAuth({
       // Deliberately not awaited and never allowed to throw: a provider
       // failure must not turn into a distinguishable signup response.
       void sendVerificationEmail({ to: user.email, name: user.name, url })
+    },
+    // Attaches a freshly-confirmed account to any seat an admin reserved for
+    // that address.
+    //
+    // Hooked on verification rather than on sign-up, and that is the whole
+    // security argument for this feature. A seat exists for an address that
+    // may have no account yet, so *registering* that address succeeds — anyone
+    // can claim it. Only confirmation proves the caller controls the mailbox,
+    // so this fires on `emailVerified` becoming true and nowhere earlier.
+    //
+    // Resolves identity only. The seat stays pending until the invite link is
+    // actually redeemed, so someone who verifies before clicking still has a
+    // link worth clicking.
+    afterEmailVerification: async (user) => {
+      try {
+        await backfillSeatsForVerifiedUser(user.id, user.email)
+      } catch (error) {
+        // Never surfaced to the caller: it would turn verification into a
+        // distinguishable failure and break the sign-in handoff. The seat
+        // stays pending and is claimed at accept time instead.
+        console.error("[invites] seat backfill failed:", error)
+      }
     },
   },
 

@@ -71,6 +71,13 @@
       "when": 1791533355564,
       "tag": "0009_team_last_opened_at",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791563217237,
+      "tag": "0010_invite_token_hash_and_constraints",
+      "breakpoints": true
     }
   ]
 }

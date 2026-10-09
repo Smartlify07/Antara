@@ -53,7 +53,7 @@ export function NavUser() {
 
   async function handleSignOut() {
     await authClient.signOut()
-    await navigate({ to: "/login" })
+    await navigate({ to: "/login", search: { callbackURL: undefined } })
   }
 
   return (

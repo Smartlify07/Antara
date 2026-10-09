@@ -101,7 +101,11 @@ function VerifyEmailPage() {
 
         <p className="text-sm tracking-tight text-balance text-muted-foreground">
           Already verified?{" "}
-          <Link to="/login" className="font-medium">
+          <Link
+            to="/login"
+            search={{ callbackURL: undefined }}
+            className="font-medium"
+          >
             Log in
           </Link>
         </p>
