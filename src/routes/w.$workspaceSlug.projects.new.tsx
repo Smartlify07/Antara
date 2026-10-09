@@ -1,24 +1,34 @@
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { ProjectCreateForm } from "@/components/projects/project-create-form"
 import {
-  listAssignableMembersFn,
-  listProjectTagsFn,
-} from "@/server/functions/projects"
+  assignableMembersQuery,
+  projectTagsQuery,
+} from "@/lib/queries/projects"
 
 export const Route = createFileRoute("/w/$workspaceSlug/projects/new")({
-  loader: async ({ context }) => {
-    const [members, tagOptions] = await Promise.all([
-      listAssignableMembersFn({ data: { workspaceId: context.workspaceId } }),
-      listProjectTagsFn({ data: { workspaceId: context.workspaceId } }),
-    ])
-    return { members, tagOptions }
-  },
   component: NewProjectPage,
 })
 
 function NewProjectPage() {
-  const { members, tagOptions } = Route.useLoaderData()
   const { workspaceId, workspace } = Route.useRouteContext()
+
+  // Both lists are cached under keys so creating a tag or a member later
+  // invalidates them precisely, instead of every loader in the app.
+  const { data: members = [], isPending: membersPending } = useQuery(
+    assignableMembersQuery(workspaceId)
+  )
+  const { data: tagOptions = [], isPending: tagsPending } = useQuery(
+    projectTagsQuery(workspaceId)
+  )
+
+  if (membersPending || tagsPending) {
+    return (
+      <div className="flex min-h-40 items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import type { ProjectListItem } from "@/server/services/project-service"
-import type { OptimisticProject } from "@/lib/optimistic-projects"
+import type { OptimisticProject } from "@/lib/queries/projects"
 import { ProjectCard } from "@/components/workspace/project-card"
 
 /**

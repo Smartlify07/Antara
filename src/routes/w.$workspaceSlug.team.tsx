@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { TeamMembers } from "@/components/team/team-members"
 import {
@@ -7,17 +8,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { listWorkspaceMembersFn } from "@/server/functions/workspaces"
+import { teamMembersQuery } from "@/lib/queries/teams"
 
 export const Route = createFileRoute("/w/$workspaceSlug/team")({
-  loader: ({ context }) =>
-    listWorkspaceMembersFn({ data: { workspaceId: context.workspaceId } }),
   component: TeamPage,
 })
 
 function TeamPage() {
-  const members = Route.useLoaderData()
-  const { workspaceRole, isWorkspaceOwner } = Route.useRouteContext()
+  const { workspaceId, workspaceRole, isWorkspaceOwner } =
+    Route.useRouteContext()
+
+  // Cached under a key, so the upcoming invite/role/suspend mutations can
+  // invalidate this list without `router.invalidate()` refetching unrelated
+  // loaders across the app.
+  const { data: members = [], isPending, error } = useQuery(
+    teamMembersQuery(workspaceId),
+  )
+
   const canManage = workspaceRole === "admin" || isWorkspaceOwner
 
   return (
@@ -40,7 +47,17 @@ function TeamPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <TeamMembers members={members} canManage={canManage} />
+          {isPending ? (
+            <p className="text-sm text-muted-foreground">Loading members…</p>
+          ) : error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error instanceof Error
+                ? error.message
+                : "Could not load members."}
+            </p>
+          ) : (
+            <TeamMembers members={members} canManage={canManage} />
+          )}
         </CardContent>
       </Card>
     </div>

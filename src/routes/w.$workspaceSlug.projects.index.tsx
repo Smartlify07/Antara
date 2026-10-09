@@ -1,64 +1,34 @@
-import { useEffect, useMemo } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { EmptyOverview } from "@/components/workspace/empty-overview"
 import { ProjectsGrid } from "@/components/workspace/projects-grid"
-import { listProjectsFn } from "@/server/functions/projects"
-import {
-  clearOptimisticProject,
-  useOptimisticProjects,
-} from "@/lib/optimistic-projects"
+import { projectsQuery } from "@/lib/queries/projects"
 
 export const Route = createFileRoute("/w/$workspaceSlug/projects/")({
-  loader: ({ context }) =>
-    listProjectsFn({ data: { workspaceId: context.workspaceId } }),
   component: ProjectsPage,
 })
 
+/**
+ * The list comes from react-query rather than a route loader, so mutations can
+ * patch the cache in place and invalidate precisely this query. Creating a
+ * project used to call `router.invalidate()`, which refetched every active
+ * loader in the app.
+ *
+ * There is no longer any optimistic bookkeeping here. The mutation writes a
+ * placeholder straight into the cache and rolls back on failure, so the list
+ * this renders is always the cache — there is nothing to reconcile.
+ */
 function ProjectsPage() {
-  const loaded = Route.useLoaderData()
-  const { projects: optimistic, error } = useOptimisticProjects()
   const { workspace, workspaceRole, isWorkspaceOwner, workspaceId } =
     Route.useRouteContext()
 
+  const { data: projects = [], isPending, error } = useQuery(
+    projectsQuery(workspaceId),
+  )
+
   const canManage = isWorkspaceOwner || workspaceRole === "admin"
-
-  // Drop each placeholder once the real row is in the loader data.
-  //
-  // This used to be an imperative `clearOptimisticProject()` right after
-  // `await router.invalidate()` in the create form. That promise resolves once
-  // the loader has refetched, not once React has committed the new data — so
-  // clearing there produced a render with neither the placeholder nor the real
-  // row, and the card vanished for a frame before reappearing.
-  //
-  // Reconciling from the data instead removes the ordering entirely. The merge
-  // below already hides a placeholder whose slug is present, so the visible
-  // result is the same whether or not the store has been pruned yet.
-  useEffect(() => {
-    const realSlugs = new Set(loaded.map((project) => project.slug))
-    for (const project of optimistic) {
-      if (realSlugs.has(project.slug)) clearOptimisticProject(project.id)
-    }
-  }, [loaded, optimistic])
-
-  // Real rows win: once the server has the project the placeholder is
-  // hidden by slug, so the swap happens without the card jumping. The
-  // combined list is sorted with the same rule the service uses (soonest
-  // deadline first, nulls last, then newest first) so an optimistic card
-  // lands in its final position immediately instead of jumping on arrival.
-  const merged = useMemo(() => {
-    const realSlugs = new Set(loaded.map((project) => project.slug))
-    return [
-      ...loaded,
-      ...optimistic.filter((p) => !realSlugs.has(p.slug)),
-    ].sort((a, b) => {
-      const aDue = a.deadline ? new Date(a.deadline).getTime() : Infinity
-      const bDue = b.deadline ? new Date(b.deadline).getTime() : Infinity
-      if (aDue !== bDue) return aDue - bDue
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    })
-  }, [loaded, optimistic])
 
   return (
     <div className="flex flex-col gap-6">
@@ -66,9 +36,9 @@ function ProjectsPage() {
         <div>
           <h1 className="text-2xl font-medium tracking-tighter">Projects</h1>
           <p className="text-sm tracking-tight text-muted-foreground">
-            {merged.length === 0
+            {projects.length === 0
               ? "Briefs, tasks, and assets live here."
-              : `${merged.length} ${merged.length === 1 ? "project" : "projects"} in this workspace.`}
+              : `${projects.length} ${projects.length === 1 ? "project" : "projects"} in this workspace.`}
           </p>
         </div>
 
@@ -89,18 +59,22 @@ function ProjectsPage() {
           className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           <AlertCircleIcon className="size-4 shrink-0" />
-          {error}
+          {error instanceof Error ? error.message : "Could not load projects."}
         </div>
       )}
 
-      {merged.length === 0 ? (
+      {isPending ? (
+        <div className="flex min-h-40 items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading projects…</p>
+        </div>
+      ) : projects.length === 0 ? (
         <EmptyOverview
           workspaceTitle={workspace.title}
           workspaceSlug={workspace.slug}
         />
       ) : (
         <ProjectsGrid
-          projects={merged}
+          projects={projects}
           workspaceId={workspaceId}
           canManage={canManage}
         />

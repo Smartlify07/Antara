@@ -1,9 +1,11 @@
+import { QueryClientProvider } from "@tanstack/react-query"
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
 import { TanStackDevtools } from "@tanstack/react-devtools"
 
 import appCss from "../styles.css?url"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { queryClient } from "@/lib/query-client"
 
 export const Route = createRootRoute({
   head: () => ({
@@ -42,7 +44,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        </QueryClientProvider>
         <TanStackDevtools
           config={{
             position: "bottom-right",

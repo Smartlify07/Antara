@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useRouter } from "@tanstack/react-router"
 import { Loader2 } from "lucide-react"
@@ -10,15 +11,16 @@ import { TagsChip, type SelectedTag } from "@/components/projects/tags-chip"
 import { createProjectFn } from "@/server/functions/projects"
 import { navigateWithTransition } from "@/lib/navigate-with-transition"
 import {
-  addOptimisticProject,
   buildOptimisticProject,
-  clearOptimisticProject,
-  setOptimisticError,
-} from "@/lib/optimistic-projects"
+  projectKeys,
+  sortProjects,
+} from "@/lib/queries/projects"
 import type {
   AssignableMember,
+  ProjectListItem,
   ProjectTagOption,
 } from "@/server/services/project-service"
+import type { CreateProjectInput } from "@/lib/project-schemas"
 import type { ProjectStatus } from "@/db/enums"
 
 export function ProjectCreateForm({
@@ -33,6 +35,7 @@ export function ProjectCreateForm({
   tagOptions: ProjectTagOption[]
 }) {
   const router = useRouter()
+  const client = useQueryClient()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [status, setStatus] = useState<ProjectStatus>("planning")
@@ -43,7 +46,6 @@ export function ProjectCreateForm({
     startDate: Date | null
     deadline: Date | null
   }>({ startDate: null, deadline: null })
-  const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function toggleMember(teamId: string) {
@@ -62,75 +64,86 @@ export function ProjectCreateForm({
     }
   }
 
+  // `createProjectFn` takes `{ data }`; unwrapping here means the mutation's
+  // own variable type is the plain payload, so onMutate receives the fields
+  // rather than an options envelope.
+  const mutation = useMutation({
+    mutationFn: (variables: CreateProjectInput) =>
+      createProjectFn({ data: variables }),
+    onMutate: async (variables) => {
+      // Put the card in the cache immediately, then go to the list. If the
+      // write fails, `onError` restores the snapshot below and the card
+      // disappears again — the rollback is the cache, not a separate store
+      // that has to be reconciled against real rows.
+      await client.cancelQueries({ queryKey: projectKeys.list(workspaceId) })
+      const snapshot = client.getQueryData<ProjectListItem[]>(
+        projectKeys.list(workspaceId)
+      )
+      client.setQueryData<ProjectListItem[]>(
+        projectKeys.list(workspaceId),
+        (current = []) =>
+          sortProjects([
+            ...current,
+            buildOptimisticProject(
+              variables,
+              new Map(tagOptions.map((tag) => [tag.id, tag]))
+            ),
+          ])
+      )
+      return { snapshot }
+    },
+    onError: (_error, _variables, context) => {
+      client.setQueryData(projectKeys.list(workspaceId), context?.snapshot)
+    },
+    onSettled: () => {
+      // Replace the placeholder with the real row. Invalidating the list only —
+      // the workspace sidebar, team members and tag options are untouched.
+      void client.invalidateQueries({ queryKey: projectKeys.list(workspaceId) })
+    },
+  })
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    if (title.trim().length < 2 || pending) return
+    // `mutation.isPending` is the single source of truth for the in-flight
+    // state. It was a local `pending` before, which then needed its own
+    // reset — and lost it when this handler was rewritten, leaving the form
+    // disabled forever after one submit.
+    if (title.trim().length < 2 || mutation.isPending) return
 
-    setPending(true)
     setError(null)
 
-    // Render the project locally first, then navigate straight to the list
-    // so the new card animates in without waiting on the server.
-    const placeholder = buildOptimisticProject({
-      title: title.trim(),
-      description: description.trim(),
-      status,
-      startDate: dates.startDate,
-      deadline: dates.deadline,
-      memberCount: memberIds.length + (leadId ? 1 : 0) + 1 /* creator */,
-      tags: tags.map((tag, index) => ({
-        id: tag.id ?? `optimistic-tag-${index}`,
-        label: tag.label,
-        color: tag.color,
-      })),
-    })
-    addOptimisticProject(placeholder)
-
-    await navigateWithTransition(() =>
-      router.navigate({
-        to: "/w/$workspaceSlug/projects",
-        params: { workspaceSlug },
-      })
-    )
-
-    try {
-      await createProjectFn({
-        data: {
-          workspaceId,
-          title: title.trim(),
-          description: description.trim(),
-          status,
-          startDate: dates.startDate,
-          deadline: dates.deadline,
-          memberIds,
-          leadId,
-          tagIds: tags.flatMap((tag) => (tag.id ? [tag.id] : [])),
-          newTagLabels: tags.flatMap((tag) => (tag.id ? [] : [tag.label])),
+    mutation.mutate(
+      {
+        workspaceId,
+        title: title.trim(),
+        description: description.trim(),
+        status,
+        startDate: dates.startDate,
+        deadline: dates.deadline,
+        memberIds,
+        leadId,
+        tagIds: tags.flatMap((tag) => (tag.id ? [tag.id] : [])),
+        newTagLabels: tags.flatMap((tag) => (tag.id ? [] : [tag.label])),
+      },
+      {
+        onSuccess: () =>
+          navigateWithTransition(() =>
+            router.navigate({
+              to: "/w/$workspaceSlug/projects",
+              params: { workspaceSlug },
+            })
+          ),
+        onError: (e) => {
+          // Stay on the form and say why, rather than bouncing to a list that
+          // no longer has the card in it.
+          setError(
+            e instanceof Error
+              ? `Could not create "${title.trim()}". ${e.message}`
+              : "Could not create the project."
+          )
         },
-      })
-      // Refresh so the real row reaches the list. The placeholder is NOT
-      // cleared here: this promise resolves when the loader has refetched,
-      // not when React has committed the new data, so clearing immediately
-      // left a render with neither card. The projects route now prunes it
-      // from the loader data instead.
-      await router.invalidate()
-    } catch (e) {
-      // Rollback: drop the card and surface why on the list.
-      clearOptimisticProject(placeholder.id)
-      setOptimisticError(
-        e instanceof Error
-          ? `Could not create "${title.trim()}". ${e.message}`
-          : "Could not create the project."
-      )
-      await navigateWithTransition(() =>
-        router.navigate({
-          to: "/w/$workspaceSlug/projects/new",
-          params: { workspaceSlug },
-        })
-      )
-    } finally {
-      setPending(false)
-    }
+      }
+    )
   }
 
   return (
@@ -190,7 +203,7 @@ export function ProjectCreateForm({
         <Button
           type="button"
           variant="ghost"
-          disabled={pending}
+          disabled={mutation.isPending}
           onClick={() =>
             router.navigate({
               to: "/w/$workspaceSlug/projects",
@@ -200,9 +213,12 @@ export function ProjectCreateForm({
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={pending || title.trim().length < 2}>
-          {pending && <Loader2 className="animate-spin" />}
-          {pending ? "Creating…" : "Create project"}
+        <Button
+          type="submit"
+          disabled={mutation.isPending || title.trim().length < 2}
+        >
+          {mutation.isPending && <Loader2 className="animate-spin" />}
+          {mutation.isPending ? "Creating…" : "Create project"}
         </Button>
       </div>
     </form>

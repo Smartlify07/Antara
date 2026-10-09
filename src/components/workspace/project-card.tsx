@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useRouter } from "@tanstack/react-router"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,8 @@ import {
 import { ProjectCoverArt } from "@/components/workspace/project-cover-art"
 import { TagDot } from "@/components/projects/tags-chip"
 import type { ProjectListItem } from "@/server/services/project-service"
-import type { OptimisticProject } from "@/lib/optimistic-projects"
+import type { OptimisticProject } from "@/lib/queries/projects"
+import { projectKeys } from "@/lib/queries/projects"
 import { setProjectStatusFn, trashProjectFn } from "@/server/functions/projects"
 import { formatDueDate, isOverdue } from "@/lib/time"
 import { PROJECT_STATUS_META } from "@/lib/status-meta"
@@ -51,7 +52,7 @@ export function ProjectCard({
   /** True while the server write is still in flight. */
   optimistic?: boolean
 }) {
-  const router = useRouter()
+  const client = useQueryClient()
   const [pending, setPending] = useState(false)
   const [trashOpen, setTrashOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,12 +70,18 @@ export function ProjectCard({
   // menu stays hidden for an optimistic row.
   const actionsEnabled = canManage && !optimistic
 
+  // Targeted invalidation: only the projects list for this workspace
+  // refetches. `router.invalidate()` refetched every active loader in the app,
+  // so trashing one card also reloaded the workspace sidebar, team members
+  // and the tag vocabulary.
   async function run(action: () => Promise<unknown>) {
     setPending(true)
     setError(null)
     try {
       await action()
-      await router.invalidate()
+      await client.invalidateQueries({
+        queryKey: projectKeys.list(workspaceId),
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.")
     } finally {
