@@ -24,7 +24,13 @@ export function ProjectsGrid({
       <AnimatePresence initial={false} mode="popLayout">
         {projects.map((project) => (
           <motion.div
-            key={project.id}
+            // Slug, not id. An optimistic placeholder and the real row it
+            // becomes have different ids, so keying on id made every handoff
+            // an unmount plus a mount — AnimatePresence played the exit and
+            // enter animations and the card visibly faded out and back in.
+            // Slug survives the swap, so React updates it in place and the
+            // card never flickers. Unique per workspace, so it's a safe key.
+            key={project.slug}
             layout={reduceMotion ? false : "position"}
             initial={
               reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96 }
