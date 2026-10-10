@@ -36,7 +36,8 @@ export interface ProjectUpdateItem {
   id: string
   body: string
   kind: UpdateKind
-  reviewStatus: UpdateReviewStatus
+  /** Null on a comment — only progress updates carry a review. */
+  reviewStatus: UpdateReviewStatus | null
   reviewNote: string | null
   createdAt: Date
   author: {
@@ -265,7 +266,15 @@ export async function createProjectUpdate(
   return db.transaction(async (tx) => {
     const [update] = await tx
       .insert(projectUpdates)
-      .values({ projectId, authorId: userId, body, kind })
+      .values({
+        projectId,
+        authorId: userId,
+        body,
+        kind,
+        // Only progress updates enter the review queue. A comment stays null so
+        // nothing lists it as awaiting a decision.
+        reviewStatus: kind === "progress_update" ? "pending" : null,
+      })
       .returning({ id: projectUpdates.id })
 
     if (!update) throw new Error("Could not post the update.")
@@ -336,11 +345,13 @@ export async function createProjectUpdate(
 }
 
 /**
- * Records the lead's decision on a submission.
+ * Records the lead's decision on a progress update.
  *
- * Only a still-pending update can be reviewed, so a second click is a no-op
- * rather than an error — the UI disables the buttons, but the button is not
- * the guard.
+ * Two guards, both in the WHERE clause rather than in application code: the
+ * update must still be `pending`, and its kind must be `progress_update`. The
+ * kind check is what keeps a comment out of the review flow — a comment's
+ * `review_status` is NULL, so it can never match `pending`, and the row is left
+ * untouched instead of gaining a decision it should never have had.
  */
 export async function reviewProjectUpdate(
   workspaceId: string,
@@ -352,7 +363,7 @@ export async function reviewProjectUpdate(
 ): Promise<void> {
   const allowed = await canReviewProjectUpdates(workspaceId, userId, projectId)
   if (!allowed) {
-    throw new Error("Only the project lead can review submissions.")
+    throw new Error("Only the project lead can review updates.")
   }
 
   const updated = await db
@@ -368,6 +379,7 @@ export async function reviewProjectUpdate(
       and(
         eq(projectUpdates.id, updateId),
         eq(projectUpdates.projectId, projectId),
+        eq(projectUpdates.kind, "progress_update"),
         eq(projectUpdates.reviewStatus, "pending")
       )
     )

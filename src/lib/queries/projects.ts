@@ -186,7 +186,9 @@ export function buildOptimisticUpdate(input: {
     id: `optimistic-${stamp}`,
     body: input.body,
     kind: input.kind,
-    reviewStatus: "pending",
+    // Mirrors the service: only a progress update carries a review, so an
+    // optimistic comment must not flash an "Awaiting review" state either.
+    reviewStatus: input.kind === "progress_update" ? "pending" : null,
     reviewNote: null,
     createdAt: new Date(),
     author: input.author,

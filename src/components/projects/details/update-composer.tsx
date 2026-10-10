@@ -268,7 +268,7 @@ export function UpdateComposer({
           // `self-end` pins the buttons to the bottom of a multi-row textarea
           // rather than the vertical centre, where they read as belonging to
           // the middle of the text. `mb-1` is the 4px gap off the bottom edge.
-          className="self-end mb-1 has-[>button]:mr-0"
+          className="mb-1 self-end has-[>button]:mr-0"
         >
           <InputGroupButton
             type="button"

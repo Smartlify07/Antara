@@ -292,6 +292,31 @@ kind and title editing`:
 | Archive / unarchive on the card is optimistic | `ProjectCard.run` takes an optional cache patch applied before the write and restored on failure. Status changes patch this row in place. |
 | Trash is deliberately **not** optimistic | Removing the row unmounts the card, taking the confirm dialog and the error banner with it — a rejected trash would restore the card with nothing to explain why. Left awaiting, with the reason in a comment, until there is a toast surface. |
 
+### 7c. Only progress updates are reviewable
+
+Comments cannot be approved or have changes requested — approval is about
+whether work is accepted, which is a question about a submission, not about a
+remark.
+
+Rather than filtering in the UI, `review_status` became **nullable**
+(migration 0013) so `NULL` means "not reviewable" and `pending` means
+"reviewable, not yet looked at". Leaving comments at `pending` implied a queue
+of approvals nobody works through, and every comment card would have shown an
+"Awaiting review" badge with no way to clear it.
+
+The rule is enforced in three places:
+
+- `createProjectUpdate` writes `review_status: null` for a comment.
+- `reviewProjectUpdate` requires `kind = 'progress_update'` **in the WHERE
+  clause**, so a comment cannot be given a decision even if a crafted request
+  reaches the endpoint. The lead check is separate and still runs first.
+- The card renders a badge, a review note and the approve/request controls only
+  when `reviewable && reviewStatus === "pending"`. Gated explicitly on the kind
+  rather than relying on the null status alone, so the rule stays readable.
+
+`buildOptimisticUpdate` mirrors the service, so an optimistic comment does not
+flash a review state before the refetch corrects it.
+
 ### 7b. Optimistic posting, and a rollback bug in it
 
 Posting was optimistic from the start, but the rollback had a defect that only

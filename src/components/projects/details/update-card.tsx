@@ -11,9 +11,10 @@ import { cn } from "@/lib/utils"
 import type { ProjectUpdateItem } from "@/server/services/project-update-service"
 
 const REVIEW_META = {
-  // A comment is a remark between collaborators, so "awaiting review" would be
-  // noise on most cards. The badge stays blank until there is a decision to
-  // report, and the lead's controls below are what make it actionable.
+  // Only progress updates reach this map; a comment has no review status at
+  // all. `pending` has a blank label deliberately — "awaiting review" on a
+  // card whose approve button sits right below it states the obvious, and the
+  // controls already make the pending state actionable.
   pending: {
     label: "",
     className: "bg-muted text-muted-foreground",
@@ -31,8 +32,13 @@ const REVIEW_META = {
 } as const
 
 /**
- * One progress update, with the files it carried and — for a lead — the
- * approve / request-changes controls.
+ * One post in the feed — a comment or a progress update — with the files it
+ * carried.
+ *
+ * Only a progress update is reviewable, so only a progress update renders a
+ * status badge or the approve / request-changes controls. `reviewStatus` is null
+ * on a comment, which is what the branch below keys off; the service enforces
+ * the same rule on write, so this is presentation rather than the guard.
  *
  * The review decision is optimistic: the badge flips immediately and the
  * buttons disable, then the write settles. `onSettled` refetches the feed
@@ -52,6 +58,12 @@ export function UpdateCard({
   const client = useQueryClient()
   const updatesKey = projectKeys.updates(workspaceId, projectId)
   const pending = "optimistic" in update
+
+  // Only progress updates are reviewed. A comment has `reviewStatus: null` and
+  // gets no badge and no controls at all.
+  const reviewable = update.kind === "progress_update"
+  const meta =
+    reviewable && update.reviewStatus ? REVIEW_META[update.reviewStatus] : null
 
   // Optimistic: the badge flips the moment a decision is clicked, and reverts
   // only this row on failure rather than restoring a whole-list snapshot — a
@@ -86,7 +98,6 @@ export function UpdateCard({
     },
   })
 
-  const meta = REVIEW_META[update.reviewStatus]
   const name = update.author.name ?? update.author.email ?? "Someone"
 
   return (
@@ -124,9 +135,9 @@ export function UpdateCard({
             })}
           </span>
         </div>
-        {/* Only rendered once there is a decision to report. A blank pending
-            state would otherwise sit on every card doing nothing. */}
-        {!pending && meta.label && (
+        {/* Null for a comment, and blank while a review is pending — a badge that
+            says nothing sits on every card doing nothing. */}
+        {!pending && meta && meta.label && (
           <span
             className={cn(
               "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
@@ -169,7 +180,10 @@ export function UpdateCard({
         </ul>
       )}
 
-      {update.reviewNote && (
+      {/* Gated on `reviewable` as well as the status: a comment's status is null so
+          the second condition already excludes it, but relying on that alone
+          would make the rule implicit. */}
+      {reviewable && update.reviewNote && (
         <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
           {update.reviewNote}
         </p>
@@ -177,32 +191,35 @@ export function UpdateCard({
 
       {/* Suppressed while pending: there is no server row to review yet, so
           the buttons would be firing against an id that does not exist. */}
-      {canReview && update.reviewStatus === "pending" && !pending && (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={review.isPending}
-            onClick={() => review.mutate("approved")}
-          >
-            {review.isPending ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <CheckIcon />
-            )}
-            Approve
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={review.isPending}
-            onClick={() => review.mutate("changes_requested")}
-          >
-            <RotateCcwIcon />
-            Request changes
-          </Button>
-        </div>
-      )}
+      {canReview &&
+        reviewable &&
+        update.reviewStatus === "pending" &&
+        !pending && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={review.isPending}
+              onClick={() => review.mutate("approved")}
+            >
+              {review.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <CheckIcon />
+              )}
+              Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={review.isPending}
+              onClick={() => review.mutate("changes_requested")}
+            >
+              <RotateCcwIcon />
+              Request changes
+            </Button>
+          </div>
+        )}
     </article>
   )
 }

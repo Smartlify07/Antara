@@ -32,9 +32,11 @@ export const projectUpdates = pgTable(
     // Comment or progress update. Defaults to a comment so any post written
     // before this column existed reads as the quieter of the two.
     kind: updateKind("kind").notNull().default("comment"),
-    reviewStatus: updateReviewStatus("review_status")
-      .notNull()
-      .default("pending"),
+    // Nullable because only progress updates are reviewed. A comment has no
+    // review lifecycle, so a `pending` row would imply a queue nobody works
+    // through. NULL means "not reviewable", which is distinct from "not yet
+    // reviewed" — which is what `pending` means on a progress update.
+    reviewStatus: updateReviewStatus("review_status"),
     reviewedBy: text("reviewed_by").references(() => user.id, {
       onDelete: "set null",
     }),
