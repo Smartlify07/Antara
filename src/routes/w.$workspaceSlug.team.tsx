@@ -1,7 +1,6 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { InviteDialog } from "@/components/team/invite-dialog"
-import { PendingInvites } from "@/components/team/pending-invites"
 import { TeamMembers } from "@/components/team/team-members"
 import {
   Card,
@@ -10,7 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { teamMembersQuery } from "@/lib/queries/teams"
+import { revokeInviteFn } from "@/server/functions/invites"
+import { teamKeys, teamMembersQuery } from "@/lib/queries/teams"
 
 export const Route = createFileRoute("/w/$workspaceSlug/team")({
   component: TeamPage,
@@ -27,6 +27,16 @@ function TeamPage() {
     isPending,
     error,
   } = useQuery(teamMembersQuery(workspaceId))
+
+  const client = useQueryClient()
+
+  const revoke = useMutation({
+    mutationFn: (inviteId: string) =>
+      revokeInviteFn({ data: { workspaceSlug: workspace.slug, inviteId } }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: teamKeys.members(workspaceId) })
+    },
+  })
 
   const canManage = workspaceRole === "admin" || isWorkspaceOwner
 
@@ -64,6 +74,7 @@ function TeamPage() {
             <TeamMembers
               members={members}
               canManage={canManage}
+              onRevokeInvite={(inviteId) => revoke.mutate(inviteId)}
               action={
                 canManage ? (
                   <InviteDialog
@@ -76,8 +87,6 @@ function TeamPage() {
           )}
         </CardContent>
       </Card>
-
-      {canManage && <PendingInvites workspaceSlug={workspace.slug} />}
     </div>
   )
 }

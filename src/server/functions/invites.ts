@@ -147,15 +147,6 @@ export const createInviteFn = createServerFn({ method: "POST" })
     return { outcomes }
   })
 
-export const listPendingInvitesFn = createServerFn({ method: "GET" })
-  .validator(z.object({ workspaceSlug: z.string().min(1) }))
-  .handler(async ({ data }) => {
-    const { access, isAdmin } = await requireManager(data.workspaceSlug)
-    // `isAdmin` decides whether inviter names come along. They are never sent
-    // to a non-admin, rather than being sent and hidden in the UI.
-    return service.listPendingInvites(access.workspace.id, isAdmin)
-  })
-
 export const revokeInviteFn = createServerFn({ method: "POST" })
   .validator(
     z.object({

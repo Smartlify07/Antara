@@ -122,9 +122,9 @@ export async function createInvite(input: CreateInviteInput): Promise<{
   const expiresAt = inviteExpiry()
 
   await db.transaction(async (tx) => {
-    // Drop any pending invite for this address first. Doing it inside the
-    // transaction means a concurrent second invite can't slip a row past the
-    // unique index and surface as an unhandled violation.
+    // Drop the previous invite and the seat it reserved. Both, in the same
+    // transaction, so a concurrent second invite can't slip past either unique
+    // index and surface as an unhandled violation.
     await tx
       .delete(workspaceInvites)
       .where(
@@ -134,6 +134,27 @@ export async function createInvite(input: CreateInviteInput): Promise<{
           isNull(workspaceInvites.acceptedAt)
         )
       )
+
+    await tx
+      .delete(team)
+      .where(
+        and(
+          eq(team.workspaceId, input.workspaceId),
+          sql`lower(${team.email}) = ${email}`,
+          isNull(team.userId)
+        )
+      )
+
+    // Reserve the seat immediately, so the invitee appears in the member list
+    // marked as awaiting rather than only in a separate invites list. The seat
+    // carries `user_id = null` until the link is redeemed.
+    await tx.insert(team).values({
+      workspaceId: input.workspaceId,
+      email,
+      roleId: role.id,
+      status: "active",
+      invitedAt: new Date(),
+    })
 
     await tx.insert(workspaceInvites).values({
       workspaceId: input.workspaceId,
@@ -177,28 +198,15 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
     )
   }
 
-  // Already a member of THIS workspace, by either representation:
-  // a seat reserved by address, or a joined membership matched on the user's
-  // own email. Scoped to this workspace on purpose — see the note at the top
-  // of this file.
-  const reserved = await db
-    .select({ id: team.id })
-    .from(team)
-    .where(
-      and(
-        eq(team.workspaceId, input.workspaceId),
-        sql`lower(${team.email}) = ${email}`
-      )
-    )
-    .limit(1)
-
-  if (reserved.length > 0) {
-    throw new InviteError(
-      "That address already has a seat in this workspace.",
-      "already_member"
-    )
-  }
-
+  // Only a *joined* membership blocks an invite.
+  //
+  // A seat reserved by address does not — that is the replace-and-reissue path,
+  // and `createInvite` clears the old seat in the same transaction. Rejecting it
+  // would make a second invite to someone already invited impossible, and that
+  // is the common case: the first mail gets lost.
+  //
+  // Scoped to THIS workspace on purpose. Asking whether a `user` row exists
+  // anywhere would turn any admin into an oracle over the whole user base.
   const joined = await db
     .select({ id: team.id })
     .from(team)
@@ -218,24 +226,22 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
     )
   }
 
-  // The owner can't be re-invited: owner-ness is `workspaces.ownerId`, not a
-  // role, so an invite could never grant it and would just be confusing.
-  const isOwner = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
+  // Can't invite yourself. No separate owner check is needed: creating a
+  // workspace gives the owner a joined seat, so the check above already covers
+  // them.
+  const self = await db
+    .select({ id: team.id })
+    .from(team)
     .where(
       and(
-        eq(workspaces.id, input.workspaceId),
-        eq(workspaces.ownerId, input.invitedBy)
+        eq(team.workspaceId, input.workspaceId),
+        eq(team.userId, input.invitedBy)
       )
     )
     .limit(1)
 
-  if (isOwner.length > 0 && !input.isOwner) {
-    throw new InviteError(
-      "That address is already in this workspace.",
-      "already_member"
-    )
+  if (self.length > 0) {
+    throw new InviteError("You're already in this workspace.", "already_member")
   }
 }
 
@@ -286,86 +292,18 @@ export async function getRoleTitle(roleId: string) {
   return rows[0]?.scope === "workspace" ? rows[0].title : null
 }
 
-export interface PendingInvite {
-  id: string
-  email: string
-  role: string
-  expiresAt: Date
-  createdAt: Date
-  /** Only populated when the caller may manage the workspace. */
-  invitedByName?: string | null
-  invitedByEmail?: string | null
-}
-
 /**
- * Pending invites for a workspace. `invitedBy` is resolved only when
- * `includeInviter` is set, and the server functions call it strictly for
- * admins — the names should never reach a non-admin client at all, rather
- * than being present and merely hidden in the UI.
+ * Deletes a pending invite and the seat it reserved, invalidating the token
+ * immediately.
+ *
+ * Both, or the row would linger in the member list still badged "awaiting"
+ * with no way left to complete it — which is exactly the confusion revoking is
+ * meant to end.
  */
-export async function listPendingInvites(
-  workspaceId: string,
-  includeInviter: boolean
-): Promise<PendingInvite[]> {
-  const rows = await db
-    .select({
-      id: workspaceInvites.id,
-      email: workspaceInvites.email,
-      expiresAt: workspaceInvites.expiresAt,
-      createdAt: workspaceInvites.createdAt,
-      roleTitle: roles.title,
-      invitedBy: workspaceInvites.invitedBy,
-    })
-    .from(workspaceInvites)
-    .innerJoin(roles, eq(workspaceInvites.roleId, roles.id))
-    .where(
-      and(
-        eq(workspaceInvites.workspaceId, workspaceId),
-        isNull(workspaceInvites.acceptedAt)
-      )
-    )
-    .orderBy(workspaceInvites.createdAt)
-
-  if (!includeInviter) {
-    return rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      role: r.roleTitle,
-      expiresAt: r.expiresAt,
-      createdAt: r.createdAt,
-    }))
-  }
-
-  const inviterIds = rows
-    .map((r) => r.invitedBy)
-    .filter((v): v is string => !!v)
-  const inviters = inviterIds.length
-    ? await db
-        .select({ id: user.id, name: user.name, email: user.email })
-        .from(user)
-        .where(sql`${user.id} in ${inviterIds}`)
-    : []
-
-  const byId = new Map(inviters.map((i) => [i.id, i]))
-
-  return rows.map((r) => {
-    const inviter = r.invitedBy ? byId.get(r.invitedBy) : null
-    return {
-      id: r.id,
-      email: r.email,
-      role: r.roleTitle,
-      expiresAt: r.expiresAt,
-      createdAt: r.createdAt,
-      invitedByName: inviter?.name ?? null,
-      invitedByEmail: inviter?.email ?? null,
-    }
-  })
-}
-
-/** Deletes a pending invite, invalidating its token immediately. */
 export async function revokeInvite(workspaceId: string, inviteId: string) {
-  await db
-    .delete(workspaceInvites)
+  const invite = await db
+    .select({ email: workspaceInvites.email })
+    .from(workspaceInvites)
     .where(
       and(
         eq(workspaceInvites.id, inviteId),
@@ -373,6 +311,32 @@ export async function revokeInvite(workspaceId: string, inviteId: string) {
         isNull(workspaceInvites.acceptedAt)
       )
     )
+    .limit(1)
+
+  if (!invite[0]) return
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(workspaceInvites)
+      .where(
+        and(
+          eq(workspaceInvites.id, inviteId),
+          isNull(workspaceInvites.acceptedAt)
+        )
+      )
+
+    // Only the un-attached seat. Once the signup backfill has attached an
+    // account this row is a real membership and revoking must not remove it.
+    await tx
+      .delete(team)
+      .where(
+        and(
+          eq(team.workspaceId, workspaceId),
+          sql`lower(${team.email}) = ${invite[0].email.toLowerCase()}`,
+          isNull(team.userId)
+        )
+      )
+  })
 }
 
 /**

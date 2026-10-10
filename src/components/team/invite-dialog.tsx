@@ -14,7 +14,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createInviteFn, type InviteOutcome } from "@/server/functions/invites"
-import { inviteKeys } from "@/lib/queries/invites"
 import { parseEmailList } from "@/lib/parse-email-list"
 import { teamKeys } from "@/lib/queries/teams"
 
@@ -44,9 +43,8 @@ export function InviteDialog({
     mutationFn: (batch: string[]) =>
       createInviteFn({ data: { workspaceSlug, emails: batch } }),
     onSuccess: ({ outcomes: results }) => {
-      void client.invalidateQueries({
-        queryKey: inviteKeys.pending(workspaceSlug),
-      })
+      // Pending invitees are seats on the member list now, so that's the one
+      // query to refresh — there's no separate invites list to keep in step.
       void client.invalidateQueries({
         queryKey: teamKeys.members(workspaceId),
       })

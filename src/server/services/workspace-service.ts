@@ -7,6 +7,7 @@ import {
   team,
   user,
   workspaces,
+  workspaceInvites,
   type Workspace,
 } from "@/db/schema/index"
 
@@ -225,6 +226,53 @@ export async function getWorkspaceBySlug(
   return { workspace: row.workspace, role: row.role.title, isOwner: false }
 }
 
+/**
+ * Resolves the live invite behind each pending seat.
+ *
+ * Matched on the seat's reserved address rather than a foreign key, because
+ * `team` carries no `invitedBy` and no invite id — only `workspace_invites`
+ * does. The pending-unique index guarantees at most one live invite per address
+ * per workspace, so the match is unambiguous.
+ *
+ * Always sets `inviteId`, since revoking needs it. Sets `invitedByName` only
+ * when asked.
+ */
+async function attachPendingInvites(
+  items: WorkspaceMemberItem[],
+  workspaceId: string,
+  includeInviter: boolean
+): Promise<void> {
+  const pending = items.filter((i) => i.isPending && i.email)
+  if (!pending.length) return
+
+  const rows = await db
+    .select({
+      id: workspaceInvites.id,
+      email: workspaceInvites.email,
+      inviterName: user.name,
+    })
+    .from(workspaceInvites)
+    .leftJoin(user, eq(workspaceInvites.invitedBy, user.id))
+    .where(
+      and(
+        eq(workspaceInvites.workspaceId, workspaceId),
+        isNull(workspaceInvites.acceptedAt)
+      )
+    )
+
+  const byEmail = new Map(
+    rows.map((r) => [r.email.toLowerCase(), r] as const),
+  )
+
+  for (const item of items) {
+    if (!item.isPending || !item.email) continue
+    const invite = byEmail.get(item.email.toLowerCase())
+    if (!invite) continue
+    item.inviteId = invite.id
+    if (includeInviter) item.invitedByName = invite.inviterName ?? null
+  }
+}
+
 export interface WorkspaceMemberItem {
   id: string
   name: string | null
@@ -233,10 +281,30 @@ export interface WorkspaceMemberItem {
   role: string
   status: MembershipStatus
   isOwner: boolean
+  /**
+   * Reserved by invite but not yet claimed — no account attached, or attached
+   * but the link hasn't been redeemed. Rendered in the same list as everyone
+   * else with an "awaiting" badge, rather than in a separate section.
+   */
+  isPending: boolean
+  /**
+   * The live invite backing a pending seat. Null once accepted. Needed to
+   * revoke, which takes an invite id rather than the membership id.
+   */
+  inviteId?: string | null
+  /**
+   * Who issued the invite. Populated only when `includeInviter` is set.
+   *
+   * Omitted entirely for callers who may not manage the workspace, rather than
+   * sent and hidden in the UI: "invited by" is reconnaissance about who works
+   * with whom, and a non-admin has no business holding it.
+   */
+  invitedByName?: string | null
 }
 
 export async function listWorkspaceMembers(
-  workspaceId: string
+  workspaceId: string,
+  includeInviter = false
 ): Promise<WorkspaceMemberItem[]> {
   const workspace = await db
     .select()
@@ -261,7 +329,14 @@ export async function listWorkspaceMembers(
     role: row.role.title,
     status: row.membership.status,
     isOwner: row.membership.userId === ws.ownerId,
+    // Attached but not joined: the signup backfill resolves identity on
+    // verification, but the link still has to be redeemed before they're in.
+    isPending: row.membership.userId === null || row.membership.joinedAt === null,
   }))
+
+  if (items.some((i) => i.isPending)) {
+    await attachPendingInvites(items, workspaceId, includeInviter)
+  }
 
   const ownerCovered = items.some((item) => item.isOwner)
   if (!ownerCovered) {
@@ -279,6 +354,7 @@ export async function listWorkspaceMembers(
         role: "admin",
         status: "active",
         isOwner: true,
+        isPending: false,
       })
     }
   }

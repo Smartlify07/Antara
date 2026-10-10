@@ -132,8 +132,14 @@ export const listWorkspaceMembersFn = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const userId = await requireUserId()
     const workspaces = await service.listWorkspaces(userId)
-    if (!workspaces.some((item) => item.workspace.id === data.workspaceId)) {
-      throw redirect({ to: "/dashboard" })
-    }
-    return service.listWorkspaceMembers(data.workspaceId)
+    const access = workspaces.find(
+      (item) => item.workspace.id === data.workspaceId
+    )
+    if (!access) throw redirect({ to: "/dashboard" })
+
+    // Inviter names ride along only for callers who may manage the workspace.
+    // Omitted entirely otherwise, rather than sent and hidden in the UI —
+    // "invited by" is reconnaissance about who works with whom.
+    const canManage = access.isOwner || access.role === "admin"
+    return service.listWorkspaceMembers(data.workspaceId, canManage)
   })
