@@ -64,53 +64,87 @@ async function requireManager(workspaceSlug: string) {
   }
 }
 
+/** Per-request ceiling, separate from the per-day cap. Keeps one paste bounded. */
+const MAX_PER_REQUEST = 20
+
 const createSchema = z.object({
   workspaceSlug: z.string().min(1),
-  email: z.email(),
-  roleTitle: z.enum(["admin", "member"]),
+  emails: z.array(z.email()).min(1).max(MAX_PER_REQUEST),
 })
 
+export interface InviteOutcome {
+  email: string
+  ok: boolean
+  /** Stable reason code, or a message safe to show an admin. */
+  code?: string
+  message?: string
+}
+
 /**
- * Creates an invite and sends the email.
+ * Creates invites and sends the emails, one outcome per address.
  *
- * The response never varies with whether the address already has an account.
- * That question is answered inside the workspace by `assertCanInvite`; asking
- * it globally would hand any admin a way to enumerate the product.
+ * Results are per-recipient rather than all-or-nothing: a paste of ten
+ * addresses where two are already members should still send the other eight.
+ *
+ * The per-address reason is safe to surface. `assertCanInvite` only ever asks
+ * whether someone is in *this* workspace, which the admin can already see on
+ * the member list — so this is not an oracle over the wider user base. What is
+ * deliberately never returned, for any address, is whether it has an account
+ * elsewhere.
  */
 export const createInviteFn = createServerFn({ method: "POST" })
   .validator(createSchema)
   .handler(async ({ data }) => {
     const { caller, access, isOwner } = await requireManager(data.workspaceSlug)
 
-    const email = normalizeEmail(data.email)
+    // De-duplicated case-insensitively here too. The client does the same, but
+    // the server is the thing that has to be right.
+    const unique = [
+      ...new Map(data.emails.map((e) => [e.trim().toLowerCase(), e])).values(),
+    ]
 
-    try {
-      const { token, expiresAt, roleTitle } = await service.createInvite({
-        workspaceId: access.workspace.id,
-        email,
-        roleTitle: data.roleTitle,
-        invitedBy: caller.userId,
-        isOwner,
-      })
+    const outcomes: InviteOutcome[] = []
 
-      // Fire and forget. A provider failure must not roll back a valid invite,
-      // and the admin can reissue from the pending list if the mail didn't go.
-      void sendInviteEmail({
-        to: email,
-        workspaceTitle: access.workspace.title,
-        inviterName: caller.name,
-        roleTitle,
-        token,
-        expiresAt,
-      })
+    for (const raw of unique) {
+      const email = normalizeEmail(raw)
+      try {
+        const { token, expiresAt, roleTitle } = await service.createInvite({
+          workspaceId: access.workspace.id,
+          email,
+          // Always `member`. Granting admin isn't offered from here — a
+          // promotion is a deliberate act, not a side effect of an invite.
+          roleTitle: "member",
+          invitedBy: caller.userId,
+          isOwner,
+        })
 
-      return { ok: true as const }
-    } catch (e) {
-      if (e instanceof service.InviteError) {
-        return { ok: false as const, code: e.code, message: e.message }
+        // Fire and forget. A provider failure must not roll back a valid
+        // invite, and the admin can reissue from the pending list if the mail
+        // didn't go.
+        void sendInviteEmail({
+          to: email,
+          workspaceTitle: access.workspace.title,
+          inviterName: caller.name,
+          roleTitle,
+          token,
+          expiresAt,
+        })
+
+        outcomes.push({ email, ok: true })
+      } catch (e) {
+        outcomes.push({
+          email,
+          ok: false,
+          code: e instanceof service.InviteError ? e.code : "unknown",
+          message:
+            e instanceof service.InviteError
+              ? e.message
+              : "Could not send that invite.",
+        })
       }
-      throw e
     }
+
+    return { outcomes }
   })
 
 export const listPendingInvitesFn = createServerFn({ method: "GET" })

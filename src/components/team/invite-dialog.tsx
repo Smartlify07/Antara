@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Mail, Shield, User } from "lucide-react"
-import { useState } from "react"
+import { AlertTriangle, CheckCircle2, Loader2, Mail } from "lucide-react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,26 +13,14 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createInviteFn } from "@/server/functions/invites"
+import { createInviteFn, type InviteOutcome } from "@/server/functions/invites"
 import { inviteKeys } from "@/lib/queries/invites"
+import { parseEmailList } from "@/lib/parse-email-list"
 import { teamKeys } from "@/lib/queries/teams"
-import { cn } from "@/lib/utils"
-
-/**
- * Role picker.
- *
- * Both are workspace-scope. The server re-validates the scope rather than
- * trusting this — `roles` holds two scopes sharing the same titles, so a
- * project-scope id here would otherwise sail through the foreign key and
- * break `team` lookups later.
- */
-const ROLES = [
-  { id: "admin", title: "Admin", icon: Shield, blurb: "Manage people and projects" },
-  { id: "member", title: "Member", icon: User, blurb: "Work on projects" },
-] as const
 
 interface InviteDialogProps {
   workspaceSlug: string
+  /** Keys the member query. Distinct from the slug — see the note below. */
   workspaceId: string
 }
 
@@ -47,55 +35,71 @@ export function InviteDialog({
 }: InviteDialogProps) {
   const client = useQueryClient()
   const [open, setOpen] = useState(false)
-  const [email, setEmail] = useState("")
-  const [role, setRole] = useState<"admin" | "member">("member")
-  const [error, setError] = useState<string | null>(null)
+  const [input, setInput] = useState("")
+  const [outcomes, setOutcomes] = useState<InviteOutcome[]>([])
 
-  const create = useMutation({
-    mutationFn: (variables: {
-    workspaceSlug: string
-    email: string
-    roleTitle: "admin" | "member"
-  }) => createInviteFn({ data: variables }),
-    onSuccess: (result) => {
-      if (result.ok) {
+  const { emails, invalid } = useMemo(() => parseEmailList(input), [input])
+
+  const send = useMutation({
+    mutationFn: (batch: string[]) =>
+      createInviteFn({ data: { workspaceSlug, emails: batch } }),
+    onSuccess: ({ outcomes: results }) => {
+      void client.invalidateQueries({
+        queryKey: inviteKeys.pending(workspaceSlug),
+      })
+      void client.invalidateQueries({
+        queryKey: teamKeys.members(workspaceId),
+      })
+
+      setOutcomes(results)
+
+      // Only clear the addresses that worked. Leaving the failures in the box
+      // means the admin can fix a typo and resend without re-pasting
+      // everything, and it keeps the bad ones visible.
+      if (results.every((r) => r.ok)) {
+        setInput("")
         setOpen(false)
-        setEmail("")
-        setError(null)
-        void client.invalidateQueries({
-          queryKey: inviteKeys.pending(workspaceSlug),
-        })
-        void client.invalidateQueries({
-          queryKey: teamKeys.members(workspaceId),
-        })
+        setOutcomes([])
         return
       }
-      // The server distinguishes "already in this workspace" from a bad role,
-      // but never whether the address has an account elsewhere — that answer
-      // is global and would be an enumeration oracle for any admin. Its message
-      // carries the specific reason, so the code isn't needed here.
-      setError(result.message ?? "Could not send that invite.")
+      setInput(
+        results
+          .filter((r) => !r.ok)
+          .map((r) => r.email)
+          .join(", ")
+      )
     },
     onError: (e) =>
-      setError(e instanceof Error ? e.message : "Could not send that invite."),
+      setOutcomes([
+        {
+          email: "",
+          ok: false,
+          message: e instanceof Error ? e.message : "Could not send invites.",
+        },
+      ]),
   })
-
-  const selected = ROLES.find((r) => r.id === role) ?? ROLES[1]
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
-    const trimmed = email.trim()
-    if (!trimmed || create.isPending) return
-    setError(null)
-    create.mutate({
-      workspaceSlug,
-      email: trimmed,
-      roleTitle: selected.id,
-    })
+    if (!emails.length || send.isPending) return
+    setOutcomes([])
+    send.mutate(emails)
   }
 
+  const failed = outcomes.filter((o) => !o.ok)
+  const sent = outcomes.filter((o) => o.ok)
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) {
+          setInput("")
+          setOutcomes([])
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" className="shrink-0">
           <Mail />
@@ -103,68 +107,79 @@ export function InviteDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Invite to this workspace</DialogTitle>
+          <DialogTitle>Invite your team</DialogTitle>
           <DialogDescription>
-            They&apos;ll get an email with a link. It works whether or not they
-            already have an Antara account.
+            Enter the email addresses of your team members. Separate multiple
+            addresses with commas. Everyone you invite joins as a member.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="invite-email">Email</Label>
+            <Label htmlFor="invite-emails">Email addresses</Label>
             <Input
-              id="invite-email"
-              type="email"
-              placeholder="ada@studio.com"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={create.isPending}
+              id="invite-emails"
+              type="text"
+              inputMode="email"
+              autoComplete="off"
+              placeholder="ada@studio.com, grace@studio.com"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={send.isPending}
             />
-          </div>
 
-          <div className="flex flex-col gap-2">
-            <Label>Role</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {ROLES.map((r) => {
-                const Icon = r.icon
-                const active = role === r.id
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setRole(r.id)}
-                    aria-pressed={active}
-                    className={cn(
-                      "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
-                      active
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:bg-muted",
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5 text-sm font-medium">
-                      <Icon className="size-4" />
-                      {r.title}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {r.blurb}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {error && (
-            <p
-              role="alert"
-              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {error}
+            <p className="text-xs text-muted-foreground">
+              {emails.length > 0 && (
+                <>
+                  {emails.length === 1
+                    ? "1 recipient"
+                    : `${emails.length} recipients`}
+                </>
+              )}
+              {emails.length > 0 && invalid.length > 0 && " · "}
+              {invalid.length > 0 && (
+                <>
+                  {invalid.length === 1
+                    ? "1 entry isn't a valid email address"
+                    : `${invalid.length} entries aren't valid email addresses`}{" "}
+                  and will be skipped
+                </>
+              )}
             </p>
+          </div>
+
+          {sent.length > 0 && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="size-4 text-emerald-600" />
+              {sent.length === 1
+                ? "1 invite sent"
+                : `${sent.length} invites sent`}
+              .
+            </p>
+          )}
+
+          {failed.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+            >
+              <p className="mb-1 flex items-center gap-2 font-medium text-destructive">
+                <AlertTriangle className="size-4 shrink-0" />
+                {failed.length === 1
+                  ? "1 invite wasn't sent"
+                  : `${failed.length} invites weren't sent`}
+              </p>
+              <ul className="space-y-1 text-destructive">
+                {failed.map((o) => (
+                  <li key={o.email || "unknown"} className="truncate text-xs">
+                    <span className="font-medium">{o.email}</span>
+                    {o.message ? ` — ${o.message}` : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <DialogFooter>
@@ -173,14 +188,18 @@ export function InviteDialog({
               variant="outline"
               onClick={() => setOpen(false)}
             >
-              Cancel
+              {failed.length > 0 ? "Done" : "Cancel"}
             </Button>
             <Button
               type="submit"
-              disabled={create.isPending || email.trim().length === 0}
+              disabled={send.isPending || emails.length === 0}
             >
-              {create.isPending && <Loader2 className="animate-spin" />}
-              {create.isPending ? "Sending…" : "Send invite"}
+              {send.isPending && <Loader2 className="animate-spin" />}
+              {send.isPending
+                ? "Sending…"
+                : emails.length > 1
+                  ? `Send ${emails.length} invites`
+                  : "Send invite"}
             </Button>
           </DialogFooter>
         </form>

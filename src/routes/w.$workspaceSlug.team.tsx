@@ -47,8 +47,8 @@ function TeamPage() {
           </CardTitle>
           <CardDescription>
             {canManage
-              ? "Invite people, and manage who can see this workspace."
-              : "Invitations, suspensions, and role changes arrive next."}
+              ? "Everyone here can see this workspace's projects. Suspending and removing people is coming next."
+              : "Invitations, suspensions, and role changes are coming next."}
           </CardDescription>
         </CardHeader>
         <CardContent>
