@@ -14,6 +14,7 @@ import type {
   ProjectTagOption,
 } from "@/server/services/project-service"
 import type { ProjectUpdateItem } from "@/server/services/project-update-service"
+import type { UpdateKind } from "@/db/enums"
 
 /**
  * Query keys for projects.
@@ -175,6 +176,7 @@ export type OptimisticUpdate = ProjectUpdateItem & { optimistic: true }
  */
 export function buildOptimisticUpdate(input: {
   body: string
+  kind: UpdateKind
   author: ProjectUpdateItem["author"]
   attachments: { file: File; url: string }[]
 }): OptimisticUpdate {
@@ -183,6 +185,7 @@ export function buildOptimisticUpdate(input: {
   return {
     id: `optimistic-${stamp}`,
     body: input.body,
+    kind: input.kind,
     reviewStatus: "pending",
     reviewNote: null,
     createdAt: new Date(),

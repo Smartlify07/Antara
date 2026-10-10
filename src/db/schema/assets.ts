@@ -7,7 +7,12 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core"
-import { assetProvider, deletionJobStatus, updateReviewStatus } from "../enums"
+import {
+  assetProvider,
+  deletionJobStatus,
+  updateKind,
+  updateReviewStatus,
+} from "../enums"
 import { user } from "./auth"
 import { projects } from "./projects"
 import { id } from "./shared"
@@ -24,6 +29,9 @@ export const projectUpdates = pgTable(
       onDelete: "set null",
     }),
     body: text("body").notNull(),
+    // Comment or progress update. Defaults to a comment so any post written
+    // before this column existed reads as the quieter of the two.
+    kind: updateKind("kind").notNull().default("comment"),
     reviewStatus: updateReviewStatus("review_status")
       .notNull()
       .default("pending"),

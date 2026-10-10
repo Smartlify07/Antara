@@ -276,6 +276,22 @@ Blocking, and outside what I can do:
 6. `workspace_invites.token` stores the raw token (handoff §3, §7.6 disagree) —
    flagged, not fixed here.
 
+### 7a. Round two
+
+Landed on top of phases 1–2, as commit `feat: refine details page tabs, post
+kind and title editing`:
+
+| Change | Notes |
+|---|---|
+| Larger tabs with a sliding indicator | `TabsSwitcher` replaces the raw `TabsList`. The indicator is placed by index (`translateX(index * 100%)`) rather than measured, since the triggers are equal-width. Transition is disabled for the first paint so the pill does not slide in on load. |
+| Post kind — comment or progress update | New `update_kind` enum on `project_updates` (migration 0012), defaults to `comment`. Chosen in the composer via a segmented toggle; the feed renders progress updates with a badge. |
+| "Sending…" removed from feed cards | The card already dims at `opacity-60` while in flight, which carries the state. The pending review badge is now blank rather than reading "Awaiting review" on every card, since most posts are comments that nobody is reviewing. |
+| Duplicate status row removed | The Overview stat row repeated the Status already shown in the right column next to the pill that edits it. |
+| Title editable inline | `ProjectTitle` — click to edit, saves on blur/Enter, abandons on Escape. The slug is deliberately not re-derived, matching the immutability comment at `projects.ts:41`. |
+| Optimistic across every attribute write | Two writes were previously awaited-then-refetched: adding members and replacing tags. Both now patch the detail cache first. Member adds append the resolved rows; a tag replace maps the whole set, giving new labels a placeholder id so React keeps the key stable across the swap. |
+| Archive / unarchive on the card is optimistic | `ProjectCard.run` takes an optional cache patch applied before the write and restored on failure. Status changes patch this row in place. |
+| Trash is deliberately **not** optimistic | Removing the row unmounts the card, taking the confirm dialog and the error banner with it — a rejected trash would restore the card with nothing to explain why. Left awaiting, with the reason in a comment, until there is a toast surface. |
+
 ---
 
 ## 8. Verification

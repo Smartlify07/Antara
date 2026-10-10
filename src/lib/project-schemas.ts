@@ -67,7 +67,16 @@ const scopedProject = z.object({
   projectId: z.string(),
 })
 
-/** Body text for the progress-update composer. */
+export const setProjectTitleSchema = z.object({
+  ...scopedProject.shape,
+  title: z
+    .string()
+    .trim()
+    .min(2, "Project title must be at least 2 characters")
+    .max(120, "Project title must be at most 120 characters"),
+})
+
+/** Body text for the feed composer. */
 export const projectUpdateSchema = z.object({
   ...scopedProject.shape,
   body: z
@@ -75,6 +84,12 @@ export const projectUpdateSchema = z.object({
     .trim()
     .min(1, "Write something before sending")
     .max(4000, "Update must be at most 4000 characters"),
+  /**
+   * Whether this is a running comment or a progress update. Both live in one
+   * table and share one review flow, so this only changes how the feed labels
+   * the post. Defaults to a comment, which is what an unqualified post is.
+   */
+  kind: z.enum(["comment", "progress_update"]).default("comment"),
   /**
    * Already-uploaded files. The browser uploads each attachment to the
    * provider first, then posts the resulting metadata here — so the

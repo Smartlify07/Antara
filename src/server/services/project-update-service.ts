@@ -13,7 +13,7 @@ import {
   workspaces,
 } from "@/db/schema/index"
 import { requireWorkspaceAccess } from "@/server/services/project-service"
-import type { UpdateReviewStatus } from "@/db/enums"
+import type { UpdateKind, UpdateReviewStatus } from "@/db/enums"
 
 /**
  * Progress updates: the activity feed, the attachments they carry, and the
@@ -35,6 +35,7 @@ export interface UpdateVersion {
 export interface ProjectUpdateItem {
   id: string
   body: string
+  kind: UpdateKind
   reviewStatus: UpdateReviewStatus
   reviewNote: string | null
   createdAt: Date
@@ -71,6 +72,7 @@ export async function listProjectUpdates(
     .select({
       id: projectUpdates.id,
       body: projectUpdates.body,
+      kind: projectUpdates.kind,
       reviewStatus: projectUpdates.reviewStatus,
       reviewNote: projectUpdates.reviewNote,
       createdAt: projectUpdates.createdAt,
@@ -149,6 +151,7 @@ export async function listProjectUpdates(
     return {
       id: row.id,
       body: row.body,
+      kind: row.kind,
       reviewStatus: row.reviewStatus,
       reviewNote: row.reviewNote,
       createdAt: row.createdAt,
@@ -242,6 +245,7 @@ export async function createProjectUpdate(
   userId: string,
   projectId: string,
   body: string,
+  kind: UpdateKind,
   attachments: AttachmentInput[]
 ): Promise<{ id: string }> {
   const [project] = await db
@@ -261,7 +265,7 @@ export async function createProjectUpdate(
   return db.transaction(async (tx) => {
     const [update] = await tx
       .insert(projectUpdates)
-      .values({ projectId, authorId: userId, body })
+      .values({ projectId, authorId: userId, body, kind })
       .returning({ id: projectUpdates.id })
 
     if (!update) throw new Error("Could not post the update.")

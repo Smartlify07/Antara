@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { AlertCircleIcon } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { TabsSwitcher } from "@/components/projects/details/tabs-switcher"
 import { ProjectDescription } from "@/components/projects/details/project-description"
 import { ProjectPills } from "@/components/projects/details/project-pills"
+import { ProjectTitle } from "@/components/projects/details/project-title"
 import { ProjectProperties } from "@/components/projects/details/project-properties"
 import { UpdateCard } from "@/components/projects/details/update-card"
 import { UpdateComposer } from "@/components/projects/details/update-composer"
@@ -36,6 +38,9 @@ export function ProjectDetailPage({
 }) {
   const [error, setError] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
+  // Controlled so the switcher's indicator knows which tab to slide to; Radix
+  // only reports the change.
+  const [tab, setTab] = useState("overview")
 
   const updates = useQuery(projectUpdatesQuery(workspaceId, project.id))
   const canReview = useQuery(canReviewUpdatesQuery(workspaceId, project.id))
@@ -86,9 +91,12 @@ export function ProjectDetailPage({
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-3">
         <div>
-          <h1 className="text-2xl font-medium tracking-tighter">
-            {project.title}
-          </h1>
+          <ProjectTitle
+            title={project.title}
+            canEdit={canEdit}
+            saving={pills.title.isPending}
+            onSave={(next) => pills.title.mutate(next)}
+          />
           <p className="text-sm tracking-tight text-muted-foreground">
             {project.taskCount} task{project.taskCount === 1 ? "" : "s"} ·{" "}
             {memberRefs.length} member{memberRefs.length === 1 ? "" : "s"}
@@ -108,17 +116,23 @@ export function ProjectDetailPage({
         </p>
       )}
 
-      <Tabs defaultValue="overview" className="flex flex-col gap-6">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="activities">Activities</TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-6">
+        <TabsSwitcher
+          value={tab}
+          tabs={[
+            { value: "overview", label: "Overview" },
+            { value: "activities", label: "Activities" },
+          ]}
+        />
 
         <TabsContent value="overview">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="flex flex-col gap-8">
+              {/* Status is deliberately absent: the right column's Status row
+                  already shows it, next to the pill that edits it. Repeating it
+                  here put the same value on screen twice with no new
+                  information. */}
               <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
-                <Stat label="Status" value={project.status} />
                 <Stat label="Start" value={project.startDate} />
                 <Stat label="Deadline" value={project.deadline} />
                 <Stat label="Created" value={project.createdAt} />

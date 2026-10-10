@@ -7,6 +7,7 @@ import {
   setProjectLeadFn,
   setProjectStatusFn,
   setProjectTagsFn,
+  setProjectTitleFn,
 } from "@/server/functions/projects"
 import { projectKeys } from "@/lib/queries/projects"
 import type { SelectedTag } from "@/components/projects/tags-chip"
@@ -102,8 +103,19 @@ export function useProjectPills({
     })
   )
 
-  const members = write<string[]>("members", (teamIds) =>
-    addProjectMembersFn({ data: { ...scope, teamIds } })
+  // Appending the new rows from the workspace member list is enough: the
+  // service resolves each `team` row to a membership, so the shape the chip
+  // reads is the shape the response will contain.
+  const members = write<string[]>(
+    "members",
+    (teamIds) => addProjectMembersFn({ data: { ...scope, teamIds } }),
+    (current, teamIds) => ({
+      ...current,
+      members: [
+        ...current.members,
+        ...addedMembers(current.members, allMembers, teamIds),
+      ],
+    })
   )
 
   const dates = write<{ startDate: Date | null; deadline: Date | null }>(
@@ -112,14 +124,35 @@ export function useProjectPills({
     (current, next) => ({ ...current, ...next })
   )
 
-  const tags = write<SelectedTag[]>("tags", (next) =>
-    setProjectTagsFn({
-      data: {
-        ...scope,
-        tagIds: next.flatMap((tag) => (tag.id ? [tag.id] : [])),
-        newTagLabels: next.flatMap((tag) => (tag.id ? [] : [tag.label])),
-      },
+  // The chip replaces the whole tag set, so the patch is a replacement too.
+  // New labels have no server id yet and render with the neutral dot until the
+  // refetch gives them one — same as the optimistic project row in the grid.
+  const tags = write<SelectedTag[]>(
+    "tags",
+    (next) =>
+      setProjectTagsFn({
+        data: {
+          ...scope,
+          tagIds: next.flatMap((tag) => (tag.id ? [tag.id] : [])),
+          newTagLabels: next.flatMap((tag) => (tag.id ? [] : [tag.label])),
+        },
+      }),
+    (current, next) => ({
+      ...current,
+      tags: next.map((tag) => ({
+        // A placeholder id stands in for the row the server is about to
+        // create, so React has a stable key across the swap.
+        id: tag.id ?? `optimistic-tag-${tag.label}`,
+        label: tag.label,
+        color: tag.color,
+      })),
     })
+  )
+
+  const title = write<string>(
+    "title",
+    (next) => setProjectTitleFn({ data: { ...scope, title: next } }),
+    (current, next) => ({ ...current, title: next })
   )
 
   const description = write<string>(
@@ -152,6 +185,7 @@ export function useProjectPills({
     members,
     dates,
     tags,
+    title,
     description,
     handleLeadChange: lead.mutate,
     handleMembersToggle,
@@ -162,8 +196,35 @@ export function useProjectPills({
       members.isPending ||
       dates.isPending ||
       tags.isPending ||
+      title.isPending ||
       description.isPending,
   }
+}
+
+/**
+ * Resolves newly-added `team` ids into project membership rows, skipping
+ * anyone already on the project so a double-add cannot show them twice.
+ */
+function addedMembers(
+  current: ProjectMemberRef[],
+  all: AssignableMember[],
+  teamIds: string[]
+): ProjectMemberRef[] {
+  return teamIds.flatMap((teamId) => {
+    if (current.some((member) => member.teamId === teamId)) return []
+    const person = all.find((member) => member.teamId === teamId)
+    if (!person) return []
+    return [
+      {
+        teamId: person.teamId,
+        name: person.name,
+        email: person.email,
+        image: person.image,
+        joined: person.joined,
+        isLead: false,
+      },
+    ]
+  })
 }
 
 /**

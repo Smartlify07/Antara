@@ -85,6 +85,13 @@
       "when": 1791580615254,
       "tag": "0011_assets_logical_restructure",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791664394925,
+      "tag": "0012_update_kind",
+      "breakpoints": true
     }
   ]
 }

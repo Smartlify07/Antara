@@ -697,6 +697,31 @@ export async function setProjectDates(
     )
 }
 
+/**
+ * Renames a project.
+ *
+ * The slug is deliberately left alone: project slugs are unique per workspace
+ * and immutable (`projects.ts:41`), and are what the details route and every
+ * card link are built from. Re-slugging would break bookmarks and any link
+ * already shared, so the title and the URL can diverge.
+ */
+export async function setProjectTitle(
+  workspaceId: string,
+  userId: string,
+  projectId: string,
+  title: string
+): Promise<void> {
+  await requireProjectAdmin(workspaceId, userId, "rename the project")
+  await requireProject(workspaceId, projectId)
+
+  await db
+    .update(projects)
+    .set({ title, updatedAt: new Date() })
+    .where(
+      and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId))
+    )
+}
+
 export async function setProjectDescription(
   workspaceId: string,
   userId: string,

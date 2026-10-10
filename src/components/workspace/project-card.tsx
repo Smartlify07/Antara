@@ -78,20 +78,43 @@ export function ProjectCard({
   // refetches. `router.invalidate()` refetched every active loader in the app,
   // so trashing one card also reloaded the workspace sidebar, team members
   // and the tag vocabulary.
-  async function run(action: () => Promise<unknown>) {
+  //
+  // `patch` applies the change to the list cache before the write, so the card
+  // reflects archive/restore the moment it is clicked. The snapshot restores it
+  // if the request fails, and the invalidation still runs so the server's row
+  // wins either way.
+  async function run(
+    action: () => Promise<unknown>,
+    patch?: (current: ProjectListItem[]) => ProjectListItem[]
+  ) {
     setPending(true)
     setError(null)
+
+    const key = projectKeys.list(workspaceId)
+    const snapshot = client.getQueryData<ProjectListItem[]>(key)
+    if (patch && snapshot) {
+      client.setQueryData(key, patch)
+    }
+
     try {
       await action()
-      await client.invalidateQueries({
-        queryKey: projectKeys.list(workspaceId),
-      })
     } catch (e) {
+      if (snapshot) client.setQueryData(key, snapshot)
       setError(e instanceof Error ? e.message : "Something went wrong.")
-    } finally {
       setPending(false)
       setTrashOpen(false)
+      return
     }
+
+    await client.invalidateQueries({ queryKey: key })
+    setPending(false)
+    setTrashOpen(false)
+  }
+
+  /** Applies a status change to just this project's row in the cache. */
+  function withStatus(status: ProjectListItem["status"]) {
+    return (current: ProjectListItem[]) =>
+      current.map((row) => (row.id === project.id ? { ...row, status } : row))
   }
 
   return (
@@ -178,14 +201,16 @@ export function ProjectCard({
                   <DropdownMenuItem
                     disabled={pending}
                     onSelect={() =>
-                      void run(() =>
-                        setProjectStatusFn({
-                          data: {
-                            workspaceId,
-                            projectId: project.id,
-                            status: archived ? "active" : "archived",
-                          },
-                        })
+                      void run(
+                        () =>
+                          setProjectStatusFn({
+                            data: {
+                              workspaceId,
+                              projectId: project.id,
+                              status: archived ? "active" : "archived",
+                            },
+                          }),
+                        withStatus(archived ? "active" : "archived")
                       )
                     }
                   >
@@ -276,6 +301,12 @@ export function ProjectCard({
               disabled={pending}
               onClick={(e) => {
                 e.preventDefault()
+                // Deliberately not optimistic. Removing the row from the list
+                // unmounts this card, taking the confirm dialog and the error
+                // banner with it — so a rejected trash would put the card back
+                // with nothing to say why. Archive/restore is patched in place
+                // and stays optimistic; trash has nowhere to report from until
+                // there is a toast surface.
                 void run(() =>
                   trashProjectFn({
                     data: { workspaceId, projectId: project.id },

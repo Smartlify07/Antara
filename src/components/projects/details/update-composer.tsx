@@ -11,10 +11,12 @@ import {
   uploadAsset,
   validateAssetFile,
 } from "@/components/projects/cloudinary-assets"
+import { KindToggle } from "@/components/projects/details/kind-toggle"
 import { createProjectUpdateFn } from "@/server/functions/projects"
 import { buildOptimisticUpdate, projectKeys } from "@/lib/queries/projects"
 import { useSession } from "@/lib/auth-client"
 import type { ProjectUpdateItem } from "@/server/services/project-update-service"
+import type { UpdateKind } from "@/db/enums"
 
 interface StagedFile {
   file: File
@@ -44,6 +46,7 @@ export function UpdateComposer({
   const client = useQueryClient()
   const { data: session } = useSession()
   const [body, setBody] = useState("")
+  const [kind, setKind] = useState<UpdateKind>("comment")
   const [staged, setStaged] = useState<StagedFile[]>([])
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -81,7 +84,7 @@ export function UpdateComposer({
   function removeStaged(index: number) {
     setStaged((current) => {
       const entry = current[index]
-      if (entry && entry.url.startsWith("blob:")) URL.revokeObjectURL(entry.url)
+      if (entry.url.startsWith("blob:")) URL.revokeObjectURL(entry.url)
       return current.filter((_, i) => i !== index)
     })
   }
@@ -89,6 +92,7 @@ export function UpdateComposer({
   const mutation = useMutation({
     mutationFn: async (payload: {
       body: string
+      kind: UpdateKind
       attachments: { file: File; url: string }[]
       previews: StagedFile[]
     }) => {
@@ -106,6 +110,7 @@ export function UpdateComposer({
           workspaceId,
           projectId,
           body: payload.body,
+          kind: payload.kind,
           attachments: uploaded.map((entry) => ({
             filename: entry.file.name,
             url: entry.asset.url,
@@ -124,6 +129,7 @@ export function UpdateComposer({
 
       const optimistic = buildOptimisticUpdate({
         body: payload.body,
+        kind: payload.kind,
         author: {
           id: session?.user.id ?? "",
           name: session?.user.name ?? null,
@@ -153,6 +159,9 @@ export function UpdateComposer({
       }
       setStaged([])
       setBody("")
+      // Kind resets too, so the next post starts from the quieter default
+      // rather than inheriting whatever the last one happened to be.
+      setKind("comment")
     },
     onSettled: () => {
       void client.invalidateQueries({ queryKey: updatesKey })
@@ -166,6 +175,7 @@ export function UpdateComposer({
     try {
       await mutation.mutateAsync({
         body: trimmed,
+        kind,
         attachments: staged.map((entry) => ({
           file: entry.file,
           url: entry.url,
@@ -184,12 +194,20 @@ export function UpdateComposer({
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-2">
+      <KindToggle kind={kind} onChange={setKind} disabled={busy} />
+
       <InputGroup className="border-0 shadow-none">
         <InputGroupTextarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Write a progress update…"
-          aria-label="Progress update"
+          placeholder={
+            kind === "progress_update"
+              ? "What changed since the last update?"
+              : "Write a comment…"
+          }
+          aria-label={
+            kind === "progress_update" ? "Progress update" : "Comment"
+          }
           maxLength={4000}
           rows={3}
           onKeyDown={(e) => {

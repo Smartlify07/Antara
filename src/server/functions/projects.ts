@@ -12,6 +12,7 @@ import {
   setProjectDescriptionSchema,
   setProjectLeadSchema,
   setProjectTagsSchema,
+  setProjectTitleSchema,
   slugifyTitle,
   updateProjectReviewSchema,
 } from "@/lib/project-schemas"
@@ -233,6 +234,19 @@ export const setProjectTagsFn = createServerFn({ method: "POST" })
     return { ok: true }
   })
 
+export const setProjectTitleFn = createServerFn({ method: "POST" })
+  .validator(setProjectTitleSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.setProjectTitle(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.title
+    )
+    return { ok: true }
+  })
+
 export const setProjectDescriptionFn = createServerFn({ method: "POST" })
   .validator(setProjectDescriptionSchema)
   .handler(async ({ data }) => {
@@ -281,6 +295,7 @@ export const createProjectUpdateFn = createServerFn({ method: "POST" })
       userId,
       data.projectId,
       data.body,
+      data.kind,
       data.attachments
     )
   })

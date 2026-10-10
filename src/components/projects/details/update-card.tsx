@@ -11,8 +11,11 @@ import { cn } from "@/lib/utils"
 import type { ProjectUpdateItem } from "@/server/services/project-update-service"
 
 const REVIEW_META = {
+  // A comment is a remark between collaborators, so "awaiting review" would be
+  // noise on most cards. The badge stays blank until there is a decision to
+  // report, and the lead's controls below are what make it actionable.
   pending: {
-    label: "Awaiting review",
+    label: "",
     className: "bg-muted text-muted-foreground",
   },
   approved: {
@@ -97,21 +100,32 @@ export function UpdateCard({
           </AvatarFallback>
         </Avatar>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-sm font-medium">{name}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium">{name}</span>
+            {update.kind === "progress_update" && (
+              <span className="shrink-0 rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                Progress update
+              </span>
+            )}
+          </span>
           <span className="text-xs text-muted-foreground">
             {formatDistanceToNow(new Date(update.createdAt), {
               addSuffix: true,
             })}
           </span>
         </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-            meta.className
-          )}
-        >
-          {pending ? "Sending…" : meta.label}
-        </span>
+        {/* Only rendered once there is a decision to report. A blank pending
+            state would otherwise sit on every card doing nothing. */}
+        {!pending && meta.label && (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+              meta.className
+            )}
+          >
+            {meta.label}
+          </span>
+        )}
       </header>
 
       <p className="text-sm leading-relaxed whitespace-pre-wrap">
