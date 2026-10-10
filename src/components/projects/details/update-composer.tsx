@@ -227,7 +227,11 @@ export function UpdateComposer({
   const busy = mutation.isPending
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-2">
+    <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-3">
+      {/* The gap between the toggle and the textarea is deliberately wider
+          than the rest of the stack: the two are separate decisions — what
+          kind of post this is, versus what it says — and reading them as one
+          control would make the toggle look like a prefix on the textarea. */}
       <KindToggle kind={kind} onChange={setKind} disabled={busy} />
 
       <InputGroup className="border-0 shadow-none">
@@ -265,10 +269,18 @@ export function UpdateComposer({
           >
             <PaperclipIcon />
           </InputGroupButton>
+          {/* Primary: sending is the point of this control, and it is the
+              only thing the composer commits. Attach stays ghost so the two
+              buttons do not compete for the same weight. */}
           <InputGroupButton
             type="button"
             size="icon-sm"
+            variant="default"
             aria-label="Send update"
+            // aria-busy alongside the swapped icon: an icon-only button has room for one
+            // glyph at size-8, and `aria-busy` still tells assistive tech the
+            // action is running.
+            aria-busy={busy}
             disabled={busy || body.trim().length === 0}
             onClick={() => void handleSubmit()}
           >
