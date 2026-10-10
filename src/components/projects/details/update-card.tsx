@@ -53,6 +53,10 @@ export function UpdateCard({
   const updatesKey = projectKeys.updates(workspaceId, projectId)
   const pending = "optimistic" in update
 
+  // Optimistic: the badge flips the moment a decision is clicked, and reverts
+  // only this row on failure rather than restoring a whole-list snapshot — a
+  // feed that refetched mid-flight should not have someone else's post
+  // reverted along with it.
   const review = useMutation({
     mutationFn: (decision: "approved" | "changes_requested") =>
       reviewProjectUpdateFn({
@@ -60,16 +64,22 @@ export function UpdateCard({
       }),
     onMutate: async (decision) => {
       await client.cancelQueries({ queryKey: updatesKey })
-      const snapshot = client.getQueryData<ProjectUpdateItem[]>(updatesKey)
+      const previous = update.reviewStatus
       client.setQueryData<ProjectUpdateItem[]>(updatesKey, (current = []) =>
         current.map((row) =>
           row.id === update.id ? { ...row, reviewStatus: decision } : row
         )
       )
-      return { snapshot }
+      return { previous }
     },
     onError: (_error, _decision, context) => {
-      if (context?.snapshot) client.setQueryData(updatesKey, context.snapshot)
+      const previous = context?.previous
+      if (!previous) return
+      client.setQueryData<ProjectUpdateItem[]>(updatesKey, (current = []) =>
+        current.map((row) =>
+          row.id === update.id ? { ...row, reviewStatus: previous } : row
+        )
+      )
     },
     onSettled: () => {
       void client.invalidateQueries({ queryKey: updatesKey })

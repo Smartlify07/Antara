@@ -292,6 +292,39 @@ kind and title editing`:
 | Archive / unarchive on the card is optimistic | `ProjectCard.run` takes an optional cache patch applied before the write and restored on failure. Status changes patch this row in place. |
 | Trash is deliberately **not** optimistic | Removing the row unmounts the card, taking the confirm dialog and the error banner with it — a rejected trash would restore the card with nothing to explain why. Left awaiting, with the reason in a comment, until there is a toast surface. |
 
+### 7b. Optimistic posting, and a rollback bug in it
+
+Posting was optimistic from the start, but the rollback had a defect that only
+appears on a project's **first** ever post: `onMutate` captured the cache with
+`getQueryData`, which returns `undefined` when the feed has never been
+populated, and `onError` guarded on `if (context?.snapshot)`. A failed first
+post therefore skipped the restore entirely and left the optimistic row
+stranded in the feed with no way to remove it.
+
+Three changes, all in the same direction:
+
+- The snapshot is coerced to `[]`, so the restore branch always runs.
+- Rollback drops **only** the failed post, by id, instead of restoring the
+  whole list. A whole-list restore reverts anything else that landed in the
+  feed while the write was in flight — including another person's update.
+- The review mutation on the card had the same shape and the same weakness; it
+  now reverts its own row's status rather than a whole-list snapshot.
+
+Deliberately **not** cleared on failure: the composer text and the staged
+files. A rejected post should be retryable without retyping it, and the
+previews are still referenced by the chips rather than by the removed row — so
+revoking those object URLs there would break the retry.
+
+Also removed the separate `uploading` state. The upload runs inside
+`mutationFn`, so `mutation.isPending` already spans it; the extra flag tracked
+the same thing a moment later and could disagree with itself.
+
+One consequence worth being explicit about: because the optimistic row is
+written before the upload starts, a provider failure rolls back *after* the
+post has already appeared. The previous comment claimed the upload ran first to
+avoid that, which was never true — `onMutate` is awaited before `mutationFn`.
+The comment was corrected rather than the behaviour.
+
 ---
 
 ## 8. Verification

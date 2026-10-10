@@ -23,18 +23,43 @@ interface StagedFile {
   url: string
 }
 
+/** What one send carries. Both post kinds use this shape. */
+interface PostPayload {
+  body: string
+  kind: UpdateKind
+  attachments: { file: File; url: string }[]
+}
+
 /**
- * The progress-update composer.
+ * Turns a send failure into something worth showing. The upload step and the
+ * save step fail for different reasons, so they say different things — a
+ * missing Cloudinary preset is a setup problem, not something the user did.
+ */
+function describeFailure(error: unknown): string {
+  if (!(error instanceof Error)) return "Could not send your message."
+  if (error.message.includes("not configured")) {
+    return "File uploads are not configured yet. Send without attachments."
+  }
+  if (error.message.includes("Could not upload")) {
+    return `${error.message} Nothing else was sent.`
+  }
+  return `Could not send. ${error.message}`
+}
+
+/**
+ * Composer for both post kinds — a running comment or a progress update. They
+ * share this component, this mutation and this optimistic path; only the label
+ * and the badge differ.
  *
- * Attachments upload to the provider *before* the update is posted, so the
- * server receives URLs rather than bytes and no request handler ever holds a
- * 90MB video. The trade-off is that a failed upload leaves an orphaned provider
- * file — the alternative (uploading inside the transaction) is not possible
- * across a third party, and it is what the deletion queue in phase 3 will
- * reconcile.
+ * Posting is optimistic. The row is written into the feed cache before the
+ * request, showing object-URL previews for any staged files, and is removed
+ * again if the write fails. The composer's text is deliberately *not* cleared
+ * until success, so a rejected post can be retried without retyping it.
  *
- * The post itself is optimistic: the row appears in the feed immediately with
- * object-URL previews, and rolls back if the write fails.
+ * Attachments upload to the provider rather than through the server, so no
+ * request handler ever holds a 90MB video. The cost is that an upload failure
+ * has to roll the row back after the fact, and that a provider file can be
+ * orphaned when the update itself then fails to save.
  */
 export function UpdateComposer({
   workspaceId,
@@ -49,7 +74,6 @@ export function UpdateComposer({
   const [kind, setKind] = useState<UpdateKind>("comment")
   const [staged, setStaged] = useState<StagedFile[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const updatesKey = projectKeys.updates(workspaceId, projectId)
 
@@ -90,14 +114,11 @@ export function UpdateComposer({
   }
 
   const mutation = useMutation({
-    mutationFn: async (payload: {
-      body: string
-      kind: UpdateKind
-      attachments: { file: File; url: string }[]
-      previews: StagedFile[]
-    }) => {
-      // Upload first, so a provider failure surfaces before the optimistic row
-      // is written rather than rolling it back a moment later.
+    mutationFn: async (payload: PostPayload) => {
+      // Uploads run inside mutationFn, which TanStack invokes *after* onMutate
+      // has already written the optimistic row. So the post appears in the
+      // feed immediately and a slow upload does not hold it back — the trade is
+      // that a provider failure has to roll the row back after the fact.
       const uploaded = await Promise.all(
         payload.attachments.map(async (entry) => ({
           ...entry,
@@ -125,7 +146,13 @@ export function UpdateComposer({
     onMutate: async (payload) => {
       setError(null)
       await client.cancelQueries({ queryKey: updatesKey })
-      const snapshot = client.getQueryData<ProjectUpdateItem[]>(updatesKey)
+
+      // Coerced to an array rather than left undefined. On the project's very
+      // first post there is no cached feed yet, so `getQueryData` returns
+      // undefined — and `if (context?.snapshot)` in onError would then skip the
+      // restore, leaving the optimistic row stranded with no way to remove it.
+      const snapshot =
+        client.getQueryData<ProjectUpdateItem[]>(updatesKey) ?? []
 
       const optimistic = buildOptimisticUpdate({
         body: payload.body,
@@ -139,18 +166,25 @@ export function UpdateComposer({
         attachments: payload.attachments,
       })
 
-      client.setQueryData<ProjectUpdateItem[]>(updatesKey, (current = []) => [
+      client.setQueryData<ProjectUpdateItem[]>(updatesKey, [
         optimistic,
-        ...current,
+        ...snapshot,
       ])
 
-      return { snapshot }
+      return { snapshot, optimisticId: optimistic.id }
     },
     onError: (err, _variables, context) => {
-      if (context?.snapshot) {
-        client.setQueryData(updatesKey, context.snapshot)
-      }
-      setError(err instanceof Error ? err.message : "Could not send.")
+      // Rollback: drop this post and nothing else. Restoring the whole snapshot
+      // would also revert any update that landed in the feed while this one was
+      // in flight — including someone else's.
+      client.setQueryData<ProjectUpdateItem[]>(updatesKey, (current = []) =>
+        current.filter((row) => row.id !== context?.optimisticId)
+      )
+
+      // Text and staged files are left alone deliberately: a rejected post
+      // should be retryable without retyping, and the previews are still
+      // referenced by the chips rather than by the row we just removed.
+      setError(describeFailure(err))
     },
     onSuccess: () => {
       // Only now are the previews dead: the feed is showing server URLs.
@@ -170,8 +204,8 @@ export function UpdateComposer({
 
   async function handleSubmit() {
     const trimmed = body.trim()
-    if (!trimmed || mutation.isPending || uploading) return
-    setUploading(true)
+    if (!trimmed || mutation.isPending) return
+
     try {
       await mutation.mutateAsync({
         body: trimmed,
@@ -180,17 +214,17 @@ export function UpdateComposer({
           file: entry.file,
           url: entry.url,
         })),
-        previews: staged,
       })
     } catch {
-      // onError already surfaced it; swallow so this stays an unhandled-free
-      // promise.
-    } finally {
-      setUploading(false)
+      // onMutate already rolled the row back and onError already said why.
+      // Swallow so the click handler has no unhandled rejection.
     }
   }
 
-  const busy = mutation.isPending || uploading
+  // One flag, not two. `mutation.isPending` already spans the upload, because
+  // the upload runs inside mutationFn — a separate `uploading` state was
+  // tracking the same thing a moment later and could disagree with it.
+  const busy = mutation.isPending
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-2">
