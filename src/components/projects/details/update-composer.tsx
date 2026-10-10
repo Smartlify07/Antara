@@ -256,9 +256,20 @@ export function UpdateComposer({
               void handleSubmit()
             }
           }}
-          className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+          // pl-4 rather than the inherited px-2.5, so the text starts at the
+          // same inset the send icon sits at from the right edge: 8px of
+          // button padding plus the addon's own 8px. Matching them is what makes
+          // the field read as one block instead of text pushed away from an
+          // icon.
+          className="resize-none border-0 bg-transparent pl-4 shadow-none focus-visible:ring-0"
         />
-        <InputGroupAddon align="inline-end">
+        <InputGroupAddon
+          align="inline-end"
+          // `self-end` pins the buttons to the bottom of a multi-row textarea
+          // rather than the vertical centre, where they read as belonging to
+          // the middle of the text. `mb-1` is the 4px gap off the bottom edge.
+          className="self-end mb-1 has-[>button]:mr-0"
+        >
           <InputGroupButton
             type="button"
             size="icon-sm"
