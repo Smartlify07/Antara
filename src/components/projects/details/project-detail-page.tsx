@@ -42,17 +42,6 @@ export function ProjectDetailPage({
   // only reports the change.
   const [tab, setTab] = useState("overview")
 
-  // Radix unmounts inactive panels rather than hiding them, so a mount-driven
-  // fade would also play on first page load — the request was for a fade on
-  // switch. Armed once the reader has actually switched, and never disarmed,
-  // so returning to Overview later still fades.
-  const [hasSwitched, setHasSwitched] = useState(false)
-
-  function handleTabChange(next: string) {
-    setTab(next)
-    setHasSwitched(true)
-  }
-
   const updates = useQuery(projectUpdatesQuery(workspaceId, project.id))
   const canReview = useQuery(canReviewUpdatesQuery(workspaceId, project.id))
 
@@ -127,11 +116,7 @@ export function ProjectDetailPage({
         </p>
       )}
 
-      <Tabs
-        value={tab}
-        onValueChange={handleTabChange}
-        className="flex flex-col gap-6"
-      >
+      <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-6">
         <TabsSwitcher
           value={tab}
           tabs={[
@@ -140,15 +125,7 @@ export function ProjectDetailPage({
           ]}
         />
 
-        {/* 300ms reads as deliberate without pulling focus off the sliding
-            indicator. Gated on `hasSwitched` because Radix unmounts inactive
-            panels, so an ungated mount animation would also play on first load. */}
-        <TabsContent
-          value="overview"
-          className={
-            hasSwitched ? "animate-in duration-300 fade-in-0" : undefined
-          }
-        >
+        <TabsContent value="overview">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="flex flex-col gap-8">
               {/* Status is deliberately absent: the right column's Status row
@@ -202,12 +179,7 @@ export function ProjectDetailPage({
           </div>
         </TabsContent>
 
-        <TabsContent
-          value="activities"
-          className={
-            hasSwitched ? "animate-in duration-300 fade-in-0" : undefined
-          }
-        >
+        <TabsContent value="activities">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="flex flex-col gap-4">
               <UpdateComposer
