@@ -111,8 +111,7 @@ export function InviteDialog({
         <DialogHeader>
           <DialogTitle>Invite your team</DialogTitle>
           <DialogDescription>
-            Enter the email addresses of your team members. Separate multiple
-            addresses with commas. Everyone you invite joins as a member.
+            Enter the email addresses of your team members, separated by commas.
           </DialogDescription>
         </DialogHeader>
 
@@ -195,11 +194,7 @@ export function InviteDialog({
               disabled={send.isPending || emails.length === 0}
             >
               {send.isPending && <Loader2 className="animate-spin" />}
-              {send.isPending
-                ? "Sending…"
-                : emails.length > 1
-                  ? `Send ${emails.length} invites`
-                  : "Send invite"}
+              {send.isPending ? "Sending…" : "Send invites"}
             </Button>
           </DialogFooter>
         </form>
