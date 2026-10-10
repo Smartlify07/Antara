@@ -118,7 +118,7 @@ export async function createInvite(input: CreateInviteInput): Promise<{
 
   const role = await resolveWorkspaceRole(input.workspaceId, input.roleTitle)
 
-  const { token, tokenHash } = mintInviteToken()
+  const { token, tokenHash } = await mintInviteToken()
   const expiresAt = inviteExpiry()
 
   await db.transaction(async (tx) => {
@@ -253,7 +253,7 @@ export async function findLiveInviteByToken(token: string) {
     .from(workspaceInvites)
     .where(
       and(
-        eq(workspaceInvites.tokenHash, hashInviteToken(token)),
+        eq(workspaceInvites.tokenHash, await hashInviteToken(token)),
         isNull(workspaceInvites.acceptedAt),
         sql`${workspaceInvites.expiresAt} > now()`
       )

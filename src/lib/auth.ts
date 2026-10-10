@@ -3,7 +3,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { db } from "@/db"
 import { sendVerificationEmail } from "@/lib/email/templates"
 import { normalizeEmail } from "@/lib/normalize-email"
-import { backfillSeatsForVerifiedUser } from "@/server/services/invite-service"
 
 /**
  * Production origin. Keep this explicit rather than letting better-auth
@@ -54,6 +53,14 @@ export const auth = betterAuth({
     // link worth clicking.
     afterEmailVerification: async (user) => {
       try {
+        // Imported lazily on purpose. A static import here pulls the service
+        // — and anything it reaches — into the client graph, because
+        // server-function modules import this file and route files import
+        // those. `invite-token` is built on Web Crypto now rather than
+        // `node:crypto`, so this is belt and braces rather than the only
+        // thing standing between us and a dead form.
+        const { backfillSeatsForVerifiedUser } =
+          await import("@/server/services/invite-service")
         await backfillSeatsForVerifiedUser(user.id, user.email)
       } catch (error) {
         // Never surfaced to the caller: it would turn verification into a
