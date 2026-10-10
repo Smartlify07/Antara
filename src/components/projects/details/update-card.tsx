@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { formatDistanceToNow } from "date-fns"
-import { CheckIcon, Loader2, RotateCcwIcon } from "lucide-react"
+import { CheckIcon, RotateCcwIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
@@ -50,14 +50,13 @@ export function UpdateCard({
   projectId,
   canReview,
 }: {
-  update: ProjectUpdateItem & { optimistic?: boolean }
+  update: ProjectUpdateItem
   workspaceId: string
   projectId: string
   canReview: boolean
 }) {
   const client = useQueryClient()
   const updatesKey = projectKeys.updates(workspaceId, projectId)
-  const pending = "optimistic" in update
 
   // Only progress updates are reviewed. A comment has `reviewStatus: null` and
   // gets no badge and no controls at all.
@@ -100,15 +99,12 @@ export function UpdateCard({
 
   const name = update.author.name ?? update.author.email ?? "Someone"
 
+  // An optimistic row renders identically to a real one. It is already in the
+  // feed and reads as posted; a dimmed or labelled placeholder would be a
+  // pending state, and there is nothing to distinguish it from the settled row
+  // it becomes.
   return (
-    <article
-      className={cn(
-        "flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4",
-        // A placeholder has no server record yet, so it is dimmed to read as
-        // in-flight rather than as a real submission.
-        pending && "opacity-60"
-      )}
-    >
+    <article className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4">
       <header className="flex items-center gap-2">
         <Avatar className="size-6">
           {update.author.image ? (
@@ -137,7 +133,7 @@ export function UpdateCard({
         </div>
         {/* Null for a comment, and blank while a review is pending — a badge that
             says nothing sits on every card doing nothing. */}
-        {!pending && meta && meta.label && (
+        {meta && meta.label && (
           <span
             className={cn(
               "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
@@ -189,24 +185,24 @@ export function UpdateCard({
         </p>
       )}
 
-      {/* Suppressed while pending: there is no server row to review yet, so
-          the buttons would be firing against an id that does not exist. */}
+      {/* An optimistic row has no server id yet, so approving it would post
+          against an id that does not exist. Keyed off the id prefix rather
+          than an `optimistic` flag, which nothing else needs now. */}
       {canReview &&
         reviewable &&
         update.reviewStatus === "pending" &&
-        !pending && (
+        !update.id.startsWith("optimistic-") && (
           <div className="flex items-center gap-2">
+            {/* Both buttons just disable while the decision is in flight —
+                the badge above has already flipped optimistically, so a spinner
+                would be describing something already shown. */}
             <Button
               size="sm"
               variant="outline"
               disabled={review.isPending}
               onClick={() => review.mutate("approved")}
             >
-              {review.isPending ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <CheckIcon />
-              )}
+              <CheckIcon />
               Approve
             </Button>
             <Button

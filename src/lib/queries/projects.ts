@@ -158,22 +158,18 @@ export function buildOptimisticProject(
 }
 
 /**
- * A placeholder update living in the feed alongside real ones.
- *
- * `optimistic` is not decoration: the card reads it to dim the row and to
- * suppress the review controls, since a submission the server has not accepted
- * has nothing to approve yet.
- */
-export type OptimisticUpdate = ProjectUpdateItem & { optimistic: true }
-
-/**
  * Builds the row rendered between the click and the server's response.
+ *
+ * The `optimistic-` id prefix is what marks it: the card checks the prefix to
+ * decide whether the row can be reviewed yet, and nothing else branches on a
+ * placeholder, because it renders identically to a settled post.
  *
  * `localUrl` is the browser object URL for each attachment. Those previews
  * must be revoked by the caller when the placeholder is replaced or rolled
  * back — the grid never made optimistic rows carry blob URLs, so nothing else
  * in the app does this cleanup today.
  */
+export type OptimisticUpdate = ProjectUpdateItem
 export function buildOptimisticUpdate(input: {
   body: string
   kind: UpdateKind
@@ -205,6 +201,5 @@ export function buildOptimisticUpdate(input: {
       mimeType: attachment.file.type || "application/octet-stream",
       sizeBytes: attachment.file.size,
     })),
-    optimistic: true,
   }
 }

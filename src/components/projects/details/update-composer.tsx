@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
-import { Loader2, PaperclipIcon, SendIcon, XIcon } from "lucide-react"
+import { PaperclipIcon, SendIcon, XIcon } from "lucide-react"
 import {
   InputGroup,
   InputGroupAddon,
@@ -288,14 +288,15 @@ export function UpdateComposer({
             size="icon-sm"
             variant="default"
             aria-label="Send update"
-            // aria-busy alongside the swapped icon: an icon-only button has room for one
-            // glyph at size-8, and `aria-busy` still tells assistive tech the
-            // action is running.
+            // Disabled rather than spinning: the post is already in the feed by
+            // the time this is clickable again, so there is nothing for a
+            // spinner to describe. `aria-busy` still reports it to assistive
+            // tech, where a spinner would be invisible anyway.
             aria-busy={busy}
             disabled={busy || body.trim().length === 0}
             onClick={() => void handleSubmit()}
           >
-            {busy ? <Loader2 className="animate-spin" /> : <SendIcon />}
+            <SendIcon />
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
