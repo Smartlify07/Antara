@@ -16,7 +16,23 @@ import path from "node:path"
  * builds first, then reads that build's output.
  */
 
-const CLIENT_DIR = path.join(process.cwd(), ".output", "public")
+/**
+ * Where Nitro put the client assets.
+ *
+ * Deliberately a list, not one path. Nitro writes `.output/public` when run
+ * locally, but its Vercel preset writes `.vercel/output/static` — and this
+ * script hardcoded the local one, so it exited 1 on every Vercel build.
+ *
+ * Worse, the message it printed ("No build output at .../.output/public. Run
+ * pnpm build first.") reads like the *platform* failing to find a build, when
+ * the build had in fact succeeded seconds earlier and the guard was looking in
+ * the wrong place. That sent the investigation after Vercel rather than here.
+ * So it now names every directory it looked in.
+ */
+const CANDIDATE_DIRS = [".vercel/output/static", ".output/public"] as const
+
+const searched = CANDIDATE_DIRS.map((p) => path.join(process.cwd(), p))
+const CLIENT_DIR = searched.find((dir) => fs.existsSync(dir))
 
 /**
  * Node builtins must never appear in client code, matched on the `node:`
@@ -45,8 +61,10 @@ function walk(dir: string): string[] {
   return out
 }
 
-if (!fs.existsSync(CLIENT_DIR)) {
-  console.error(`No build output at ${CLIENT_DIR}. Run pnpm build first.`)
+if (!CLIENT_DIR) {
+  console.error("No client build output found. Looked in:")
+  for (const dir of searched) console.error(`  ${dir}`)
+  console.error("Run pnpm build first.")
   process.exit(1)
 }
 
@@ -64,7 +82,7 @@ for (const file of files) {
     const at = Math.max(0, match.index - 40)
     const snippet = text.slice(at, match.index + match[0].length + 40)
     failures.push(
-      `${path.relative(process.cwd(), file)}  [${label}]  …${snippet}…`,
+      `${path.relative(process.cwd(), file)}  [${label}]  …${snippet}…`
     )
   }
 }
@@ -78,7 +96,7 @@ if (failures.length) {
     console.error(`  …and ${failures.length - 20} more`)
   }
   console.error(
-    "\n`path` and friends are deliberately not matched — see FORBIDDEN.",
+    "\n`path` and friends are deliberately not matched — see FORBIDDEN."
   )
   process.exit(1)
 }
