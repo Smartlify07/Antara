@@ -185,6 +185,9 @@ export const inspectInviteFn = createServerFn({ method: "GET" })
       workspaceSlug: workspace.slug,
       roleTitle: role,
       emailHint: invite.email,
+      // Needed to decline without the token being re-sent anywhere. Opaque, and
+      // useless without a verified session and a seat of your own.
+      inviteId: invite.id,
       expiresAt: invite.expiresAt,
     }
   })
@@ -227,6 +230,31 @@ export const acceptInviteFn = createServerFn({ method: "POST" })
   })
 
 /**
+ * A session that has been verified, or a redirect that explains why not.
+ *
+ * Split out from `requireManager` because accepting and declining need only a
+ * verified *person*, not admin rights over the workspace. The `emailVerified`
+ * check is the load-bearing one: a seat is reserved for an address that may have
+ * no account, so registering that address succeeds, and anyone who could act on
+ * an unverified session could walk into the workspace.
+ */
+async function requireVerifiedSession() {
+  const session = await auth.api.getSession({
+    headers: await getRequestHeaders(),
+  })
+  if (!session?.user) {
+    throw redirect({ to: "/login", search: { callbackURL: undefined } })
+  }
+  if (!session.user.emailVerified) {
+    throw redirect({
+      to: "/verify-email",
+      search: { error: undefined },
+    })
+  }
+  return session
+}
+
+/**
  * Who is asking, for the invite landing page.
  *
  * Only the two facts the page branches on. Deliberately not the user id or
@@ -243,5 +271,68 @@ export const inviteViewerFn = createServerFn({ method: "GET" }).handler(
     }
   }
 )
+
+/**
+ * Every live invitation for the caller, found without a token.
+ *
+ * The recovery path for whenever the token is gone: a resent verification email
+ * points at `/verify-email`, a link opened in a new tab or a different browser
+ * never carried one. The pending seat does.
+ *
+ * Requires a **verified** session, same as accepting does — an unverified
+ * account must not be able to enumerate or accept an invitation addressed to it.
+ */
+export const pendingInvitesFn = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const session = await requireVerifiedSession()
+    return service.listPendingInvitesForUser(
+      session.user.id,
+      session.user.email
+    )
+  }
+)
+
+/**
+ * Declines, from the pending list or from `/invite/$token`.
+ *
+ * Deleting is the whole of it — same as an admin revoking — so there is no
+ * `declined_at` state to carry. The seat goes too, which is what makes the
+ * "Awaiting" badge disappear from the member list.
+ */
+export const declineInviteFn = createServerFn({ method: "POST" })
+  .validator(z.object({ inviteId: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const session = await requireVerifiedSession()
+    const declined = await service.declineInvite(
+      session.user.id,
+      session.user.email,
+      data.inviteId
+    )
+    return { declined }
+  })
+
+/**
+ * Accepts an invitation the caller already holds a pending seat for, with no
+ * token involved.
+ *
+ * The seat is the proof and the verified session is the authority — the token
+ * only ever proved "you were sent this", which the seat now does instead. The
+ * invite is still scoped to the caller: it is only accepted if a seat exists in
+ * that workspace for them and it has not been joined, so knowing an id is not
+ * enough to walk into somebody else's workspace.
+ */
+export const acceptPendingInviteFn = createServerFn({ method: "POST" })
+  .validator(z.object({ inviteId: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const session = await requireVerifiedSession()
+
+    const workspace = await service.acceptInviteById(
+      session.user.id,
+      session.user.email,
+      data.inviteId
+    )
+    if (!workspace) return { ok: false as const }
+    return { ok: true as const, workspaceSlug: workspace.slug }
+  })
 
 export { INVITE_TTL_DAYS }

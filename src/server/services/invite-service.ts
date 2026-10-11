@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm"
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm"
 import { db } from "@/db"
 import {
   roles,
@@ -301,6 +301,29 @@ export async function getRoleTitle(roleId: string) {
  * meant to end.
  */
 export async function revokeInvite(workspaceId: string, inviteId: string) {
+  await discardPendingInvite(workspaceId, inviteId)
+}
+
+/**
+ * Removes a pending invite and the seat it reserved.
+ *
+ * Shared by admin revoke and by the invitee's own "Not now", so there is one
+ * path and one state to reason about.
+ *
+ * The seat deletion is subtler than it looks. `backfillSeatsForVerifiedUser`
+ * attaches an account *and clears the seat's email*, so by the time a verified
+ * user sees the invitation the seat is `{ user_id, email: null, joined_at: null }`
+ * — matching it by address finds nothing, and the row survives revocation still
+ * badged "awaiting" with no way left to complete it.
+ *
+ * So the seat is found by address *or* by the account holding that address, and
+ * only ever when it has not been joined. A joined membership is a real
+ * membership and must survive either action.
+ */
+async function discardPendingInvite(
+  workspaceId: string,
+  inviteId: string
+): Promise<boolean> {
   const invite = await db
     .select({ email: workspaceInvites.email })
     .from(workspaceInvites)
@@ -313,7 +336,8 @@ export async function revokeInvite(workspaceId: string, inviteId: string) {
     )
     .limit(1)
 
-  if (!invite[0]) return
+  if (!invite[0]) return false
+  const email = invite[0].email.toLowerCase()
 
   await db.transaction(async (tx) => {
     await tx
@@ -325,18 +349,78 @@ export async function revokeInvite(workspaceId: string, inviteId: string) {
         )
       )
 
-    // Only the un-attached seat. Once the signup backfill has attached an
-    // account this row is a real membership and revoking must not remove it.
+    const [holder] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(sql`lower(${user.email}) = ${email}`)
+      .limit(1)
+
     await tx
       .delete(team)
       .where(
         and(
           eq(team.workspaceId, workspaceId),
-          sql`lower(${team.email}) = ${invite[0].email.toLowerCase()}`,
-          isNull(team.userId)
+          isNull(team.joinedAt),
+          or(
+            and(sql`lower(${team.email}) = ${email}`, isNull(team.userId)),
+            ...(holder ? [eq(team.userId, holder.id)] : [])
+          )
         )
       )
   })
+
+  return true
+}
+
+/**
+ * Declines, as the person who was invited.
+ *
+ * Scoped to the caller: the invite is only discarded if a seat exists in that
+ * workspace for them and it has not been joined. Without that check, knowing
+ * an invite id would be enough to discard somebody else's.
+ */
+export async function declineInvite(
+  userId: string,
+  userEmail: string,
+  inviteId: string
+): Promise<boolean> {
+  const email = normalizeEmail(userEmail)
+
+  const invite = await db
+    .select({
+      id: workspaceInvites.id,
+      workspaceId: workspaceInvites.workspaceId,
+    })
+    .from(workspaceInvites)
+    .where(
+      and(
+        eq(workspaceInvites.id, inviteId),
+        sql`lower(${workspaceInvites.email}) = ${email}`,
+        isNull(workspaceInvites.acceptedAt)
+      )
+    )
+    .limit(1)
+
+  if (!invite[0]) return false
+
+  const seat = await db
+    .select({ id: team.id })
+    .from(team)
+    .where(
+      and(
+        eq(team.workspaceId, invite[0].workspaceId),
+        isNull(team.joinedAt),
+        or(
+          and(sql`lower(${team.email}) = ${email}`, isNull(team.userId)),
+          eq(team.userId, userId)
+        )
+      )
+    )
+    .limit(1)
+
+  if (!seat[0]) return false
+
+  return discardPendingInvite(invite[0].workspaceId, inviteId)
 }
 
 /**
@@ -360,18 +444,27 @@ export async function acceptInviteForUser(
   const email = normalizeEmail(userEmail)
 
   await db.transaction(async (tx) => {
-    // Attach the pending row to this account. Matched on email rather than
-    // creating a second one: the invite already reserved a seat, and a
-    // duplicate would make the workspace look like it has two of the same
-    // person in it.
+    // The reserved seat has two shapes by the time anyone accepts, and this
+    // lookup has to match both.
+    //
+    // 1. Untouched since `createInvite`: carries the invited address, no user.
+    // 2. Touched by `backfillSeatsForVerifiedUser` on verification: carries the
+    //    user, no address, still no `joinedAt`.
+    //
+    // Matching only the first fell through to the INSERT branch below and hit
+    // `team_workspace_user_unique`, because shape 2 already occupies
+    // (workspace_id, user_id). That is the path every verification takes, so it
+    // was the common case, not an edge one.
     const pending = await tx
       .select()
       .from(team)
       .where(
         and(
           eq(team.workspaceId, invite.workspaceId),
-          sql`lower(${team.email}) = ${email}`,
-          isNull(team.userId)
+          or(
+            and(sql`lower(${team.email}) = ${email}`, isNull(team.userId)),
+            and(eq(team.userId, userId), isNull(team.joinedAt))
+          )
         )
       )
       .limit(1)
@@ -409,6 +502,163 @@ export async function acceptInviteForUser(
     .select({ slug: workspaces.slug, title: workspaces.title })
     .from(workspaces)
     .where(eq(workspaces.id, invite.workspaceId))
+    .limit(1)
+
+  return rows[0] ?? null
+}
+
+export interface PendingInviteForUser {
+  inviteId: string
+  workspaceSlug: string
+  workspaceTitle: string
+  roleTitle: string
+  expiresAt: Date
+}
+
+/**
+ * Every live invitation addressed to this person, across all workspaces.
+ *
+ * This is the tokenless handle. Once `backfillSeatsForVerifiedUser` has run, a
+ * pending seat is `{ user_id: <them>, joined_at: null }` — which identifies both
+ * "this person has an unaccepted invite" and which workspace it is for, with no
+ * token anywhere.
+ *
+ * That matters because the token does not survive every path: a resent
+ * verification email points at `/verify-email`, a link opened in a new tab or a
+ * different browser never had it, and there is nothing server-side to rebuild it
+ * from. The seat can, so the invitation is always reachable.
+ *
+ * Invited to two workspaces? Both are returned and each is accepted
+ * separately — accepting one leaves the other pending.
+ */
+export async function listPendingInvitesForUser(
+  userId: string,
+  userEmail: string
+): Promise<PendingInviteForUser[]> {
+  const email = normalizeEmail(userEmail)
+
+  const rows = await db
+    .select({
+      inviteId: workspaceInvites.id,
+      slug: workspaces.slug,
+      title: workspaces.title,
+      roleTitle: roles.title,
+      expiresAt: workspaceInvites.expiresAt,
+    })
+    .from(team)
+    .innerJoin(workspaces, eq(team.workspaceId, workspaces.id))
+    .innerJoin(roles, eq(team.roleId, roles.id))
+    .innerJoin(
+      workspaceInvites,
+      and(
+        eq(workspaceInvites.workspaceId, team.workspaceId),
+        sql`lower(${workspaceInvites.email}) = ${email}`,
+        isNull(workspaceInvites.acceptedAt),
+        sql`${workspaceInvites.expiresAt} > now()`
+      )
+    )
+    .where(
+      and(
+        isNull(team.joinedAt),
+        ne(team.status, "left"),
+        isNull(workspaces.deletedAt),
+        or(
+          and(sql`lower(${team.email}) = ${email}`, isNull(team.userId)),
+          eq(team.userId, userId)
+        )
+      )
+    )
+    .orderBy(workspaceInvites.createdAt)
+
+  return rows.map((r) => ({
+    inviteId: r.inviteId,
+    workspaceSlug: r.slug,
+    workspaceTitle: r.title,
+    roleTitle: r.roleTitle,
+    expiresAt: r.expiresAt,
+  }))
+}
+
+/**
+ * Accepts an invitation by id, for a caller who holds the pending seat.
+ *
+ * The tokenless counterpart to `acceptInviteForUser`, for the paths where the
+ * token is genuinely gone: a resent verification email points at
+ * `/verify-email`, and a link opened in a new tab or on another device never
+ * carried one. Since only the token's hash is stored, it cannot be rebuilt —
+ * but the seat can, and a verified session plus an unjoined seat is the same
+ * guarantee the token gave.
+ *
+ * Scoped to the caller: the seat must exist in that workspace, belong to them,
+ * and not be joined. Returns null for an id that isn't theirs, so this can't be
+ * used to accept into somebody else's workspace.
+ */
+export async function acceptInviteById(
+  userId: string,
+  userEmail: string,
+  inviteId: string
+): Promise<{ slug: string } | null> {
+  const email = normalizeEmail(userEmail)
+
+  const invite = await db
+    .select({
+      id: workspaceInvites.id,
+      workspaceId: workspaceInvites.workspaceId,
+      roleId: workspaceInvites.roleId,
+    })
+    .from(workspaceInvites)
+    .where(
+      and(
+        eq(workspaceInvites.id, inviteId),
+        isNull(workspaceInvites.acceptedAt),
+        sql`${workspaceInvites.expiresAt} > now()`
+      )
+    )
+    .limit(1)
+
+  if (!invite[0]) return null
+
+  const seat = await db
+    .select({ id: team.id })
+    .from(team)
+    .where(
+      and(
+        eq(team.workspaceId, invite[0].workspaceId),
+        isNull(team.joinedAt),
+        ne(team.status, "left"),
+        or(
+          and(sql`lower(${team.email}) = ${email}`, isNull(team.userId)),
+          eq(team.userId, userId)
+        )
+      )
+    )
+    .limit(1)
+
+  if (!seat[0]) return null
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(team)
+      .set({
+        userId,
+        email: null,
+        roleId: invite[0].roleId,
+        status: "active",
+        joinedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(team.id, seat[0].id))
+
+    await tx
+      .update(workspaceInvites)
+      .set({ acceptedAt: new Date() })
+      .where(eq(workspaceInvites.id, invite[0].id))
+  })
+
+  const rows = await db
+    .select({ slug: workspaces.slug })
+    .from(workspaces)
+    .where(eq(workspaces.id, invite[0].workspaceId))
     .limit(1)
 
   return rows[0] ?? null
