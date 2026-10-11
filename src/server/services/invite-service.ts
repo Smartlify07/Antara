@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, or, sql } from "drizzle-orm"
+import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm"
 import { db } from "@/db"
 import {
   roles,
@@ -125,6 +125,11 @@ export async function createInvite(input: CreateInviteInput): Promise<{
     // Drop the previous invite and the seat it reserved. Both, in the same
     // transaction, so a concurrent second invite can't slip past either unique
     // index and surface as an unhandled violation.
+    //
+    // The seat lookup has to cover the backfilled shape as well — matching only
+    // `{ email, user_id: null }` left the attached-but-unjoined seat behind
+    // whenever the invitee had already signed up, producing a second seat for
+    // the same person.
     await tx
       .delete(workspaceInvites)
       .where(
@@ -135,15 +140,7 @@ export async function createInvite(input: CreateInviteInput): Promise<{
         )
       )
 
-    await tx
-      .delete(team)
-      .where(
-        and(
-          eq(team.workspaceId, input.workspaceId),
-          sql`lower(${team.email}) = ${email}`,
-          isNull(team.userId)
-        )
-      )
+    await deleteUnjoinedSeat(tx, input.workspaceId, email)
 
     // Reserve the seat immediately, so the invitee appears in the member list
     // marked as awaiting rather than only in a separate invites list. The seat
@@ -189,9 +186,12 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
         sql`${workspaceInvites.createdAt} > now() - interval '1 day'`
       )
     )
-    .limit(MAX_INVITES_PER_DAY + 1)
+    // Counted before this invite is written, so the cap is on invites *sent* today.
+    // Fetching `MAX + 1` and testing `> MAX` counted the row that was about to be
+    // replaced, letting 26 through a limit named 25.
+    .limit(MAX_INVITES_PER_DAY)
 
-  if (recent.length > MAX_INVITES_PER_DAY) {
+  if (recent.length >= MAX_INVITES_PER_DAY) {
     throw new InviteError(
       `You've sent ${MAX_INVITES_PER_DAY} invites in the last day. Try again tomorrow.`,
       "rate_limited"
@@ -214,7 +214,18 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
     .where(
       and(
         eq(team.workspaceId, input.workspaceId),
-        sql`lower(${user.email}) = ${email}`
+        sql`lower(${user.email}) = ${email}`,
+        // Load-bearing, and the check the comment above describes rather than
+        // the one it performed.
+        //
+        // Once the invitee signs up and verifies, the backfill attaches their
+        // account to the reserved seat and clears its address — leaving
+        // `joined_at` null. This join matches that row, so a person who was
+        // invited, created an account and has *not* accepted was reported as
+        // already in the workspace, and could never be re-invited. Since the
+        // invite is what sends the mail, that is a dead end: they can't be
+        // reached and they aren't a member.
+        isNotNull(team.joinedAt)
       )
     )
     .limit(1)
@@ -224,24 +235,6 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
       "That address is already in this workspace.",
       "already_member"
     )
-  }
-
-  // Can't invite yourself. No separate owner check is needed: creating a
-  // workspace gives the owner a joined seat, so the check above already covers
-  // them.
-  const self = await db
-    .select({ id: team.id })
-    .from(team)
-    .where(
-      and(
-        eq(team.workspaceId, input.workspaceId),
-        eq(team.userId, input.invitedBy)
-      )
-    )
-    .limit(1)
-
-  if (self.length > 0) {
-    throw new InviteError("You're already in this workspace.", "already_member")
   }
 }
 
@@ -349,27 +342,58 @@ async function discardPendingInvite(
         )
       )
 
-    const [holder] = await tx
-      .select({ id: user.id })
-      .from(user)
-      .where(sql`lower(${user.email}) = ${email}`)
-      .limit(1)
-
-    await tx
-      .delete(team)
-      .where(
-        and(
-          eq(team.workspaceId, workspaceId),
-          isNull(team.joinedAt),
-          or(
-            and(sql`lower(${team.email}) = ${email}`, isNull(team.userId)),
-            ...(holder ? [eq(team.userId, holder.id)] : [])
-          )
-        )
-      )
+    await deleteUnjoinedSeat(tx, workspaceId, email)
   })
 
   return true
+}
+
+/** The transaction handle, so a helper can join a caller's transaction. */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+/**
+ * Removes the seat reserved for `email`, if there is one that was never joined.
+ *
+ * A reserved seat has two shapes by the time anything else runs, and both have
+ * to be matched or the row survives:
+ *
+ * 1. Untouched since `createInvite`: carries the invited address, no account.
+ * 2. Touched by `backfillSeatsForVerifiedUser` on verification: carries the
+ *    account and **no address**, because the backfill writes `email = null`.
+ *
+ * Matching only the first left a stale seat behind in two places. On re-invite
+ * it meant two seats for one person, so the member list showed them twice and
+ * the next backfill was rejected by the unique index on
+ * `(workspace_id, user_id)`. On revoke it meant a row badged "awaiting" with
+ * no invite left to redeem.
+ *
+ * So the seat is found by address *or* by the account holding that address, and
+ * only ever while `joined_at IS NULL` — a joined membership is a real
+ * membership and must survive being re-invited, revoked or declined.
+ */
+async function deleteUnjoinedSeat(
+  tx: Tx,
+  workspaceId: string,
+  email: string
+): Promise<void> {
+  const [holder] = await tx
+    .select({ id: user.id })
+    .from(user)
+    .where(sql`lower(${user.email}) = ${email}`)
+    .limit(1)
+
+  await tx
+    .delete(team)
+    .where(
+      and(
+        eq(team.workspaceId, workspaceId),
+        isNull(team.joinedAt),
+        or(
+          and(sql`lower(${team.email}) = ${email}`, isNull(team.userId)),
+          ...(holder ? [eq(team.userId, holder.id)] : [])
+        )
+      )
+    )
 }
 
 /**
