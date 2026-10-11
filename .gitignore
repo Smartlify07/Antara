@@ -15,3 +15,6 @@ todos.json
 *.tsbuildinfo
 
 .vercel
+
+# git worktrees
+.worktrees
