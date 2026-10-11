@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
 import { db } from "@/db"
+import { resolveMembership } from "@/server/services/access-service"
 import type { MembershipStatus } from "@/db/enums"
 import { seedWorkspaceRoles } from "@/db/seed"
 import {
@@ -201,46 +202,26 @@ export async function getWorkspaceBySlug(
   userId: string,
   slug: string
 ): Promise<WorkspaceAccess | null> {
-  const owned = await db
+  const rows = await db
     .select()
     .from(workspaces)
-    .where(
-      and(
-        eq(workspaces.slug, slug),
-        eq(workspaces.ownerId, userId),
-        isNull(workspaces.deletedAt)
-      )
-    )
+    .where(and(eq(workspaces.slug, slug), isNull(workspaces.deletedAt)))
     .limit(1)
-  if (owned[0]) {
-    return { workspace: owned[0], role: "admin", isOwner: true }
-  }
 
-  const rows = await db
-    .select({ workspace: workspaces, role: roles })
-    .from(team)
-    .innerJoin(workspaces, eq(team.workspaceId, workspaces.id))
-    .innerJoin(roles, eq(team.roleId, roles.id))
-    .where(
-      and(
-        eq(team.userId, userId),
-        eq(workspaces.slug, slug),
-        eq(team.status, "active"),
-        // The load-bearing check for the whole consent model.
-        //
-        // `createInvite` reserves a seat and the verification backfill attaches
-        // an account to it, both leaving `joined_at` null. That row satisfies
-        // every other condition here — correct user, live workspace, active
-        // status — so without this an invitee could skip the Accept button and
-        // walk straight in by typing the URL.
-        isNotNull(team.joinedAt),
-        isNull(workspaces.deletedAt)
-      )
-    )
-    .limit(1)
-  const row = rows[0]
-  if (!row) return null
-  return { workspace: row.workspace, role: row.role.title, isOwner: false }
+  const workspace = rows[0]
+  if (!workspace) return null
+
+  // Membership rules live in `access-service` and only there. This used to
+  // spell out its own version of the check, which is how a pending seat ended
+  // up able to enter a workspace nobody had accepted yet.
+  const membership = await resolveMembership(workspace.id, userId)
+  if (!membership) return null
+
+  return {
+    workspace,
+    role: membership.role,
+    isOwner: membership.isOwner,
+  }
 }
 
 /**

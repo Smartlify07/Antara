@@ -10,8 +10,8 @@ import {
   tasks,
   team,
   user,
-  workspaces,
 } from "@/db/schema/index"
+import * as accessService from "@/server/services/access-service"
 import { resolveTagColor, tagColorFor } from "@/lib/tag-colors"
 import type { ProjectStatus } from "@/db/enums"
 
@@ -20,34 +20,11 @@ import type { ProjectStatus } from "@/db/enums"
  * Thin server functions in `src/server/functions` own auth and call in here.
  */
 
-export async function requireWorkspaceAccess(
-  workspaceId: string,
-  userId: string
-): Promise<void> {
-  const [membership] = await db
-    .select({ id: team.id })
-    .from(team)
-    .where(and(eq(team.workspaceId, workspaceId), eq(team.userId, userId)))
-    .limit(1)
-
-  if (membership) return
-
-  const [owned] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      and(
-        eq(workspaces.id, workspaceId),
-        eq(workspaces.ownerId, userId),
-        isNull(workspaces.deletedAt)
-      )
-    )
-    .limit(1)
-
-  if (!owned) {
-    throw new Error("Workspace not found or you do not have access.")
-  }
-}
+/**
+ * Delegated to `access-service` — see the note there for why this check is not
+ * reimplemented locally.
+ */
+export const requireWorkspaceAccess = accessService.requireWorkspaceAccess
 
 export interface ProjectListItem {
   id: string
@@ -180,36 +157,11 @@ async function getProjectActionContext(
   workspaceId: string,
   userId: string
 ): Promise<{ role: string; isOwner: boolean }> {
-  const [owned] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      and(
-        eq(workspaces.id, workspaceId),
-        eq(workspaces.ownerId, userId),
-        isNull(workspaces.deletedAt)
-      )
-    )
-    .limit(1)
-  if (owned) return { role: "admin", isOwner: true }
-
-  const [membership] = await db
-    .select({ title: roles.title })
-    .from(team)
-    .innerJoin(roles, eq(team.roleId, roles.id))
-    .where(
-      and(
-        eq(team.workspaceId, workspaceId),
-        eq(team.userId, userId),
-        eq(team.status, "active")
-      )
-    )
-    .limit(1)
-
+  const membership = await accessService.resolveMembership(workspaceId, userId)
   if (!membership) {
     throw new Error("Workspace not found or you do not have access.")
   }
-  return { role: membership.title, isOwner: false }
+  return membership
 }
 
 export interface AssignableMember {
