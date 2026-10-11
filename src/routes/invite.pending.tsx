@@ -1,14 +1,14 @@
-import { useMutation, useQuery, queryOptions } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import { MailWarning, ShieldQuestion } from "lucide-react"
 import { useState } from "react"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { Button } from "@/components/ui/button"
+import { pendingInvitesQuery } from "@/lib/queries/invites"
 import { Header, InviteDecision } from "./invite.$token"
 import {
   acceptPendingInviteFn,
   declineInviteFn,
-  pendingInvitesFn,
 } from "@/server/functions/invites"
 
 /**
@@ -28,11 +28,6 @@ export const Route = createFileRoute("/invite/pending")({
   component: PendingInvitesPage,
 })
 
-const pendingQuery = queryOptions({
-  queryKey: ["invite", "pending"] as const,
-  queryFn: () => pendingInvitesFn(),
-})
-
 interface Pending {
   inviteId: string
   workspaceSlug: string
@@ -42,7 +37,7 @@ interface Pending {
 }
 
 function PendingInvitesPage() {
-  const { data: invites, isPending, error } = useQuery(pendingQuery)
+  const { data: invites, isPending, error } = useQuery(pendingInvitesQuery())
 
   if (isPending) {
     return (
@@ -73,7 +68,7 @@ function PendingInvitesPage() {
     )
   }
 
-  if (!invites || invites.length === 0) {
+  if (!invites?.length) {
     return (
       <AuthLayout>
         <div className="flex flex-col gap-6">
@@ -94,7 +89,7 @@ function PendingInvitesPage() {
   // accepting one leaves the others pending.
   if (invites.length > 1) return <ManyInvites invites={invites} />
 
-  return <OneInvite invite={invites[0]!} />
+  return <OneInvite invite={invites[0]} />
 }
 
 function OneInvite({ invite }: { invite: Pending }) {

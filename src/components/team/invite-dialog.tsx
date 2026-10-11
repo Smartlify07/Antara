@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { createInviteFn, type InviteOutcome } from "@/server/functions/invites"
 import { parseEmailList } from "@/lib/parse-email-list"
 import { teamKeys } from "@/lib/queries/teams"
+import { workspaceKeys } from "@/lib/queries/workspaces"
 
 interface InviteDialogProps {
   workspaceSlug: string
@@ -47,6 +48,13 @@ export function InviteDialog({
       // query to refresh — there's no separate invites list to keep in step.
       void client.invalidateQueries({
         queryKey: teamKeys.members(workspaceId),
+      })
+
+      // The sidebar badge counts the same seats, so it has to move with them.
+      // Missed this and the number stays frozen until the badge is next
+      // mounted, which looks like the invite didn't land.
+      void client.invalidateQueries({
+        queryKey: workspaceKeys.teamCount(workspaceSlug),
       })
 
       setOutcomes(results)

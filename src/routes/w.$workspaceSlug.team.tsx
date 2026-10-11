@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card"
 import { revokeInviteFn } from "@/server/functions/invites"
 import { teamKeys, teamMembersQuery } from "@/lib/queries/teams"
+import { workspaceKeys } from "@/lib/queries/workspaces"
 
 export const Route = createFileRoute("/w/$workspaceSlug/team")({
   component: TeamPage,
@@ -34,7 +35,14 @@ function TeamPage() {
     mutationFn: (inviteId: string) =>
       revokeInviteFn({ data: { workspaceSlug: workspace.slug, inviteId } }),
     onSuccess: () => {
-      void client.invalidateQueries({ queryKey: teamKeys.members(workspaceId) })
+      // Revoking removes the seat as well as the invite, so the badge that
+      // counts those seats has to drop too.
+      void Promise.all([
+        client.invalidateQueries({ queryKey: teamKeys.members(workspaceId) }),
+        client.invalidateQueries({
+          queryKey: workspaceKeys.teamCount(workspace.slug),
+        }),
+      ])
     },
   })
 

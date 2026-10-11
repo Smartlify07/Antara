@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm"
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
 import { db } from "@/db"
 import type { MembershipStatus } from "@/db/enums"
 import { seedWorkspaceRoles } from "@/db/seed"
@@ -103,6 +103,11 @@ export async function listWorkspaces(
       and(
         eq(team.userId, userId),
         ne(team.status, "left"),
+        // A reserved seat exists before anyone accepts. Without this the
+        // workspace appears in the switcher for someone who has been invited
+        // but has not joined — visible membership for a decision they haven't
+        // made yet.
+        isNotNull(team.joinedAt),
         isNull(workspaces.deletedAt)
       )
     )
@@ -153,6 +158,10 @@ export async function resolveLandingWorkspace(
       and(
         eq(team.userId, userId),
         ne(team.status, "left"),
+        // Same reason as `listWorkspaces`: a pending seat must not be able to
+        // pick where `/dashboard` sends somebody. Landing a not-yet-member
+        // inside the workspace is the consent gate with the gate removed.
+        isNotNull(team.joinedAt),
         isNull(workspaces.deletedAt)
       )
     )
@@ -217,6 +226,14 @@ export async function getWorkspaceBySlug(
         eq(team.userId, userId),
         eq(workspaces.slug, slug),
         eq(team.status, "active"),
+        // The load-bearing check for the whole consent model.
+        //
+        // `createInvite` reserves a seat and the verification backfill attaches
+        // an account to it, both leaving `joined_at` null. That row satisfies
+        // every other condition here — correct user, live workspace, active
+        // status — so without this an invitee could skip the Accept button and
+        // walk straight in by typing the URL.
+        isNotNull(team.joinedAt),
         isNull(workspaces.deletedAt)
       )
     )
@@ -260,9 +277,7 @@ async function attachPendingInvites(
       )
     )
 
-  const byEmail = new Map(
-    rows.map((r) => [r.email.toLowerCase(), r] as const),
-  )
+  const byEmail = new Map(rows.map((r) => [r.email.toLowerCase(), r] as const))
 
   for (const item of items) {
     if (!item.isPending || !item.email) continue
@@ -331,7 +346,8 @@ export async function listWorkspaceMembers(
     isOwner: row.membership.userId === ws.ownerId,
     // Attached but not joined: the signup backfill resolves identity on
     // verification, but the link still has to be redeemed before they're in.
-    isPending: row.membership.userId === null || row.membership.joinedAt === null,
+    isPending:
+      row.membership.userId === null || row.membership.joinedAt === null,
   }))
 
   if (items.some((i) => i.isPending)) {

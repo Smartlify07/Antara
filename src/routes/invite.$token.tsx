@@ -1,20 +1,15 @@
-import { useMutation, useQuery, queryOptions } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import { CircleCheck, Loader2, MailWarning, ShieldQuestion } from "lucide-react"
 import { useState } from "react"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { Button } from "@/components/ui/button"
+import { inviteViewerQuery } from "@/lib/queries/invites"
 import {
   acceptInviteFn,
   declineInviteFn,
   inspectInviteFn,
-  inviteViewerFn,
 } from "@/server/functions/invites"
-
-const viewerQuery = queryOptions({
-  queryKey: ["invite", "viewer"] as const,
-  queryFn: () => inviteViewerFn(),
-})
 
 export const Route = createFileRoute("/invite/$token")({
   // Resolved before render, so a dead invite never flashes a live-looking page.
@@ -108,7 +103,7 @@ export function InviteDecision({
 function InvitePage() {
   const { token } = Route.useParams()
   const { invite: inspect } = Route.useRouteContext()
-  const { data: viewer } = useQuery(viewerQuery)
+  const { data: viewer } = useQuery(inviteViewerQuery())
   const navigate = useNavigate()
   const [declined, setDeclined] = useState(false)
 
