@@ -9,7 +9,8 @@ export const Route = createFileRoute("/workspaces/new")({
   // and swapped to a spinner on any background refetch.
   beforeLoad: async () => {
     const landing = await authLandingFn()
-    if (!landing) throw redirect({ to: "/login" })
+    if (!landing)
+      throw redirect({ to: "/login", search: { callbackURL: undefined } })
   },
   component: NewWorkspacePage,
 })

@@ -14,6 +14,8 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as InvitePendingRouteImport } from './routes/invite.pending'
 import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
 import { Route as WorkspacesNewRouteImport } from './routes/workspaces/new'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -46,6 +48,16 @@ const SignupRoute = SignupRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvitePendingRoute = InvitePendingRouteImport.update({
+  id: '/invite/pending',
+  path: '/invite/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WWorkspaceSlugRoute = WWorkspaceSlugRouteImport.update({
@@ -98,6 +110,8 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/invite/$token': typeof InviteTokenRoute
+  '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -113,6 +127,8 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/invite/$token': typeof InviteTokenRoute
+  '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -128,6 +144,8 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/invite/$token': typeof InviteTokenRoute
+  '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -145,6 +163,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/invite/$token'
+    | '/invite/pending'
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
@@ -160,6 +180,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/invite/$token'
+    | '/invite/pending'
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
@@ -174,6 +196,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/invite/$token'
+    | '/invite/pending'
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
@@ -190,6 +214,8 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  InviteTokenRoute: typeof InviteTokenRoute
+  InvitePendingRoute: typeof InvitePendingRoute
   WWorkspaceSlugRoute: typeof WWorkspaceSlugRouteWithChildren
   WorkspacesNewRoute: typeof WorkspacesNewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -230,6 +256,20 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/pending': {
+      id: '/invite/pending'
+      path: '/invite/pending'
+      fullPath: '/invite/pending'
+      preLoaderRoute: typeof InvitePendingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/w/$workspaceSlug': {
@@ -330,6 +370,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  InviteTokenRoute: InviteTokenRoute,
+  InvitePendingRoute: InvitePendingRoute,
   WWorkspaceSlugRoute: WWorkspaceSlugRouteWithChildren,
   WorkspacesNewRoute: WorkspacesNewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

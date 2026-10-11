@@ -5,6 +5,7 @@ import { AuthLayout } from "@/components/auth/auth-layout"
 import { ResendVerification } from "@/components/auth/resend-verification"
 import { readPendingVerification } from "@/lib/pending-verification"
 import { authLandingFn, landingRedirect } from "@/server/functions/workspaces"
+import { pendingInvitesFn } from "@/server/functions/invites"
 
 export const Route = createFileRoute("/verify-email")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -17,6 +18,19 @@ export const Route = createFileRoute("/verify-email")({
   beforeLoad: async () => {
     const landing = await authLandingFn()
     if (!landing?.emailVerified) return
+
+    // Someone who was invited and just confirmed their address. Without this
+    // they were routed by `landingRedirect` to `/workspaces/new` — they'd start
+    // creating a workspace of their own with an invitation still sitting
+    // pending, which is a confusing way to arrive from an invite email.
+    //
+    // Found from the pending seat, not a token: a resent verification email
+    // points here by design, and a link opened elsewhere never carried one.
+    const pending = await pendingInvitesFn()
+    if (pending.length > 0) {
+      throw redirect({ to: "/invite/pending" })
+    }
+
     throw redirect(landingRedirect(landing.slug))
   },
   component: VerifyEmailPage,
@@ -101,7 +115,11 @@ function VerifyEmailPage() {
 
         <p className="text-sm tracking-tight text-balance text-muted-foreground">
           Already verified?{" "}
-          <Link to="/login" className="font-medium">
+          <Link
+            to="/login"
+            search={{ callbackURL: undefined }}
+            className="font-medium"
+          >
             Log in
           </Link>
         </p>

@@ -15,7 +15,8 @@ async function requireUserId(): Promise<string> {
   const session = await auth.api.getSession({
     headers: await getRequestHeaders(),
   })
-  if (!session?.user) throw redirect({ to: "/login" })
+  if (!session?.user)
+    throw redirect({ to: "/login", search: { callbackURL: undefined } })
   return session.user.id
 }
 
@@ -126,13 +127,39 @@ export const getWorkspaceFn = createServerFn({ method: "GET" })
     return access
   })
 
+/**
+ * Member count for the sidebar badge, resolved from a slug.
+ *
+ * Two calls in one round trip: the sidebar only needs a number, and resolving
+ * slug → id then counting was previously two sequential requests on every
+ * workspace navigation.
+ *
+ * Counts exactly what `listWorkspaceMembers` returns, pending invitees included,
+ * so the badge agrees with the roster on the team page.
+ */
+export const workspaceTeamCountFn = createServerFn({ method: "GET" })
+  .validator(z.object({ workspaceSlug: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    const access = await service.getWorkspaceBySlug(userId, data.workspaceSlug)
+    if (!access) return 0
+    const members = await service.listWorkspaceMembers(access.workspace.id)
+    return members.length
+  })
+
 export const listWorkspaceMembersFn = createServerFn({ method: "GET" })
   .validator(z.object({ workspaceId: z.string() }))
   .handler(async ({ data }) => {
     const userId = await requireUserId()
     const workspaces = await service.listWorkspaces(userId)
-    if (!workspaces.some((item) => item.workspace.id === data.workspaceId)) {
-      throw redirect({ to: "/dashboard" })
-    }
-    return service.listWorkspaceMembers(data.workspaceId)
+    const access = workspaces.find(
+      (item) => item.workspace.id === data.workspaceId
+    )
+    if (!access) throw redirect({ to: "/dashboard" })
+
+    // Inviter names ride along only for callers who may manage the workspace.
+    // Omitted entirely otherwise, rather than sent and hidden in the UI —
+    // "invited by" is reconnaissance about who works with whom.
+    const canManage = access.isOwner || access.role === "admin"
+    return service.listWorkspaceMembers(data.workspaceId, canManage)
   })
