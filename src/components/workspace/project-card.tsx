@@ -26,6 +26,7 @@ import { projectKeys } from "@/lib/queries/projects"
 import { setProjectStatusFn, trashProjectFn } from "@/server/functions/projects"
 import { formatDueDate, isOverdue } from "@/lib/time"
 import { PROJECT_STATUS_META } from "@/lib/status-meta"
+import { Link } from "@tanstack/react-router"
 import {
   AlarmClockIcon,
   ArchiveIcon,
@@ -43,11 +44,14 @@ import { cn } from "@/lib/utils"
 export function ProjectCard({
   project,
   workspaceId,
+  workspaceSlug,
   canManage,
   optimistic = false,
 }: {
   project: ProjectListItem | OptimisticProject
   workspaceId: string
+  /** Needed to build the link into the details route. */
+  workspaceSlug: string
   canManage: boolean
   /** True while the server write is still in flight. */
   optimistic?: boolean
@@ -74,37 +78,95 @@ export function ProjectCard({
   // refetches. `router.invalidate()` refetched every active loader in the app,
   // so trashing one card also reloaded the workspace sidebar, team members
   // and the tag vocabulary.
-  async function run(action: () => Promise<unknown>) {
+  //
+  // `patch` applies the change to the list cache before the write, so the card
+  // reflects archive/restore the moment it is clicked. The snapshot restores it
+  // if the request fails, and the invalidation still runs so the server's row
+  // wins either way.
+  async function run(
+    action: () => Promise<unknown>,
+    patch?: (current: ProjectListItem[]) => ProjectListItem[]
+  ) {
     setPending(true)
     setError(null)
+
+    const key = projectKeys.list(workspaceId)
+    const snapshot = client.getQueryData<ProjectListItem[]>(key)
+    if (patch && snapshot) {
+      client.setQueryData(key, patch)
+    }
+
     try {
       await action()
-      await client.invalidateQueries({
-        queryKey: projectKeys.list(workspaceId),
-      })
     } catch (e) {
+      if (snapshot) client.setQueryData(key, snapshot)
       setError(e instanceof Error ? e.message : "Something went wrong.")
-    } finally {
       setPending(false)
       setTrashOpen(false)
+      return
     }
+
+    await client.invalidateQueries({ queryKey: key })
+    setPending(false)
+    setTrashOpen(false)
+  }
+
+  /** Applies a status change to just this project's row in the cache. */
+  function withStatus(status: ProjectListItem["status"]) {
+    return (current: ProjectListItem[]) =>
+      current.map((row) => (row.id === project.id ? { ...row, status } : row))
   }
 
   return (
     <Card className="group/card h-full gap-0 py-0">
-      <ProjectCoverArt
-        seed={project.slug}
-        gradient={{
-          start: project.gradientStart,
-          end: project.gradientEnd,
-        }}
-        className="h-44"
-      />
+      {/* Wrapping the cover art in a link is what makes the card navigable.
+          An optimistic row is excluded — the detail route resolves by slug and
+          would 404 on a project the server has not created yet. The header
+          keeps its own title link so the whole card is reachable by mouse
+          without nesting two anchors on one target. */}
+      {!optimistic ? (
+        <Link
+          to="/w/$workspaceSlug/projects/$projectSlug"
+          params={{
+            workspaceSlug,
+            projectSlug: project.slug,
+          }}
+          className="block focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+        >
+          <ProjectCoverArt
+            seed={project.slug}
+            gradient={{
+              start: project.gradientStart,
+              end: project.gradientEnd,
+            }}
+            className="h-44"
+          />
+        </Link>
+      ) : (
+        <ProjectCoverArt
+          seed={project.slug}
+          gradient={{
+            start: project.gradientStart,
+            end: project.gradientEnd,
+          }}
+          className="h-44"
+        />
+      )}
 
       <CardHeader className="gap-3 px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="line-clamp-2 text-lg leading-snug font-medium tracking-tight">
-            {project.title}
+            {optimistic ? (
+              project.title
+            ) : (
+              <Link
+                to="/w/$workspaceSlug/projects/$projectSlug"
+                params={{ workspaceSlug, projectSlug: project.slug }}
+                className="hover:underline"
+              >
+                {project.title}
+              </Link>
+            )}
           </CardTitle>
 
           <div className="flex shrink-0 items-center gap-1">
@@ -139,14 +201,16 @@ export function ProjectCard({
                   <DropdownMenuItem
                     disabled={pending}
                     onSelect={() =>
-                      void run(() =>
-                        setProjectStatusFn({
-                          data: {
-                            workspaceId,
-                            projectId: project.id,
-                            status: archived ? "active" : "archived",
-                          },
-                        })
+                      void run(
+                        () =>
+                          setProjectStatusFn({
+                            data: {
+                              workspaceId,
+                              projectId: project.id,
+                              status: archived ? "active" : "archived",
+                            },
+                          }),
+                        withStatus(archived ? "active" : "archived")
                       )
                     }
                   >
@@ -237,6 +301,12 @@ export function ProjectCard({
               disabled={pending}
               onClick={(e) => {
                 e.preventDefault()
+                // Deliberately not optimistic. Removing the row from the list
+                // unmounts this card, taking the confirm dialog and the error
+                // banner with it — so a rejected trash would put the card back
+                // with nothing to say why. Archive/restore is patched in place
+                // and stays optimistic; trash has nowhere to report from until
+                // there is a toast surface.
                 void run(() =>
                   trashProjectFn({
                     data: { workspaceId, projectId: project.id },

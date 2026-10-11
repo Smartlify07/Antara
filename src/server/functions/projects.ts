@@ -3,8 +3,21 @@ import { getRequestHeaders } from "@tanstack/react-start/server"
 import { redirect } from "@tanstack/react-router"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
-import { createProjectSchema, slugifyTitle } from "@/lib/project-schemas"
+import {
+  addProjectMembersSchema,
+  createProjectSchema,
+  projectStatusEnum,
+  projectUpdateSchema,
+  setProjectDatesSchema,
+  setProjectDescriptionSchema,
+  setProjectLeadSchema,
+  setProjectTagsSchema,
+  setProjectTitleSchema,
+  slugifyTitle,
+  updateProjectReviewSchema,
+} from "@/lib/project-schemas"
 import * as projectService from "@/server/services/project-service"
+import * as projectUpdateService from "@/server/services/project-update-service"
 
 /**
  * Thin HTTP boundary for project reads. Session handling and input
@@ -137,3 +150,171 @@ export const trashProjectFn = createServerFn({ method: "POST" })
     await projectService.trashProject(data.workspaceId, userId, data.projectId)
     return { ok: true }
   })
+
+export const getProjectDetailFn = createServerFn({ method: "GET" })
+  .validator(z.object({ workspaceId: z.string(), projectSlug: z.string() }))
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
+
+    const project = await projectService.getProjectBySlug(
+      data.workspaceId,
+      data.projectSlug
+    )
+    // Null rather than a throw: a stale bookmark should render a not-found
+    // panel, not a 500. The caller decides how to present it.
+    if (!project) return null
+
+    const members = await projectService.listProjectMembers(
+      data.workspaceId,
+      project.id
+    )
+
+    return { ...project, members }
+  })
+
+export const listProjectMembersFn = createServerFn({ method: "GET" })
+  .validator(z.object({ workspaceId: z.string(), projectId: z.string() }))
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
+    return projectService.listProjectMembers(data.workspaceId, data.projectId)
+  })
+
+export const setProjectLeadFn = createServerFn({ method: "POST" })
+  .validator(setProjectLeadSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.setProjectLead(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.teamId
+    )
+    return { ok: true }
+  })
+
+export const addProjectMembersFn = createServerFn({ method: "POST" })
+  .validator(addProjectMembersSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.addProjectMembers(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.teamIds
+    )
+    return { ok: true }
+  })
+
+export const setProjectDatesFn = createServerFn({ method: "POST" })
+  .validator(setProjectDatesSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.setProjectDates(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.startDate,
+      data.deadline
+    )
+    return { ok: true }
+  })
+
+export const setProjectTagsFn = createServerFn({ method: "POST" })
+  .validator(setProjectTagsSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.setProjectTags(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.tagIds,
+      data.newTagLabels
+    )
+    return { ok: true }
+  })
+
+export const setProjectTitleFn = createServerFn({ method: "POST" })
+  .validator(setProjectTitleSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.setProjectTitle(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.title
+    )
+    return { ok: true }
+  })
+
+export const setProjectDescriptionFn = createServerFn({ method: "POST" })
+  .validator(setProjectDescriptionSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.setProjectDescription(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.description || null
+    )
+    return { ok: true }
+  })
+
+export const listProjectUpdatesFn = createServerFn({ method: "GET" })
+  .validator(z.object({ workspaceId: z.string(), projectId: z.string() }))
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
+    return projectUpdateService.listProjectUpdates(
+      data.workspaceId,
+      data.projectId
+    )
+  })
+
+export const canReviewProjectUpdatesFn = createServerFn({ method: "GET" })
+  .validator(z.object({ workspaceId: z.string(), projectId: z.string() }))
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
+    return projectUpdateService.canReviewProjectUpdates(
+      data.workspaceId,
+      userId,
+      data.projectId
+    )
+  })
+
+export const createProjectUpdateFn = createServerFn({ method: "POST" })
+  .validator(projectUpdateSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    // Any workspace member can post. Note this is *workspace* membership,
+    // not `project_members` — posting is not yet gated on project access.
+    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
+    return projectUpdateService.createProjectUpdate(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.body,
+      data.kind,
+      data.attachments
+    )
+  })
+
+export const reviewProjectUpdateFn = createServerFn({ method: "POST" })
+  .validator(updateProjectReviewSchema)
+  .handler(async ({ data }) => {
+    const userId = await requireUserId()
+    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
+    await projectUpdateService.reviewProjectUpdate(
+      data.workspaceId,
+      userId,
+      data.projectId,
+      data.updateId,
+      data.decision,
+      data.note
+    )
+    return { ok: true }
+  })
+
+export { projectStatusEnum }

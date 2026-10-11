@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { CheckIcon, UserStarIcon, UsersIcon } from "lucide-react"
+import { CheckIcon, UserPlusIcon, UserStarIcon, UsersIcon } from "lucide-react"
 import {
   Command,
   CommandEmpty,
@@ -13,7 +13,7 @@ import { Chip } from "@/components/projects/chip"
 import { avatarTint } from "@/lib/avatar-tint"
 import type { AssignableMember } from "@/server/services/project-service"
 
-function initials(member: AssignableMember) {
+export function initials(member: AssignableMember) {
   const fromName = member.name
     ?.split(" ")
     .map((part) => part[0])
@@ -23,7 +23,7 @@ function initials(member: AssignableMember) {
   return fromName ?? (member.email?.[0] ?? "?").toUpperCase()
 }
 
-function displayName(member: AssignableMember) {
+export function displayName(member: AssignableMember) {
   return member.name ?? member.email ?? "Unknown"
 }
 
@@ -81,7 +81,7 @@ const EMPTY_COPY = "No workspace members yet."
 const MAX_STACK = 3
 
 /** Overlapping avatars, with a +N bubble once more than MAX_STACK are picked. */
-function AvatarStack({ members }: { members: AssignableMember[] }) {
+export function AvatarStack({ members }: { members: AssignableMember[] }) {
   const shown = members.slice(0, MAX_STACK)
   const overflow = members.length - shown.length
 
@@ -174,11 +174,17 @@ export function MembersChip({
   selectedIds,
   leadId,
   onToggle,
+  onInviteClick,
 }: {
   members: AssignableMember[]
   selectedIds: string[]
   leadId: string | null
   onToggle: (teamId: string) => void
+  /**
+   * Opens an invite dialog. Only rendered where the actor may invite — the
+   * create form has no such affordance, since nobody exists to invite yet.
+   */
+  onInviteClick?: () => void
 }) {
   const [query, setQuery] = useState("")
   const selectable = members.filter((member) => member.teamId !== leadId)
@@ -226,6 +232,25 @@ export function MembersChip({
               />
             ))}
           </CommandGroup>
+          {onInviteClick && (
+            <>
+              <div className="mx-2 my-1 h-px bg-border" />
+              {/* Sentinel value, the same pattern as the tag chip's
+                  `__create__`. A real value would let the keyboard select
+                  "invite" as though it were a person. */}
+              <CommandItem
+                value="__invite__"
+                onSelect={() => {
+                  onInviteClick()
+                  setQuery("")
+                }}
+                className="gap-2"
+              >
+                <UserPlusIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <span>Invite someone new</span>
+              </CommandItem>
+            </>
+          )}
         </CommandList>
       </Command>
     </Chip>

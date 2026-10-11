@@ -3,6 +3,7 @@ import {
   createFileRoute,
   redirect,
   useLocation,
+  useParams,
 } from "@tanstack/react-router"
 import { useMemo } from "react"
 import { AppShell, type Crumb } from "@/components/app-shell"
@@ -25,7 +26,9 @@ export const Route = createFileRoute("/w/$workspaceSlug")({
     if (
       location.pathname === root ||
       location.pathname === rootWithSlash ||
-      // Trailing slash on the nested projects route, e.g. /w/acme/projects/
+      // Trailing slash on the nested projects route, e.g. /w/acme/projects/.
+      // The index route serves that path, so only redirect the exact match —
+      // `/w/acme/projects/<slug>/` must fall through to the detail route.
       location.pathname === `${root}/projects/`
     ) {
       throw redirect({
@@ -46,6 +49,10 @@ export const Route = createFileRoute("/w/$workspaceSlug")({
 
 function useWorkspaceCrumbs(slug: string, title: string): Crumb[] {
   const location = useLocation()
+  // `strict: false` widens the param match to the whole matched route tree.
+  // This layout's own params stop at `workspaceSlug`, so the project slug
+  // would be invisible without it.
+  const params = useParams({ strict: false })
 
   return useMemo(() => {
     const base: Crumb[] = [
@@ -60,8 +67,14 @@ function useWorkspaceCrumbs(slug: string, title: string): Crumb[] {
     if (tail.startsWith("/projects/new")) {
       return [...base, { label: "Projects" }, { label: "New project" }]
     }
+    // `/projects/<slug>`. Read with `strict: false` because the slug is a
+    // param on the *child* route, which this layout's own params do not carry.
+    const projectSlug = params.projectSlug
+    if (projectSlug) {
+      return [...base, { label: "Projects" }, { label: projectSlug }]
+    }
     return [...base, { label: "Projects" }]
-  }, [location.pathname, slug, title])
+  }, [location.pathname, params.projectSlug, slug, title])
 }
 
 function WorkspaceLayout() {
