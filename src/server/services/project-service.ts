@@ -1,4 +1,14 @@
-import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm"
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm"
 import { db } from "@/db"
 import {
   comments,
@@ -223,7 +233,148 @@ export interface AssignableMember {
 }
 
 /**
- * Workspace members available to add to a project, including invited
+ * Throws unless the actor may change project attributes. Admin/owner only —
+ * mirrors `setProjectStatus`, which is the existing precedent for writes.
+ */
+async function requireProjectAdmin(
+  workspaceId: string,
+  userId: string,
+  what: string
+): Promise<void> {
+  const access = await getProjectActionContext(workspaceId, userId)
+  if (!access.isOwner && access.role !== "admin") {
+    throw new Error(`Only workspace admins can ${what}.`)
+  }
+}
+
+/**
+ * Loads a live project by slug within a workspace, scoped so a slug from
+ * another workspace resolves to null rather than leaking the row.
+ */
+export async function getProjectBySlug(
+  workspaceId: string,
+  slug: string
+): Promise<ProjectListItem | null> {
+  const [row] = await db
+    .select({
+      id: projects.id,
+      title: projects.title,
+      slug: projects.slug,
+      description: projects.description,
+      status: projects.status,
+      startDate: projects.startDate,
+      deadline: projects.deadline,
+      createdAt: projects.createdAt,
+      gradientStart: projects.gradientStart,
+      gradientEnd: projects.gradientEnd,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.workspaceId, workspaceId),
+        eq(projects.slug, slug),
+        isNull(projects.deletedAt)
+      )
+    )
+    .limit(1)
+
+  if (!row) return null
+
+  const [taskCount, memberCount, tagRows] = await Promise.all([
+    db
+      .select({ total: count(tasks.id) })
+      .from(tasks)
+      .where(eq(tasks.projectId, row.id)),
+    db
+      .select({ total: count(projectMembers.id) })
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, row.id)),
+    db
+      .select({
+        id: tags.id,
+        label: tags.label,
+        color: tags.color,
+      })
+      .from(projectTags)
+      .innerJoin(tags, eq(projectTags.tagId, tags.id))
+      .where(eq(projectTags.projectId, row.id))
+      .orderBy(tags.label),
+  ])
+
+  return {
+    ...row,
+    taskCount: taskCount[0]?.total ?? 0,
+    memberCount: memberCount[0]?.total ?? 0,
+    // Comments live on tasks; the detail page counts them from its own feed
+    // rather than this rollup, so the card and the page agree by construction.
+    commentCount: 0,
+    tags: tagRows.map((tag) => ({
+      id: tag.id,
+      label: tag.label,
+      color: resolveTagColor(tag.color, tag.label),
+    })),
+  }
+}
+
+/**
+ * The project's existing memberships, resolved back to `team` rows.
+ *
+ * `project_members` stores `userId`/`email` and has no foreign key to `team`
+ * at all — the link is by convention, made at insert time in `createProject`.
+ * To drive the member chips we need `team.id`, so each membership is matched
+ * back by user id where it has one, and by lowercased email where it does not
+ * (an invited member who has not registered yet). Rows with neither a
+ * `team` match nor an account are returned with a null `teamId` and are
+ * filtered out by callers that need one.
+ */
+export async function listProjectMembers(
+  workspaceId: string,
+  projectId: string
+): Promise<ProjectMemberRef[]> {
+  const rows = await db
+    .select({
+      teamId: team.id,
+      teamUserId: team.userId,
+      teamEmail: team.email,
+      joinedAt: team.joinedAt,
+      name: user.name,
+      userEmail: user.email,
+      image: user.image,
+      roleTitle: roles.title,
+    })
+    .from(projectMembers)
+    .innerJoin(roles, eq(projectMembers.roleId, roles.id))
+    .leftJoin(
+      team,
+      and(
+        eq(team.workspaceId, workspaceId),
+        eq(team.status, "active"),
+        or(
+          eq(team.userId, projectMembers.userId),
+          sql`lower(${team.email}) = lower(${projectMembers.email})`
+        )
+      )
+    )
+    .leftJoin(user, eq(team.userId, user.id))
+    .where(
+      and(
+        eq(projectMembers.projectId, projectId),
+        eq(projectMembers.status, "active")
+      )
+    )
+    .orderBy(asc(roles.title))
+
+  return rows.map((row) => ({
+    teamId: row.teamId,
+    name: row.name,
+    email: row.userEmail ?? row.teamEmail,
+    image: row.image,
+    joined: Boolean(row.teamUserId) && Boolean(row.joinedAt),
+    isLead: row.roleTitle === "lead",
+  }))
+}
+
+/** Workspace members available to add to a project, including invited
  * people who have not created an account yet.
  */
 export async function listAssignableMembers(
@@ -251,6 +402,20 @@ export async function listAssignableMembers(
     image: row.image,
     joined: Boolean(row.userId) && Boolean(row.joinedAt),
   }))
+}
+
+/**
+ * A current project membership, resolved to a workspace `team` row so it can
+ * drive the member chips directly.
+ */
+export interface ProjectMemberRef {
+  /** `team.id`, or null when the membership no longer maps to a workspace row. */
+  teamId: string | null
+  name: string | null
+  email: string | null
+  image: string | null
+  joined: boolean
+  isLead: boolean
 }
 
 export interface ProjectTagOption {
@@ -288,6 +453,44 @@ async function findTagByLabel(workspaceId: string, label: string) {
   return rows.find((row) => row.label.trim().toLowerCase() === target) ?? null
 }
 
+/**
+ * The subset of the drizzle client these helpers need. Both `db` and a
+ * transaction handle satisfy it, so a helper works inside or outside a tx
+ * without taking a union type at every call site.
+ */
+type DbLike = Pick<typeof db, "select" | "insert" | "update" | "delete">
+
+/**
+ * Looks up a project-scope role for the workspace, creating it if the
+ * workspace predates it. Seeded per workspace by `db/seed.ts`, but backfilled
+ * here so an older workspace never fails a write for a missing role.
+ */
+async function ensureProjectRole(
+  tx: DbLike,
+  workspaceId: string,
+  title: "lead" | "member"
+) {
+  const [existing] = await tx
+    .select()
+    .from(roles)
+    .where(
+      and(
+        eq(roles.workspaceId, workspaceId),
+        eq(roles.scope, "project"),
+        eq(roles.title, title)
+      )
+    )
+    .limit(1)
+  if (existing) return existing
+
+  const [created] = await tx
+    .insert(roles)
+    .values({ workspaceId, scope: "project", title, isSystem: true })
+    .returning()
+  if (!created) throw new Error("Could not create the project role.")
+  return created
+}
+
 export interface CreateProjectInput {
   title: string
   description?: string | null
@@ -323,32 +526,8 @@ export async function createProject(
 
     if (!project) throw new Error("Failed to create project.")
 
-    // Project-scope roles, seeded per workspace. Workspaces created before
-    // the project-scope `member` role existed are backfilled here rather
-    // than failing the whole creation.
-    const projectRoles = await tx
-      .select()
-      .from(roles)
-      .where(
-        and(eq(roles.workspaceId, workspaceId), eq(roles.scope, "project"))
-      )
-
-    async function ensureProjectRole(title: string) {
-      const found = projectRoles.find((role) => role.title === title)
-      if (found) return found
-      const [created] = await tx
-        .insert(roles)
-        .values({ workspaceId, scope: "project", title, isSystem: true })
-        .returning()
-      return created
-    }
-
-    const leadRole = await ensureProjectRole("lead")
-    const memberRole = await ensureProjectRole("member")
-
-    if (!leadRole || !memberRole) {
-      throw new Error("Workspace is missing its project roles.")
-    }
+    const leadRole = await ensureProjectRole(tx, workspaceId, "lead")
+    const memberRole = await ensureProjectRole(tx, workspaceId, "member")
 
     // Resolve the workspace user behind each picked team row so the
     // project membership links to a real user where one exists.
@@ -437,6 +616,37 @@ export async function createProject(
   })
 }
 
+/**
+ * Everything the details page renders in one payload.
+ *
+ * `members` comes from `listProjectMembers` rather than the list query's
+ * aggregate count, because the member chips need per-person rows.
+ */
+export interface ProjectDetail extends ProjectListItem {
+  members: ProjectMemberRef[]
+}
+
+/** Loads a live project by id, scoped to the workspace. */
+async function requireProject(
+  workspaceId: string,
+  projectId: string
+): Promise<{ id: string }> {
+  const [row] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.workspaceId, workspaceId),
+        isNull(projects.deletedAt)
+      )
+    )
+    .limit(1)
+
+  if (!row) throw new Error("Project not found.")
+  return row
+}
+
 export async function setProjectStatus(
   workspaceId: string,
   userId: string,
@@ -461,6 +671,269 @@ export async function setProjectStatus(
     .returning({ id: projects.id })
 
   if (updated.length === 0) throw new Error("Project not found.")
+}
+
+export async function setProjectDates(
+  workspaceId: string,
+  userId: string,
+  projectId: string,
+  startDate: Date | null,
+  deadline: Date | null
+): Promise<void> {
+  await requireProjectAdmin(workspaceId, userId, "change project dates")
+  await requireProject(workspaceId, projectId)
+
+  // The create form rejects an end before the start; repeat it here so the
+  // dates chip cannot write a range the form would have refused.
+  if (startDate && deadline && deadline < startDate) {
+    throw new Error("End date must be on or after the start date.")
+  }
+
+  await db
+    .update(projects)
+    .set({ startDate, deadline, updatedAt: new Date() })
+    .where(
+      and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId))
+    )
+}
+
+/**
+ * Renames a project.
+ *
+ * The slug is deliberately left alone: project slugs are unique per workspace
+ * and immutable (`projects.ts:41`), and are what the details route and every
+ * card link are built from. Re-slugging would break bookmarks and any link
+ * already shared, so the title and the URL can diverge.
+ */
+export async function setProjectTitle(
+  workspaceId: string,
+  userId: string,
+  projectId: string,
+  title: string
+): Promise<void> {
+  await requireProjectAdmin(workspaceId, userId, "rename the project")
+  await requireProject(workspaceId, projectId)
+
+  await db
+    .update(projects)
+    .set({ title, updatedAt: new Date() })
+    .where(
+      and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId))
+    )
+}
+
+export async function setProjectDescription(
+  workspaceId: string,
+  userId: string,
+  projectId: string,
+  description: string | null
+): Promise<void> {
+  await requireProjectAdmin(workspaceId, userId, "edit the description")
+  await requireProject(workspaceId, projectId)
+
+  await db
+    .update(projects)
+    .set({ description: description || null, updatedAt: new Date() })
+    .where(
+      and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId))
+    )
+}
+
+/**
+ * Replaces the project's tag set. New labels are created in the workspace
+ * vocabulary, exactly as `createProject` does, so the tag chip's inline
+ * creation behaves the same on both screens.
+ */
+export async function setProjectTags(
+  workspaceId: string,
+  userId: string,
+  projectId: string,
+  tagIds: string[],
+  newTagLabels: string[]
+): Promise<void> {
+  await requireProjectAdmin(workspaceId, userId, "change project tags")
+  await requireProject(workspaceId, projectId)
+
+  const ids = new Set(tagIds)
+  for (const label of newTagLabels) {
+    const existing = await findTagByLabel(workspaceId, label)
+    if (existing) {
+      ids.add(existing.id)
+      continue
+    }
+    const [created] = await db
+      .insert(tags)
+      .values({
+        workspaceId,
+        label: label.trim(),
+        color: tagColorFor(label),
+      })
+      .onConflictDoNothing()
+      .returning()
+    if (created) ids.add(created.id)
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(projectTags).where(eq(projectTags.projectId, projectId))
+
+    if (ids.size === 0) return
+
+    // Only tags from this workspace may be attached; a caller cannot reach
+    // another workspace's vocabulary by posting an id it guessed.
+    const valid = await tx
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.workspaceId, workspaceId), inArray(tags.id, [...ids])))
+
+    if (valid.length === 0) return
+    await tx
+      .insert(projectTags)
+      .values(valid.map((tag) => ({ projectId, tagId: tag.id })))
+      .onConflictDoNothing()
+  })
+}
+
+/**
+ * Adds workspace members to an existing project.
+ *
+ * `createProject` was the only writer of `project_members`, so this is the
+ * first path that adds someone after the fact. `onConflictDoNothing` relies on
+ * the partial unique indexes on (projectId, userId) and (projectId, email) —
+ * without them, re-adding someone would raise 23505 and surface as a failed
+ * request rather than a no-op.
+ */
+export async function addProjectMembers(
+  workspaceId: string,
+  userId: string,
+  projectId: string,
+  teamIds: string[]
+): Promise<void> {
+  await requireProjectAdmin(workspaceId, userId, "add project members")
+  await requireProject(workspaceId, projectId)
+
+  const unique = [...new Set(teamIds)]
+  if (unique.length === 0) return
+
+  const memberRole = await ensureProjectRole(db, workspaceId, "member")
+
+  const sourceRows = await db
+    .select({ id: team.id, userId: team.userId, email: team.email })
+    .from(team)
+    .where(
+      and(
+        eq(team.workspaceId, workspaceId),
+        eq(team.status, "active"),
+        inArray(team.id, unique)
+      )
+    )
+
+  if (sourceRows.length === 0) return
+
+  const values = sourceRows.map((row) => ({
+    projectId,
+    userId: row.userId,
+    email: row.userId ? null : row.email,
+    roleId: memberRole.id,
+    status: "active" as const,
+    addedBy: userId,
+  }))
+
+  await db.insert(projectMembers).values(values).onConflictDoNothing()
+}
+
+/**
+ * Moves the project `lead` role to a different member, or clears it.
+ *
+ * The lead is stored as a membership row with the project-scope `lead` role,
+ * not as a pointer on the project, so this demotes the previous lead to a
+ * plain member rather than deleting the row — removing it would drop the
+ * person's project access, which is not what "change the lead" means.
+ */
+export async function setProjectLead(
+  workspaceId: string,
+  userId: string,
+  projectId: string,
+  teamId: string | null
+): Promise<void> {
+  await requireProjectAdmin(workspaceId, userId, "change the project lead")
+  await requireProject(workspaceId, projectId)
+
+  const [leadRole, memberRole] = await Promise.all([
+    ensureProjectRole(db, workspaceId, "lead"),
+    ensureProjectRole(db, workspaceId, "member"),
+  ])
+
+  const existing = await db
+    .select({
+      id: projectMembers.id,
+      userId: projectMembers.userId,
+      email: projectMembers.email,
+      roleId: roles.title,
+    })
+    .from(projectMembers)
+    .innerJoin(roles, eq(projectMembers.roleId, roles.id))
+    .where(
+      and(
+        eq(projectMembers.projectId, projectId),
+        eq(projectMembers.status, "active")
+      )
+    )
+
+  const currentLead = existing.find((row) => row.roleId === "lead")
+
+  await db.transaction(async (tx) => {
+    if (currentLead) {
+      await tx
+        .update(projectMembers)
+        .set({ roleId: memberRole.id, updatedAt: new Date() })
+        .where(eq(projectMembers.id, currentLead.id))
+    }
+
+    if (!teamId) return
+
+    // Match the incoming `team` row to an existing membership the same way
+    // `listProjectMembers` matches them back, so reassigning the lead to
+    // someone who is already a member promotes them instead of inserting a
+    // duplicate row that the partial unique index would reject.
+    const [target] = await tx
+      .select({ id: team.id, userId: team.userId, email: team.email })
+      .from(team)
+      .where(
+        and(
+          eq(team.workspaceId, workspaceId),
+          eq(team.status, "active"),
+          eq(team.id, teamId)
+        )
+      )
+      .limit(1)
+
+    if (!target) throw new Error("That person is not a workspace member.")
+
+    const membership = existing.find(
+      (row) =>
+        (target.userId && row.userId === target.userId) ||
+        (target.email &&
+          row.email &&
+          row.email.toLowerCase() === target.email.toLowerCase())
+    )
+
+    if (membership) {
+      await tx
+        .update(projectMembers)
+        .set({ roleId: leadRole.id, updatedAt: new Date() })
+        .where(eq(projectMembers.id, membership.id))
+      return
+    }
+
+    await tx.insert(projectMembers).values({
+      projectId,
+      userId: target.userId,
+      email: target.userId ? null : target.email,
+      roleId: leadRole.id,
+      status: "active" as const,
+      addedBy: userId,
+    })
+  })
 }
 
 export async function trashProject(

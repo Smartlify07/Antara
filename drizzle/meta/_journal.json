@@ -71,6 +71,34 @@
       "when": 1791533355564,
       "tag": "0009_team_last_opened_at",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791580510067,
+      "tag": "0010_project_updates_and_asset_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791580615254,
+      "tag": "0011_assets_logical_restructure",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791664394925,
+      "tag": "0012_update_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791668436310,
+      "tag": "0013_comments_not_reviewable",
+      "breakpoints": true
     }
   ]
 }

@@ -24,9 +24,11 @@ function ProjectsPage() {
   const { workspace, workspaceRole, isWorkspaceOwner, workspaceId } =
     Route.useRouteContext()
 
-  const { data: projects = [], isPending, error } = useQuery(
-    projectsQuery(workspaceId),
-  )
+  const {
+    data: projects = [],
+    isPending,
+    error,
+  } = useQuery(projectsQuery(workspaceId))
 
   const canManage = isWorkspaceOwner || workspaceRole === "admin"
 
@@ -76,6 +78,7 @@ function ProjectsPage() {
         <ProjectsGrid
           projects={projects}
           workspaceId={workspaceId}
+          workspaceSlug={workspace.slug}
           canManage={canManage}
         />
       )}

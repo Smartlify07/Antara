@@ -1,11 +1,13 @@
 import { relations } from "drizzle-orm"
 import {
   account,
+  assetVersions,
   assets,
   comments,
   memberTags,
   projectMembers,
   projects,
+  projectUpdates,
   roles,
   session,
   statusHistory,
@@ -97,6 +99,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   members: many(projectMembers),
   tasks: many(tasks),
   assets: many(assets),
+  updates: many(projectUpdates),
 }))
 
 export const projectMembersRelations = relations(
@@ -166,21 +169,51 @@ export const statusHistoryRelations = relations(statusHistory, ({ one }) => ({
   }),
 }))
 
-export const commentsRelations = relations(comments, ({ one, many }) => ({
+export const commentsRelations = relations(comments, ({ one }) => ({
   task: one(tasks, { fields: [comments.taskId], references: [tasks.id] }),
   author: one(user, { fields: [comments.userId], references: [user.id] }),
-  assets: many(assets),
 }))
 
-export const assetsRelations = relations(assets, ({ one }) => ({
+export const projectUpdatesRelations = relations(
+  projectUpdates,
+  ({ one, many }) => ({
+    project: one(projects, {
+      fields: [projectUpdates.projectId],
+      references: [projects.id],
+    }),
+    author: one(user, {
+      fields: [projectUpdates.authorId],
+      references: [user.id],
+    }),
+    reviewer: one(user, {
+      fields: [projectUpdates.reviewedBy],
+      references: [user.id],
+    }),
+    versions: many(assetVersions),
+  })
+)
+
+export const assetsRelations = relations(assets, ({ one, many }) => ({
   project: one(projects, {
     fields: [assets.projectId],
     references: [projects.id],
   }),
   task: one(tasks, { fields: [assets.taskId], references: [tasks.id] }),
-  comment: one(comments, {
-    fields: [assets.commentId],
-    references: [comments.id],
+  creator: one(user, { fields: [assets.createdBy], references: [user.id] }),
+  versions: many(assetVersions),
+}))
+
+export const assetVersionsRelations = relations(assetVersions, ({ one }) => ({
+  asset: one(assets, {
+    fields: [assetVersions.assetId],
+    references: [assets.id],
   }),
-  uploader: one(user, { fields: [assets.uploadedBy], references: [user.id] }),
+  update: one(projectUpdates, {
+    fields: [assetVersions.updateId],
+    references: [projectUpdates.id],
+  }),
+  uploader: one(user, {
+    fields: [assetVersions.uploadedBy],
+    references: [user.id],
+  }),
 }))

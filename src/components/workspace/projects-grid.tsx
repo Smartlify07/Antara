@@ -11,10 +11,13 @@ import { ProjectCard } from "@/components/workspace/project-card"
 export function ProjectsGrid({
   projects,
   workspaceId,
+  workspaceSlug,
   canManage,
 }: {
   projects: (ProjectListItem | OptimisticProject)[]
   workspaceId: string
+  /** Needed to build the card's link into the details route. */
+  workspaceSlug: string
   canManage: boolean
 }) {
   const reduceMotion = useReducedMotion()
@@ -42,6 +45,7 @@ export function ProjectsGrid({
             <ProjectCard
               project={project}
               workspaceId={workspaceId}
+              workspaceSlug={workspaceSlug}
               canManage={canManage}
               optimistic={"optimistic" in project ? project.optimistic : false}
             />
