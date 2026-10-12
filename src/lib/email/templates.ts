@@ -1,3 +1,4 @@
+import { appOrigin } from "@/lib/app-origin"
 import { emailShell, escapeHtml, sendEmail } from "./send"
 
 /**
@@ -51,15 +52,18 @@ export async function sendInviteEmail(params: {
   roleTitle: string
   token: string
   expiresAt: Date
-  /** Public origin, so the link works from a different device. */
-  appUrl?: string
 }) {
-  const base = (params.appUrl ?? "http://localhost:3000").replace(/\/+$/, "")
+  // Resolved here rather than passed in. This used to take an optional
+  // `appUrl` that no caller ever supplied, so every production invite silently
+  // fell back to a hardcoded `http://localhost:3000` and every link in the
+  // email was dead. An optional argument nobody passes is a silent failure
+  // waiting to happen; deriving it makes that impossible.
+  const base = appOrigin()
   const url = `${base}/invite/${encodeURIComponent(params.token)}`
 
   const days = Math.max(
     1,
-    Math.round((params.expiresAt.getTime() - Date.now()) / 86_400_000),
+    Math.round((params.expiresAt.getTime() - Date.now()) / 86_400_000)
   )
 
   const roleLine =
@@ -73,7 +77,7 @@ export async function sendInviteEmail(params: {
       `<p style="margin:0 0 12px">${escapeHtml(
         params.inviterName
           ? `${params.inviterName} invited you to join ${params.workspaceTitle} on Antara.`
-          : `You've been invited to join ${params.workspaceTitle} on Antara.`,
+          : `You've been invited to join ${params.workspaceTitle} on Antara.`
       )}</p>`,
       `<p style="margin:0 0 12px">${roleLine}</p>`,
     ].join(""),

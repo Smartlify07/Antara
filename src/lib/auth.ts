@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { db } from "@/db"
+import { appOrigin } from "@/lib/app-origin"
 import { sendVerificationEmail } from "@/lib/email/templates"
 import { normalizeEmail } from "@/lib/normalize-email"
 
@@ -15,6 +16,17 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
   }),
+
+  // Explicit, so verification links do not depend on `BETTER_AUTH_URL` being
+  // correctly populated. It was set to the empty string in production, which is
+  // a *set* variable — better-auth accepted it and fell back to its own
+  // localhost default, so every verification email contained a dead link while
+  // the app itself worked fine.
+  //
+  // Same resolver as the invite email, so both link types come from one place
+  // and neither can drift. Throws in production if unresolved, rather than
+  // silently emitting localhost.
+  baseURL: appOrigin(),
 
   trustedOrigins: [PROD_ORIGIN],
 
