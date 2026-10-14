@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
+import { InviteDialog } from "@/components/team/invite-dialog"
 import { TeamMembers } from "@/components/team/team-members"
 import {
   Card,
@@ -8,22 +9,42 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { teamMembersQuery } from "@/lib/queries/teams"
+import { revokeInviteFn } from "@/server/functions/invites"
+import { teamKeys, teamMembersQuery } from "@/lib/queries/teams"
+import { workspaceKeys } from "@/lib/queries/workspaces"
 
 export const Route = createFileRoute("/w/$workspaceSlug/team")({
   component: TeamPage,
 })
 
 function TeamPage() {
-  const { workspaceId, workspaceRole, isWorkspaceOwner } =
+  const { workspace, workspaceId, workspaceRole, isWorkspaceOwner } =
     Route.useRouteContext()
 
-  // Cached under a key, so the upcoming invite/role/suspend mutations can
-  // invalidate this list without `router.invalidate()` refetching unrelated
-  // loaders across the app.
-  const { data: members = [], isPending, error } = useQuery(
-    teamMembersQuery(workspaceId),
-  )
+  // Cached under a key, so the invite mutations can invalidate this list
+  // without `router.invalidate()` refetching unrelated loaders across the app.
+  const {
+    data: members = [],
+    isPending,
+    error,
+  } = useQuery(teamMembersQuery(workspaceId))
+
+  const client = useQueryClient()
+
+  const revoke = useMutation({
+    mutationFn: (inviteId: string) =>
+      revokeInviteFn({ data: { workspaceSlug: workspace.slug, inviteId } }),
+    onSuccess: () => {
+      // Revoking removes the seat as well as the invite, so the badge that
+      // counts those seats has to drop too.
+      void Promise.all([
+        client.invalidateQueries({ queryKey: teamKeys.members(workspaceId) }),
+        client.invalidateQueries({
+          queryKey: workspaceKeys.teamCount(workspace.slug),
+        }),
+      ])
+    },
+  })
 
   const canManage = workspaceRole === "admin" || isWorkspaceOwner
 
@@ -43,7 +64,9 @@ function TeamPage() {
             Members
           </CardTitle>
           <CardDescription>
-            Invitations, suspensions, and role changes arrive next.
+            {canManage
+              ? "Everyone here can see this workspace's projects. Suspending and removing people is coming next."
+              : "Invitations, suspensions, and role changes are coming next."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -56,7 +79,19 @@ function TeamPage() {
                 : "Could not load members."}
             </p>
           ) : (
-            <TeamMembers members={members} canManage={canManage} />
+            <TeamMembers
+              members={members}
+              canManage={canManage}
+              onRevokeInvite={(inviteId) => revoke.mutate(inviteId)}
+              action={
+                canManage ? (
+                  <InviteDialog
+                    workspaceSlug={workspace.slug}
+                    workspaceId={workspaceId}
+                  />
+                ) : null
+              }
+            />
           )}
         </CardContent>
       </Card>

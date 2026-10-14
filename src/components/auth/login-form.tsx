@@ -133,7 +133,11 @@ export function LoginForm() {
           />
           <FieldDescription className="px-6 text-center">
             Don&apos;t have an account?{" "}
-            <Link to="/signup" className="font-medium">
+            <Link
+              to="/signup"
+              search={{ callbackURL: undefined }}
+              className="font-medium"
+            >
               Sign up
             </Link>
           </FieldDescription>

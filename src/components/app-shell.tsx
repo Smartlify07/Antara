@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   Breadcrumb,
@@ -16,13 +17,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Link, useParams } from "@tanstack/react-router"
-import type { WorkspaceListItem } from "@/server/services/workspace-service"
 import {
-  getWorkspaceFn,
-  listWorkspaceMembersFn,
-  listWorkspacesFn,
-  touchWorkspaceFn,
-} from "@/server/functions/workspaces"
+  workspaceTeamCountQuery,
+  workspacesQuery,
+} from "@/lib/queries/workspaces"
+import { touchWorkspaceFn } from "@/server/functions/workspaces"
 
 export interface Crumb {
   label: string
@@ -42,28 +41,15 @@ export function AppShell({
     { workspaceSlug?: string } | undefined
   const workspaceSlug = params?.workspaceSlug
 
-  const [workspaces, setWorkspaces] = useState<WorkspaceListItem[] | null>(null)
-  const [teamCount, setTeamCount] = useState<number | null>(null)
+  const { data: workspaces } = useQuery(workspacesQuery())
+
+  const { data: teamCount } = useQuery({
+    ...workspaceTeamCountQuery(workspaceSlug ?? ""),
+    enabled: !!workspaceSlug,
+  })
 
   useEffect(() => {
-    let cancelled = false
-    listWorkspacesFn()
-      .then((items) => {
-        if (!cancelled) setWorkspaces(items)
-      })
-      .catch(() => {
-        if (!cancelled) setWorkspaces([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!workspaceSlug) {
-      setTeamCount(null)
-      return
-    }
+    if (!workspaceSlug) return
 
     // Every workspace route funnels through the shell, so this is the single
     // place that records "last opened workspace".
@@ -80,28 +66,15 @@ export function AppShell({
       void touchWorkspaceFn({ data: { slug: workspaceSlug } })
     }, 400)
 
-    let cancelled = false
-    setTeamCount(null)
-    ;(async () => {
-      try {
-        const access = await getWorkspaceFn({ data: { slug: workspaceSlug } })
-        const members = await listWorkspaceMembersFn({
-          data: { workspaceId: access.workspace.id },
-        })
-        if (!cancelled) setTeamCount(members.length)
-      } catch {
-        if (!cancelled) setTeamCount(null)
-      }
-    })()
-    return () => {
-      cancelled = true
-      clearTimeout(touchTimer)
-    }
+    return () => clearTimeout(touchTimer)
   }, [workspaceSlug])
 
   return (
     <SidebarProvider>
-      <AppSidebar workspaces={workspaces} teamCount={teamCount} />
+      <AppSidebar
+        workspaces={workspaces ?? null}
+        teamCount={teamCount ?? null}
+      />
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { PlusIcon, SearchIcon } from "lucide-react"
+import { SearchIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -27,9 +27,15 @@ function initials(member: WorkspaceMemberItem) {
 export function TeamMembers({
   members,
   canManage,
+  action,
+  onRevokeInvite,
 }: {
   members: WorkspaceMemberItem[]
   canManage: boolean
+  /** Slot for the invite button, so it isn't duplicated per consumer. */
+  action?: React.ReactNode
+  /** Receives the *invite* id, not the membership id. */
+  onRevokeInvite?: (inviteId: string) => void
 }) {
   const [query, setQuery] = useState("")
 
@@ -52,10 +58,7 @@ export function TeamMembers({
             className="pl-8"
           />
         </div>
-        <Button disabled>
-          <PlusIcon />
-          Invite member
-        </Button>
+        {action}
       </div>
 
       <div className="divide-y divide-border rounded-xl border">
@@ -71,16 +74,26 @@ export function TeamMembers({
             </Avatar>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm font-medium">
-                {member.name ?? "Invited member"}
+                {member.name ?? member.email}
               </span>
               <span className="truncate text-xs text-muted-foreground">
-                {member.email ?? "No account yet"}
+                {member.name
+                  ? member.email
+                  : member.invitedByName
+                    ? `Invited by ${member.invitedByName}`
+                    : "Invitation pending"}
               </span>
             </div>
-            {member.status === "suspended" && (
-              <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                Suspended
+            {member.isPending ? (
+              <span className="shrink-0 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                Awaiting
               </span>
+            ) : (
+              member.status === "suspended" && (
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  Suspended
+                </span>
+              )
             )}
             <span
               className={cn(
@@ -104,13 +117,29 @@ export function TeamMembers({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem disabled>Change role</DropdownMenuItem>
-                  <DropdownMenuItem disabled>
-                    {member.status === "suspended" ? "Unsuspend" : "Suspend"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" disabled>
-                    Remove from workspace
-                  </DropdownMenuItem>
+                  {member.isPending ? (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      disabled={!member.inviteId}
+                      onSelect={() =>
+                        member.inviteId && onRevokeInvite?.(member.inviteId)
+                      }
+                    >
+                      Revoke invite
+                    </DropdownMenuItem>
+                  ) : (
+                    <>
+                      <DropdownMenuItem disabled>Change role</DropdownMenuItem>
+                      <DropdownMenuItem disabled>
+                        {member.status === "suspended"
+                          ? "Unsuspend"
+                          : "Suspend"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" disabled>
+                        Remove from workspace
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

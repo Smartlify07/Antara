@@ -31,7 +31,7 @@ import { rememberPendingVerification } from "@/lib/pending-verification"
 const SIGNUP_MESSAGE =
   "Check your inbox — if that address can be used, you'll get a verification link shortly."
 
-export function SignupForm() {
+export function SignupForm({ callbackURL }: { callbackURL?: string | null }) {
   const [done, setDone] = useState(false)
   const [sentTo, setSentTo] = useState("")
   const [serverError, setServerError] = useState<string | null>(null)
@@ -50,7 +50,11 @@ export function SignupForm() {
       // Where the emailed link lands once its token is consumed. Without
       // this better-auth defaults to "/", which drops the user on the
       // marketing page with no confirmation that anything happened.
-      callbackURL: "/verify-email",
+      //
+      // An invite's callbackURL rides through here, so verifying returns the
+      // person to the invite rather than to a generic page they've lost the
+      // thread of. Already validated as root-relative by the route.
+      callbackURL: callbackURL ?? "/verify-email",
     })
 
     // Any outcome shows the same message. Branching on `error` would leak
@@ -93,7 +97,11 @@ export function SignupForm() {
             <ResendVerification defaultEmail={sentTo} hideInput />
             <FieldDescription className="px-6 text-center">
               Already verified?{" "}
-              <Link to="/login" className="font-medium">
+              <Link
+                to="/login"
+                search={{ callbackURL: undefined }}
+                className="font-medium"
+              >
                 Log in
               </Link>
             </FieldDescription>
@@ -178,7 +186,11 @@ export function SignupForm() {
               />
               <FieldDescription className="px-6 text-center">
                 Already have an account?{" "}
-                <Link to="/login" className="font-medium">
+                <Link
+                  to="/login"
+                  search={{ callbackURL: undefined }}
+                  className="font-medium"
+                >
                   Log in
                 </Link>
               </FieldDescription>

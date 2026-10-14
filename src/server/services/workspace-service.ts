@@ -1,5 +1,6 @@
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm"
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
 import { db } from "@/db"
+import { resolveMembership } from "@/server/services/access-service"
 import type { MembershipStatus } from "@/db/enums"
 import { seedWorkspaceRoles } from "@/db/seed"
 import {
@@ -7,6 +8,7 @@ import {
   team,
   user,
   workspaces,
+  workspaceInvites,
   type Workspace,
 } from "@/db/schema/index"
 
@@ -102,6 +104,11 @@ export async function listWorkspaces(
       and(
         eq(team.userId, userId),
         ne(team.status, "left"),
+        // A reserved seat exists before anyone accepts. Without this the
+        // workspace appears in the switcher for someone who has been invited
+        // but has not joined — visible membership for a decision they haven't
+        // made yet.
+        isNotNull(team.joinedAt),
         isNull(workspaces.deletedAt)
       )
     )
@@ -152,6 +159,10 @@ export async function resolveLandingWorkspace(
       and(
         eq(team.userId, userId),
         ne(team.status, "left"),
+        // Same reason as `listWorkspaces`: a pending seat must not be able to
+        // pick where `/dashboard` sends somebody. Landing a not-yet-member
+        // inside the workspace is the consent gate with the gate removed.
+        isNotNull(team.joinedAt),
         isNull(workspaces.deletedAt)
       )
     )
@@ -191,38 +202,71 @@ export async function getWorkspaceBySlug(
   userId: string,
   slug: string
 ): Promise<WorkspaceAccess | null> {
-  const owned = await db
+  const rows = await db
     .select()
     .from(workspaces)
-    .where(
-      and(
-        eq(workspaces.slug, slug),
-        eq(workspaces.ownerId, userId),
-        isNull(workspaces.deletedAt)
-      )
-    )
+    .where(and(eq(workspaces.slug, slug), isNull(workspaces.deletedAt)))
     .limit(1)
-  if (owned[0]) {
-    return { workspace: owned[0], role: "admin", isOwner: true }
+
+  const workspace = rows[0]
+  if (!workspace) return null
+
+  // Membership rules live in `access-service` and only there. This used to
+  // spell out its own version of the check, which is how a pending seat ended
+  // up able to enter a workspace nobody had accepted yet.
+  const membership = await resolveMembership(workspace.id, userId)
+  if (!membership) return null
+
+  return {
+    workspace,
+    role: membership.role,
+    isOwner: membership.isOwner,
   }
+}
+
+/**
+ * Resolves the live invite behind each pending seat.
+ *
+ * Matched on the seat's reserved address rather than a foreign key, because
+ * `team` carries no `invitedBy` and no invite id — only `workspace_invites`
+ * does. The pending-unique index guarantees at most one live invite per address
+ * per workspace, so the match is unambiguous.
+ *
+ * Always sets `inviteId`, since revoking needs it. Sets `invitedByName` only
+ * when asked.
+ */
+async function attachPendingInvites(
+  items: WorkspaceMemberItem[],
+  workspaceId: string,
+  includeInviter: boolean
+): Promise<void> {
+  const pending = items.filter((i) => i.isPending && i.email)
+  if (!pending.length) return
 
   const rows = await db
-    .select({ workspace: workspaces, role: roles })
-    .from(team)
-    .innerJoin(workspaces, eq(team.workspaceId, workspaces.id))
-    .innerJoin(roles, eq(team.roleId, roles.id))
+    .select({
+      id: workspaceInvites.id,
+      email: workspaceInvites.email,
+      inviterName: user.name,
+    })
+    .from(workspaceInvites)
+    .leftJoin(user, eq(workspaceInvites.invitedBy, user.id))
     .where(
       and(
-        eq(team.userId, userId),
-        eq(workspaces.slug, slug),
-        eq(team.status, "active"),
-        isNull(workspaces.deletedAt)
+        eq(workspaceInvites.workspaceId, workspaceId),
+        isNull(workspaceInvites.acceptedAt)
       )
     )
-    .limit(1)
-  const row = rows[0]
-  if (!row) return null
-  return { workspace: row.workspace, role: row.role.title, isOwner: false }
+
+  const byEmail = new Map(rows.map((r) => [r.email.toLowerCase(), r] as const))
+
+  for (const item of items) {
+    if (!item.isPending || !item.email) continue
+    const invite = byEmail.get(item.email.toLowerCase())
+    if (!invite) continue
+    item.inviteId = invite.id
+    if (includeInviter) item.invitedByName = invite.inviterName ?? null
+  }
 }
 
 export interface WorkspaceMemberItem {
@@ -233,10 +277,30 @@ export interface WorkspaceMemberItem {
   role: string
   status: MembershipStatus
   isOwner: boolean
+  /**
+   * Reserved by invite but not yet claimed — no account attached, or attached
+   * but the link hasn't been redeemed. Rendered in the same list as everyone
+   * else with an "awaiting" badge, rather than in a separate section.
+   */
+  isPending: boolean
+  /**
+   * The live invite backing a pending seat. Null once accepted. Needed to
+   * revoke, which takes an invite id rather than the membership id.
+   */
+  inviteId?: string | null
+  /**
+   * Who issued the invite. Populated only when `includeInviter` is set.
+   *
+   * Omitted entirely for callers who may not manage the workspace, rather than
+   * sent and hidden in the UI: "invited by" is reconnaissance about who works
+   * with whom, and a non-admin has no business holding it.
+   */
+  invitedByName?: string | null
 }
 
 export async function listWorkspaceMembers(
-  workspaceId: string
+  workspaceId: string,
+  includeInviter = false
 ): Promise<WorkspaceMemberItem[]> {
   const workspace = await db
     .select()
@@ -261,7 +325,15 @@ export async function listWorkspaceMembers(
     role: row.role.title,
     status: row.membership.status,
     isOwner: row.membership.userId === ws.ownerId,
+    // Attached but not joined: the signup backfill resolves identity on
+    // verification, but the link still has to be redeemed before they're in.
+    isPending:
+      row.membership.userId === null || row.membership.joinedAt === null,
   }))
+
+  if (items.some((i) => i.isPending)) {
+    await attachPendingInvites(items, workspaceId, includeInviter)
+  }
 
   const ownerCovered = items.some((item) => item.isOwner)
   if (!ownerCovered) {
@@ -279,6 +351,7 @@ export async function listWorkspaceMembers(
         role: "admin",
         status: "active",
         isOwner: true,
+        isPending: false,
       })
     }
   }

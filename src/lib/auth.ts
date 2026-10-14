@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { db } from "@/db"
+import { appOrigin } from "@/lib/app-origin"
 import { sendVerificationEmail } from "@/lib/email/templates"
 import { normalizeEmail } from "@/lib/normalize-email"
 
@@ -15,6 +16,17 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
   }),
+
+  // Explicit, so verification links do not depend on `BETTER_AUTH_URL` being
+  // correctly populated. It was set to the empty string in production, which is
+  // a *set* variable — better-auth accepted it and fell back to its own
+  // localhost default, so every verification email contained a dead link while
+  // the app itself worked fine.
+  //
+  // Same resolver as the invite email, so both link types come from one place
+  // and neither can drift. Throws in production if unresolved, rather than
+  // silently emitting localhost.
+  baseURL: appOrigin(),
 
   trustedOrigins: [PROD_ORIGIN],
 
@@ -38,6 +50,36 @@ export const auth = betterAuth({
       // Deliberately not awaited and never allowed to throw: a provider
       // failure must not turn into a distinguishable signup response.
       void sendVerificationEmail({ to: user.email, name: user.name, url })
+    },
+    // Attaches a freshly-confirmed account to any seat an admin reserved for
+    // that address.
+    //
+    // Hooked on verification rather than on sign-up, and that is the whole
+    // security argument for this feature. A seat exists for an address that
+    // may have no account yet, so *registering* that address succeeds — anyone
+    // can claim it. Only confirmation proves the caller controls the mailbox,
+    // so this fires on `emailVerified` becoming true and nowhere earlier.
+    //
+    // Resolves identity only. The seat stays pending until the invite link is
+    // actually redeemed, so someone who verifies before clicking still has a
+    // link worth clicking.
+    afterEmailVerification: async (user) => {
+      try {
+        // Imported lazily on purpose. A static import here pulls the service
+        // — and anything it reaches — into the client graph, because
+        // server-function modules import this file and route files import
+        // those. `invite-token` is built on Web Crypto now rather than
+        // `node:crypto`, so this is belt and braces rather than the only
+        // thing standing between us and a dead form.
+        const { backfillSeatsForVerifiedUser } =
+          await import("@/server/services/invite-service")
+        await backfillSeatsForVerifiedUser(user.id, user.email)
+      } catch (error) {
+        // Never surfaced to the caller: it would turn verification into a
+        // distinguishable failure and break the sign-in handoff. The seat
+        // stays pending and is claimed at accept time instead.
+        console.error("[invites] seat backfill failed:", error)
+      }
     },
   },
 
