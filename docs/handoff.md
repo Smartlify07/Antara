@@ -314,3 +314,32 @@ Any deviation throws `SCHEMA_MISMATCH` at runtime. **Generate, then reconcile** 
 - **Verify against the live service, not by inference.** Both the `rate_limit` shape and the Resend domain status were wrong when guessed and only became obvious when actually called.
 - **What I can verify:** typecheck, build, HTTP status codes, server logs, DB queries, provider API responses. **What I can't:** anything client-side or visual — routing behaviour, animation timing, permission edge cases in a browser. Say so rather than claiming a feature works.
 - **Email delivery is now verified at the API level** (Resend `200`, real message id). Presentation in a real inbox is still unconfirmed — say so rather than claiming the email looks right.
+---
+
+## 11. PRD v1.0 implementation trail
+
+### Increment 1 - schema foundation (2026-10-17, branch eat/schema-foundation)
+
+Migrations 0015-0020, per the PRD v1.0 plan (C:\Users\anosi\.opencode\plan\antara-prd-v1-implementation-plan.md):
+
+| Migration | Content |
+|---|---|
+| 0015 | equests table + equest_triage_status enum (title, brief, category, priority, desired_deadline, triage_status, project_id, reference_links) |
+| 0016 | deliverables table + deliverable_status enum; 	asks.deliverable_id (set-null) |
+| 0017 | Version-review model on sset_versions (source, external_provider, external_file_id, submitter_notes, eview_status, submitted_at, nullable mime_type/size_bytes/provider/provider_key, two CHECK constraints), ssets gets deliverable_id/sset_type/	ags; pprovals table + sset_version_source/ersion_review_status/pproval_decision enums |
+| 0018 | Unified polymorphic comments (comment_subject enum: task/request/deliverable/version); task comments data-migrated; old per-task table dropped (hand-written rename dance) |
+| 0019 | 
+otifications shell (type/subject as text, partial index on unread) |
+| 0020 | Drops project_updates review columns + update_review_status enum; the feed becomes pure activity/audit surface per PRD (decisions attach to versions + pprovals) |
+
+Code: workflow-states.ts in src/server/services encodes the PRD's state machines as pure transition guards with 34 vitest tests (workflow-states.test.ts). The feed's approve/request-changes UI, canReviewProjectUpdates, and the review endpoints were removed in the same change; queueAssetDeletion now only enqueues source = 'upload' versions (external links must never drive provider deletes).
+
+**Not built yet (later increments):** request triage endpoints/UI, deliverable endpoints/UI, version submission + Reviews endpoint/UI, comments endpoints, notifications emission, nav restructure.
+
+**Snapshot trap learned:** drizzle-kit generate --custom does NOT reconcile the snapshot to the new schema - it duplicates the previous snapshot, so any later generate hits the TTY rename prompt. After hand-writing a custom migration's SQL, patch drizzle/meta/<n>_snapshot.json to match the SQL's end state (how 0018 was made consistent).
+
+**Generate without Doppler worked** on 2026-10-17 - pnpm db:generate is offline in practice (config url is only used by push/migrate/apply). Don't rely on it though; wrap in doppler run when credentials are available.
+
+**Migration application** requires credentials: run doppler run -- pnpm db:migrate (or deploy per the usual flow) after merging.
+
+**2026-10-17 - silent migrate CLI failure + dev journal drift, resolved.** drizzle-kit migrate can exit 1 on a non-TTY WITHOUT printing any error (spinner library eats it; identical result through pnpm, PowerShell, and cmd redirection). To surface the real failure, run the same chain through the drizzle-orm API: `migrate(db, {migrationsFolder: './drizzle'})` in a try/catch, DATABASE_URL_UNPOOLED, ssl rejectUnauthorized false. What was failing on dev: schema-ahead-of-journal drift at 0014 - its rename/column/check/index effects were present (workspace_invites had token_hash, pending_unique index, team num_nonnulls CHECK) but two unique-constraint statements never landed: the OLD workspace_invites_token_unique survived the rename (its def silently re-pointed to token_hash) and workspace_invites_token_hash_unique was missing. Fixes applied on dev: ran the file's own statements 2 and 5 exactly, re-verified all six statements of 0014 against the DB, then recorded the missing journal row (hash = sha256 of the raw <tag>.sql bytes as hex, matching drizzle-orm/migrator.js readMigrationFiles; formula validated against the DB's oldest row) with created_at = the journal's 0014 'when'. Re-ran doppler run -- pnpm db:migrate: 0015-0020 applied cleanly, watermark now equals 0020's when, ahead-of-watermark empty. Scratch probe scripts were deleted, nothing committed to the repo. Related facts: journal v7 entries carry NO hash field (idx/version/when/tag/breakpoints only), hashes are computed at migrate time, and some legacy DB journal rows hold timestamps instead of hashes - drizzle dedupes on created_at only, so that inconsistency is harmless.

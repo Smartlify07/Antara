@@ -90,10 +90,7 @@ export const team = pgTable(
     // Exactly one of the two, not merely at least one. With an OR a row can
     // carry both a user and an email, and the signup backfill then has no
     // single identity to match on.
-    check(
-      "team_user_or_email",
-      sql`num_nonnulls(${t.userId}, ${t.email}) = 1`
-    ),
+    check("team_user_or_email", sql`num_nonnulls(${t.userId}, ${t.email}) = 1`),
     uniqueIndex("team_workspace_user_unique")
       .on(t.workspaceId, t.userId)
       .where(sql`${t.userId} IS NOT NULL`),

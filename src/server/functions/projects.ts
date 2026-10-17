@@ -14,7 +14,6 @@ import {
   setProjectTagsSchema,
   setProjectTitleSchema,
   slugifyTitle,
-  updateProjectReviewSchema,
 } from "@/lib/project-schemas"
 import * as projectService from "@/server/services/project-service"
 import * as projectUpdateService from "@/server/services/project-update-service"
@@ -272,18 +271,6 @@ export const listProjectUpdatesFn = createServerFn({ method: "GET" })
     )
   })
 
-export const canReviewProjectUpdatesFn = createServerFn({ method: "GET" })
-  .validator(z.object({ workspaceId: z.string(), projectId: z.string() }))
-  .handler(async ({ data }) => {
-    const userId = await requireUserId()
-    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
-    return projectUpdateService.canReviewProjectUpdates(
-      data.workspaceId,
-      userId,
-      data.projectId
-    )
-  })
-
 export const createProjectUpdateFn = createServerFn({ method: "POST" })
   .validator(projectUpdateSchema)
   .handler(async ({ data }) => {
@@ -299,22 +286,6 @@ export const createProjectUpdateFn = createServerFn({ method: "POST" })
       data.kind,
       data.attachments
     )
-  })
-
-export const reviewProjectUpdateFn = createServerFn({ method: "POST" })
-  .validator(updateProjectReviewSchema)
-  .handler(async ({ data }) => {
-    const userId = await requireUserId()
-    await projectService.requireWorkspaceAccess(data.workspaceId, userId)
-    await projectUpdateService.reviewProjectUpdate(
-      data.workspaceId,
-      userId,
-      data.projectId,
-      data.updateId,
-      data.decision,
-      data.note
-    )
-    return { ok: true }
   })
 
 export { projectStatusEnum }

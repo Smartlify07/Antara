@@ -94,11 +94,15 @@ export async function listWorkspaceProjects(
       .from(projectMembers)
       .where(inArray(projectMembers.projectId, projectIds))
       .groupBy(projectMembers.projectId),
-    // Comments hang off tasks, so roll them up through the task.
+    // Comments hang off their subject, so task comments roll up through the
+    // task — the only comment subject the project list card counts.
     db
       .select({ projectId: tasks.projectId, total: count(comments.id) })
       .from(tasks)
-      .innerJoin(comments, eq(comments.taskId, tasks.id))
+      .innerJoin(
+        comments,
+        and(eq(comments.subjectId, tasks.id), eq(comments.subjectType, "task"))
+      )
       .where(inArray(tasks.projectId, projectIds))
       .groupBy(tasks.projectId),
     db

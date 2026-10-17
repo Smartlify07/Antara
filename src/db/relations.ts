@@ -1,13 +1,16 @@
 import { relations } from "drizzle-orm"
 import {
   account,
+  approvals,
   assetVersions,
   assets,
   comments,
+  deliverables,
   memberTags,
   projectMembers,
   projects,
   projectUpdates,
+  requests,
   roles,
   session,
   statusHistory,
@@ -32,6 +35,9 @@ export const userRelations = relations(user, ({ many }) => ({
   comments: many(comments),
   uploadedAssets: many(assets),
   sentInvites: many(workspaceInvites),
+  requests: many(requests),
+  deliverablesCreated: many(deliverables),
+  approvals: many(approvals),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -51,6 +57,9 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   roles: many(roles),
   invites: many(workspaceInvites),
   tags: many(tags),
+  requests: many(requests),
+  deliverables: many(deliverables),
+  approvals: many(approvals),
 }))
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
@@ -100,6 +109,63 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   tasks: many(tasks),
   assets: many(assets),
   updates: many(projectUpdates),
+  deliverables: many(deliverables),
+}))
+
+export const requestsRelations = relations(requests, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [requests.workspaceId],
+    references: [workspaces.id],
+  }),
+  requester: one(user, {
+    fields: [requests.requesterId],
+    references: [user.id],
+  }),
+  project: one(projects, {
+    fields: [requests.projectId],
+    references: [projects.id],
+  }),
+  deliverables: many(deliverables),
+}))
+
+export const deliverablesRelations = relations(
+  deliverables,
+  ({ one, many }) => ({
+    workspace: one(workspaces, {
+      fields: [deliverables.workspaceId],
+      references: [workspaces.id],
+    }),
+    project: one(projects, {
+      fields: [deliverables.projectId],
+      references: [projects.id],
+    }),
+    request: one(requests, {
+      fields: [deliverables.requestId],
+      references: [requests.id],
+    }),
+    owner: one(team, { fields: [deliverables.ownerId], references: [team.id] }),
+    creator: one(user, {
+      fields: [deliverables.createdBy],
+      references: [user.id],
+    }),
+    tasks: many(tasks),
+    assets: many(assets),
+  })
+)
+
+export const approvalsRelations = relations(approvals, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [approvals.workspaceId],
+    references: [workspaces.id],
+  }),
+  version: one(assetVersions, {
+    fields: [approvals.assetVersionId],
+    references: [assetVersions.id],
+  }),
+  approver: one(user, {
+    fields: [approvals.approverId],
+    references: [user.id],
+  }),
 }))
 
 export const projectMembersRelations = relations(
@@ -143,6 +209,10 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
     fields: [tasks.projectId],
     references: [projects.id],
   }),
+  deliverable: one(deliverables, {
+    fields: [tasks.deliverableId],
+    references: [deliverables.id],
+  }),
   creator: one(user, { fields: [tasks.createdBy], references: [user.id] }),
   assignees: many(taskAssignees),
   history: many(statusHistory),
@@ -170,8 +240,11 @@ export const statusHistoryRelations = relations(statusHistory, ({ one }) => ({
 }))
 
 export const commentsRelations = relations(comments, ({ one }) => ({
-  task: one(tasks, { fields: [comments.taskId], references: [tasks.id] }),
-  author: one(user, { fields: [comments.userId], references: [user.id] }),
+  author: one(user, { fields: [comments.authorId], references: [user.id] }),
+  workspace: one(workspaces, {
+    fields: [comments.workspaceId],
+    references: [workspaces.id],
+  }),
 }))
 
 export const projectUpdatesRelations = relations(
@@ -185,10 +258,6 @@ export const projectUpdatesRelations = relations(
       fields: [projectUpdates.authorId],
       references: [user.id],
     }),
-    reviewer: one(user, {
-      fields: [projectUpdates.reviewedBy],
-      references: [user.id],
-    }),
     versions: many(assetVersions),
   })
 )
@@ -199,6 +268,10 @@ export const assetsRelations = relations(assets, ({ one, many }) => ({
     references: [projects.id],
   }),
   task: one(tasks, { fields: [assets.taskId], references: [tasks.id] }),
+  deliverable: one(deliverables, {
+    fields: [assets.deliverableId],
+    references: [deliverables.id],
+  }),
   creator: one(user, { fields: [assets.createdBy], references: [user.id] }),
   versions: many(assetVersions),
 }))
