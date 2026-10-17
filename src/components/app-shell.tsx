@@ -17,6 +17,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Link, useParams } from "@tanstack/react-router"
+import { requestBadgeQuery } from "@/lib/queries/requests"
 import {
   workspaceTeamCountQuery,
   workspacesQuery,
@@ -37,14 +38,18 @@ export function AppShell({
   children: ReactNode
   crumbs: Crumb[]
 }) {
-  const params = useParams({ strict: false }) as
-    { workspaceSlug?: string } | undefined
-  const workspaceSlug = params?.workspaceSlug
+  const params = useParams({ strict: false })
+  const workspaceSlug = params.workspaceSlug
 
   const { data: workspaces } = useQuery(workspacesQuery())
 
   const { data: teamCount } = useQuery({
     ...workspaceTeamCountQuery(workspaceSlug ?? ""),
+    enabled: !!workspaceSlug,
+  })
+
+  const { data: requestsBadge } = useQuery({
+    ...requestBadgeQuery(workspaceSlug ?? ""),
     enabled: !!workspaceSlug,
   })
 
@@ -74,6 +79,7 @@ export function AppShell({
       <AppSidebar
         workspaces={workspaces ?? null}
         teamCount={teamCount ?? null}
+        requestsBadge={requestsBadge ?? null}
       />
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">

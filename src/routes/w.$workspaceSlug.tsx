@@ -64,6 +64,7 @@ function useWorkspaceCrumbs(slug: string, title: string): Crumb[] {
     ]
     const tail = location.pathname.slice(`/w/${slug}`.length)
     if (tail.startsWith("/team")) return [...base, { label: "Team" }]
+    if (tail.startsWith("/requests")) return [...base, { label: "Requests" }]
     if (tail.startsWith("/projects/new")) {
       return [...base, { label: "Projects" }, { label: "New project" }]
     }

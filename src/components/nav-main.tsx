@@ -40,6 +40,20 @@ function SoonBadge() {
   )
 }
 
+/**
+ * Badges carry either the alt text "Soon" (a placeholder surface) or a
+ * number (a live count — Requests' queue, Team's roster). Across the
+ * collapsed sidebar both hide with the labels.
+ */
+function NavBadge({ label }: { label: string }) {
+  if (label === "Soon") return <SoonBadge />
+  return (
+    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground tabular-nums">
+      {label}
+    </span>
+  )
+}
+
 export function NavMain({
   label,
   items,
@@ -62,7 +76,7 @@ export function NavMain({
               >
                 {item.icon}
                 <span>{item.title}</span>
-                {item.badge && <SoonBadge />}
+                {item.badge && <NavBadge label={item.badge} />}
               </SidebarMenuButton>
             )
             return (
@@ -96,7 +110,7 @@ export function NavMain({
                   <SidebarMenuButton tooltip={item.title}>
                     {item.icon}
                     <span>{item.title}</span>
-                    {item.badge && <SoonBadge />}
+                    {item.badge && <NavBadge label={item.badge} />}
                     <ChevronRightIcon className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
