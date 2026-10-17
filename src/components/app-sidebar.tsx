@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sidebar"
 import type { WorkspaceListItem } from "@/server/services/workspace-service"
 import {
+  ClipboardListIcon,
   FolderKanbanIcon,
   ImagesIcon,
   InboxIcon,
@@ -19,13 +20,20 @@ import {
   UsersIcon,
 } from "lucide-react"
 
+export interface RequestBadgeState {
+  canTriage: boolean
+  count: number
+}
+
 export function AppSidebar({
   workspaces,
   teamCount,
+  requestsBadge,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   workspaces: WorkspaceListItem[] | null
   teamCount: number | null
+  requestsBadge: RequestBadgeState | null
 }) {
   const location = useLocation()
   const match = location.pathname.match(/^\/w\/([^/]+)/)
@@ -39,7 +47,23 @@ export function AppSidebar({
             title: "Projects",
             url: `/w/${activeSlug}/projects`,
             icon: <FolderKanbanIcon />,
-            active: !location.pathname.includes("/team"),
+            // Naive "any other section" check — every new workspace section
+            // must be excluded here, same as /team.
+            active:
+              !location.pathname.includes("/team") &&
+              !location.pathname.includes("/requests"),
+          },
+          {
+            title: "Requests",
+            url: `/w/${activeSlug}/requests`,
+            icon: <ClipboardListIcon />,
+            badge:
+              requestsBadge &&
+              requestsBadge.canTriage &&
+              requestsBadge.count > 0
+                ? String(requestsBadge.count)
+                : undefined,
+            active: location.pathname.startsWith(`/w/${activeSlug}/requests`),
           },
           {
             title: "Team",
