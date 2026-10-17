@@ -110,13 +110,6 @@ export const projectUpdateSchema = z.object({
     .default([]),
 })
 
-export const updateProjectReviewSchema = z.object({
-  ...scopedProject.shape,
-  updateId: z.string(),
-  decision: z.enum(["approved", "changes_requested"]),
-  note: z.string().trim().max(1000).optional(),
-})
-
 export const setProjectLeadSchema = z.object({
   ...scopedProject.shape,
   /** `team.id` of the new lead, or null to clear the role. */

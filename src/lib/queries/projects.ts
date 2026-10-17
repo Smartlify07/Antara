@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query"
 import {
-  canReviewProjectUpdatesFn,
   getProjectDetailFn,
   listAssignableMembersFn,
   listProjectTagsFn,
@@ -36,8 +35,6 @@ export const projectKeys = {
     ["projects", "detail", workspaceId, slug] as const,
   updates: (workspaceId: string, projectId: string) =>
     ["projects", "updates", workspaceId, projectId] as const,
-  canReview: (workspaceId: string, projectId: string) =>
-    ["projects", "can-review", workspaceId, projectId] as const,
 }
 
 export function projectsQuery(workspaceId: string) {
@@ -74,20 +71,6 @@ export function projectUpdatesQuery(workspaceId: string, projectId: string) {
   return queryOptions({
     queryKey: projectKeys.updates(workspaceId, projectId),
     queryFn: () => listProjectUpdatesFn({ data: { workspaceId, projectId } }),
-  })
-}
-
-/**
- * Whether to render approve / request-changes controls. Fetched rather than
- * derived client-side because the answer depends on the actor's workspace role
- * *and* their project `lead` membership; the service enforces the same rule on
- * write, so hiding the control is presentation, not the guard.
- */
-export function canReviewUpdatesQuery(workspaceId: string, projectId: string) {
-  return queryOptions({
-    queryKey: projectKeys.canReview(workspaceId, projectId),
-    queryFn: () =>
-      canReviewProjectUpdatesFn({ data: { workspaceId, projectId } }),
   })
 }
 
@@ -182,13 +165,8 @@ export function buildOptimisticUpdate(input: {
     id: `optimistic-${stamp}`,
     body: input.body,
     kind: input.kind,
-    // Mirrors the service: only a progress update carries a review, so an
-    // optimistic comment must not flash an "Awaiting review" state either.
-    reviewStatus: input.kind === "progress_update" ? "pending" : null,
-    reviewNote: null,
     createdAt: new Date(),
     author: input.author,
-    reviewer: null,
     versions: input.attachments.map((attachment, index) => ({
       id: `optimistic-version-${stamp}-${index}`,
       // Each pending file is its own asset for now: the real numbering only

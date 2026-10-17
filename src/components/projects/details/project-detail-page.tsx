@@ -12,10 +12,7 @@ import { UpdateComposer } from "@/components/projects/details/update-composer"
 import { InviteMemberDialog } from "@/components/projects/details/invite-member-dialog"
 import { useProjectPills } from "@/components/projects/details/use-project-pills"
 import { TagDot } from "@/components/projects/tags-chip"
-import {
-  canReviewUpdatesQuery,
-  projectUpdatesQuery,
-} from "@/lib/queries/projects"
+import { projectUpdatesQuery } from "@/lib/queries/projects"
 import type { SelectedTag } from "@/components/projects/tags-chip"
 import type {
   AssignableMember,
@@ -43,7 +40,6 @@ export function ProjectDetailPage({
   const [tab, setTab] = useState("overview")
 
   const updates = useQuery(projectUpdatesQuery(workspaceId, project.id))
-  const canReview = useQuery(canReviewUpdatesQuery(workspaceId, project.id))
 
   const memberRefs = project.members
   const leadRef = memberRefs.find((member) => member.isLead) ?? null
@@ -209,15 +205,11 @@ export function ProjectDetailPage({
                 <UpdateCard
                   // Keyed on id: an optimistic row and its real replacement
                   // have different ids, so this is one remount per post. The
-                  // grid avoided that by keying on slug; here the card holds no
-                  // state beyond the review buttons, so the swap is not visible
-                  // and paying for a client-side key column would not be worth
-                  // it.
+                  // grid avoided that by keying on slug; here the card holds
+                  // no state, so the swap is not visible and paying for a
+                  // client-side key column would not be worth it.
                   key={update.id}
                   update={update}
-                  workspaceId={workspaceId}
-                  projectId={project.id}
-                  canReview={canReview.data === true}
                 />
               ))}
             </div>

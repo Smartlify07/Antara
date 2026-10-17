@@ -3,22 +3,22 @@ import { db } from "@/db"
 import {
   assetVersions,
   assets,
-  projectMembers,
   projects,
   projectUpdates,
-  roles,
   storageDeletionQueue,
-  team,
   user,
-  workspaces,
 } from "@/db/schema/index"
 import { requireWorkspaceAccess } from "@/server/services/project-service"
-import type { UpdateKind, UpdateReviewStatus } from "@/db/enums"
+import type { UpdateKind } from "@/db/enums"
 
 /**
- * Progress updates: the activity feed, the attachments they carry, and the
- * lead's review decision. Pure DB work only — auth lives in the server
- * functions, mirroring `project-service`.
+ * Progress updates: the activity feed and the attachments it carries. Pure DB
+ * work only — auth lives in the server functions, mirroring `project-service`.
+ *
+ * Decisions do not belong here. Approval attaches to the asset VERSION a post
+ * carried (asset_versions.review_status + approvals) — versioning the review
+ * so that approving post #2 proves nothing about the same file sent again in
+ * post #5. See `version-service` (Increment 4).
  */
 
 export interface UpdateVersion {
@@ -28,17 +28,16 @@ export interface UpdateVersion {
   label: string
   versionNo: number
   url: string
-  mimeType: string
-  sizeBytes: number
+  // Known for hosted uploads; NULL for a pasted external link, whose metadata
+  // is whatever its provider eventually says.
+  mimeType: string | null
+  sizeBytes: number | null
 }
 
 export interface ProjectUpdateItem {
   id: string
   body: string
   kind: UpdateKind
-  /** Null on a comment — only progress updates carry a review. */
-  reviewStatus: UpdateReviewStatus | null
-  reviewNote: string | null
   createdAt: Date
   author: {
     id: string
@@ -46,11 +45,6 @@ export interface ProjectUpdateItem {
     email: string | null
     image: string | null
   }
-  reviewer: {
-    id: string
-    name: string | null
-    image: string | null
-  } | null
   versions: UpdateVersion[]
 }
 
@@ -74,16 +68,11 @@ export async function listProjectUpdates(
       id: projectUpdates.id,
       body: projectUpdates.body,
       kind: projectUpdates.kind,
-      reviewStatus: projectUpdates.reviewStatus,
-      reviewNote: projectUpdates.reviewNote,
       createdAt: projectUpdates.createdAt,
       authorId: user.id,
       authorName: user.name,
       authorEmail: user.email,
       authorImage: user.image,
-      reviewerId: projectUpdates.reviewedBy,
-      reviewerName: user.name,
-      reviewerImage: user.image,
     })
     .from(projectUpdates)
     .innerJoin(projects, eq(projectUpdates.projectId, projects.id))
@@ -98,21 +87,6 @@ export async function listProjectUpdates(
     .orderBy(desc(projectUpdates.createdAt))
 
   if (rows.length === 0) return []
-
-  // Two joins on `user` (author and reviewer) collide on column name, so the
-  // reviewer is fetched separately rather than aliasing in one query.
-  const reviewerIds = rows
-    .map((row) => row.reviewerId)
-    .filter((id): id is string => Boolean(id))
-
-  const reviewers = reviewerIds.length
-    ? await db
-        .select({ id: user.id, name: user.name, image: user.image })
-        .from(user)
-        .where(inArray(user.id, reviewerIds))
-    : []
-
-  const reviewerById = new Map(reviewers.map((row) => [row.id, row]))
 
   const versionRows = await db
     .select({
@@ -148,13 +122,10 @@ export async function listProjectUpdates(
   }
 
   return rows.map((row) => {
-    const reviewer = row.reviewerId ? reviewerById.get(row.reviewerId) : null
     return {
       id: row.id,
       body: row.body,
       kind: row.kind,
-      reviewStatus: row.reviewStatus,
-      reviewNote: row.reviewNote,
       createdAt: row.createdAt,
       author: {
         id: row.authorId ?? "",
@@ -162,74 +133,9 @@ export async function listProjectUpdates(
         email: row.authorEmail,
         image: row.authorImage,
       },
-      reviewer: reviewer
-        ? { id: reviewer.id, name: reviewer.name, image: reviewer.image }
-        : null,
       versions: versionsByUpdate.get(row.id) ?? [],
     }
   })
-}
-
-/**
- * Whether the actor may approve a submission: the project's `lead`, or a
- * workspace admin/owner.
- *
- * Leads are project-scope memberships, and admins are workspace-scoped, so
- * both sides are checked. Returns false rather than throwing so the caller can
- * use it to hide the control as well as to reject the write.
- */
-export async function canReviewProjectUpdates(
-  workspaceId: string,
-  userId: string,
-  projectId: string
-): Promise<boolean> {
-  const [owned] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      and(
-        eq(workspaces.id, workspaceId),
-        eq(workspaces.ownerId, userId),
-        isNull(workspaces.deletedAt)
-      )
-    )
-    .limit(1)
-  if (owned) return true
-
-  // Workspace admin via the actor's own membership row. Joining roles on the
-  // workspace alone would find *some* admin and approve for anyone.
-  const [workspaceAdmin] = await db
-    .select({ id: roles.id })
-    .from(team)
-    .innerJoin(roles, eq(team.roleId, roles.id))
-    .where(
-      and(
-        eq(team.workspaceId, workspaceId),
-        eq(team.userId, userId),
-        eq(team.status, "active"),
-        eq(roles.scope, "workspace"),
-        eq(roles.title, "admin")
-      )
-    )
-    .limit(1)
-
-  if (workspaceAdmin) return true
-
-  const [lead] = await db
-    .select({ id: projectMembers.id })
-    .from(projectMembers)
-    .innerJoin(roles, eq(projectMembers.roleId, roles.id))
-    .where(
-      and(
-        eq(projectMembers.projectId, projectId),
-        eq(projectMembers.userId, userId),
-        eq(projectMembers.status, "active"),
-        eq(roles.title, "lead")
-      )
-    )
-    .limit(1)
-
-  return Boolean(lead)
 }
 
 /**
@@ -271,9 +177,6 @@ export async function createProjectUpdate(
         authorId: userId,
         body,
         kind,
-        // Only progress updates enter the review queue. A comment stays null so
-        // nothing lists it as awaiting a decision.
-        reviewStatus: kind === "progress_update" ? "pending" : null,
       })
       .returning({ id: projectUpdates.id })
 
@@ -345,55 +248,14 @@ export async function createProjectUpdate(
 }
 
 /**
- * Records the lead's decision on a progress update.
- *
- * Two guards, both in the WHERE clause rather than in application code: the
- * update must still be `pending`, and its kind must be `progress_update`. The
- * kind check is what keeps a comment out of the review flow — a comment's
- * `review_status` is NULL, so it can never match `pending`, and the row is left
- * untouched instead of gaining a decision it should never have had.
- */
-export async function reviewProjectUpdate(
-  workspaceId: string,
-  userId: string,
-  projectId: string,
-  updateId: string,
-  decision: "approved" | "changes_requested",
-  note?: string
-): Promise<void> {
-  const allowed = await canReviewProjectUpdates(workspaceId, userId, projectId)
-  if (!allowed) {
-    throw new Error("Only the project lead can review updates.")
-  }
-
-  const updated = await db
-    .update(projectUpdates)
-    .set({
-      reviewStatus: decision,
-      reviewedBy: userId,
-      reviewedAt: new Date(),
-      reviewNote: note?.trim() || null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(projectUpdates.id, updateId),
-        eq(projectUpdates.projectId, projectId),
-        eq(projectUpdates.kind, "progress_update"),
-        eq(projectUpdates.reviewStatus, "pending")
-      )
-    )
-    .returning({ id: projectUpdates.id })
-
-  if (updated.length === 0) {
-    throw new Error("That update has already been reviewed.")
-  }
-}
-
-/**
  * Enqueues provider-side deletes for an asset's versions. The bytes are not
  * removed on the request path — the worker in `storage_deletion_queue` does
  * that, so a slow provider cannot fail the user's click.
+ *
+ * Source guard: only versions whose bytes WE host (`source = 'upload'`) may
+ * be enqueued. An external_link version points at a file on someone else's
+ * storage; running a delete through that reference would reach into a system
+ * Antara does not own. The asset row still goes — the queue is about bytes.
  */
 export async function queueAssetDeletion(
   workspaceId: string,
@@ -406,6 +268,7 @@ export async function queueAssetDeletion(
   const versions = await db
     .select({
       id: assetVersions.id,
+      source: assetVersions.source,
       provider: assetVersions.provider,
       providerKey: assetVersions.providerKey,
     })
@@ -416,10 +279,21 @@ export async function queueAssetDeletion(
   if (versions.length === 0) throw new Error("Asset not found.")
 
   await db.transaction(async (tx) => {
+    // Narrowed into a typed list first: the upload-shape check and the insert
+    // need the same predicate, and TS does not carry a two-property filter
+    // narrowing into the map below it.
+    const deletable = versions.filter(
+      (version) =>
+        version.source === "upload" &&
+        version.provider !== null &&
+        version.providerKey !== null
+    )
     await tx.insert(storageDeletionQueue).values(
-      versions.map((version) => ({
-        provider: version.provider,
-        providerKey: version.providerKey,
+      deletable.map((version) => ({
+        provider: version.provider as "cloudinary" | "aws",
+        providerKey: version.providerKey as string,
+        // The queue keys on the version row (the bytes), though the column
+        // keeps the historical `asset_id` name.
         assetId: version.id,
       }))
     )

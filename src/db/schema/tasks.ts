@@ -8,6 +8,7 @@ import {
 } from "drizzle-orm/pg-core"
 import { taskPriority, taskStatus } from "../enums"
 import { user } from "./auth"
+import { deliverables } from "./deliverables"
 import { projectMembers, projects } from "./projects"
 import { id } from "./shared"
 
@@ -18,6 +19,13 @@ export const tasks = pgTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    // The deliverable this task serves, when the project organizes work that
+    // way. Nullable because projects work fine without deliverable structure —
+    // legacy tasks stay project-level until they're placed. Set-null so
+    // deleting a deliverable keeps its tasks readable at project level.
+    deliverableId: text("deliverable_id").references(() => deliverables.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     description: text("description"),
     status: taskStatus("status").notNull().default("backlog"),
@@ -32,6 +40,7 @@ export const tasks = pgTable(
   (t) => [
     index("tasks_project_status_idx").on(t.projectId, t.status),
     index("tasks_project_idx").on(t.projectId),
+    index("tasks_deliverable_idx").on(t.deliverableId),
     // Workspace-wide due-soon sorting across projects.
     index("tasks_due_date_idx")
       .on(t.dueDate)
@@ -74,23 +83,5 @@ export const statusHistory = pgTable(
   (t) => [index("status_history_task_idx").on(t.taskId, t.changedAt)]
 )
 
-export const comments = pgTable(
-  "comments",
-  {
-    id: id(),
-    taskId: text("task_id")
-      .notNull()
-      .references(() => tasks.id, { onDelete: "cascade" }),
-    userId: text("user_id").references(() => user.id, {
-      onDelete: "set null",
-    }),
-    body: text("body").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  },
-  (t) => [index("comments_task_idx").on(t.taskId, t.createdAt)]
-)
-
 export type Task = typeof tasks.$inferSelect
 export type StatusHistoryEntry = typeof statusHistory.$inferSelect
-export type Comment = typeof comments.$inferSelect
