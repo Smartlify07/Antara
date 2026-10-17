@@ -10,6 +10,7 @@ import { ProjectProperties } from "@/components/projects/details/project-propert
 import { UpdateCard } from "@/components/projects/details/update-card"
 import { UpdateComposer } from "@/components/projects/details/update-composer"
 import { InviteMemberDialog } from "@/components/projects/details/invite-member-dialog"
+import { DeliverablesPanel } from "@/components/projects/details/deliverables/deliverables-panel"
 import { useProjectPills } from "@/components/projects/details/use-project-pills"
 import { TagDot } from "@/components/projects/tags-chip"
 import { projectUpdatesQuery } from "@/lib/queries/projects"
@@ -21,12 +22,14 @@ import type {
 } from "@/server/services/project-service"
 
 export function ProjectDetailPage({
+  workspaceSlug,
   workspaceId,
   project,
   members,
   tagOptions,
   canEdit,
 }: {
+  workspaceSlug: string
   workspaceId: string
   project: ProjectDetail
   members: AssignableMember[]
@@ -117,6 +120,7 @@ export function ProjectDetailPage({
           value={tab}
           tabs={[
             { value: "overview", label: "Overview" },
+            { value: "work", label: "Work" },
             { value: "activities", label: "Activities" },
           ]}
         />
@@ -173,6 +177,18 @@ export function ProjectDetailPage({
               />
             </aside>
           </div>
+        </TabsContent>
+
+        {/* The operational surface: deliverables and tasks (FR-013..017).
+            A tab rather than a section of Overview — it is the lane's whole
+            management surface, not a glanceable summary line. */}
+        <TabsContent value="work">
+          <DeliverablesPanel
+            workspaceSlug={workspaceSlug}
+            workspaceId={workspaceId}
+            projectId={project.id}
+            members={members}
+          />
         </TabsContent>
 
         <TabsContent value="activities">

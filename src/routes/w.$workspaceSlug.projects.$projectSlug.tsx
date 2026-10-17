@@ -16,7 +16,7 @@ export const Route = createFileRoute("/w/$workspaceSlug/projects/$projectSlug")(
 function ProjectDetailRoute() {
   const { workspaceId, workspaceRole, isWorkspaceOwner } =
     Route.useRouteContext()
-  const { projectSlug } = Route.useParams()
+  const { workspaceSlug, projectSlug } = Route.useParams()
 
   const {
     data: project,
@@ -50,6 +50,7 @@ function ProjectDetailRoute() {
 
   return (
     <ProjectDetailPage
+      workspaceSlug={workspaceSlug}
       workspaceId={workspaceId}
       project={project}
       members={members}
