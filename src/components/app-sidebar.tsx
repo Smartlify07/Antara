@@ -25,15 +25,21 @@ export interface RequestBadgeState {
   count: number
 }
 
+export interface MyTasksBadgeState {
+  count: number
+}
+
 export function AppSidebar({
   workspaces,
   teamCount,
   requestsBadge,
+  myTasksBadge,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   workspaces: WorkspaceListItem[] | null
   teamCount: number | null
   requestsBadge: RequestBadgeState | null
+  myTasksBadge: MyTasksBadgeState | null
 }) {
   const location = useLocation()
   const match = location.pathname.match(/^\/w\/([^/]+)/)
@@ -48,10 +54,11 @@ export function AppSidebar({
             url: `/w/${activeSlug}/projects`,
             icon: <FolderKanbanIcon />,
             // Naive "any other section" check — every new workspace section
-            // must be excluded here, same as /team.
+            // must be excluded here, same as /team and /requests.
             active:
               !location.pathname.includes("/team") &&
-              !location.pathname.includes("/requests"),
+              !location.pathname.includes("/requests") &&
+              !location.pathname.includes("/my-tasks"),
           },
           {
             title: "Requests",
@@ -82,11 +89,25 @@ export function AppSidebar({
   ]
 
   const personalItems = [
-    {
-      title: "My tasks",
-      icon: <SquareCheckBigIcon />,
-      badge: "Soon",
-    },
+    // Tasks are workspace-scoped work (every task belongs to a project), so
+    // the entry exists only inside a workspace. The badge is a count, not
+    // authority: being assigned work is the fact, unlike the requests badge.
+    ...(inWorkspace && activeSlug
+      ? [
+          {
+            title: "My tasks",
+            url: `/w/${activeSlug}/my-tasks`,
+            icon: <SquareCheckBigIcon />,
+            badge:
+              myTasksBadge && myTasksBadge.count > 0
+                ? String(myTasksBadge.count)
+                : undefined,
+            active: location.pathname.startsWith(
+              `/w/${activeSlug}/my-tasks`
+            ),
+          },
+        ]
+      : []),
     {
       title: "Inbox",
       icon: <InboxIcon />,
