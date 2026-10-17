@@ -6,7 +6,8 @@ import {
   useParams,
 } from "@tanstack/react-router"
 import { useMemo } from "react"
-import { AppShell, type Crumb } from "@/components/app-shell"
+import { AppShell } from "@/components/app-shell"
+import type { Crumb } from "@/components/app-shell"
 import { getWorkspaceFn } from "@/server/functions/workspaces"
 
 /**
@@ -66,6 +67,7 @@ function useWorkspaceCrumbs(slug: string, title: string): Crumb[] {
     if (tail.startsWith("/team")) return [...base, { label: "Team" }]
     if (tail.startsWith("/requests")) return [...base, { label: "Requests" }]
     if (tail.startsWith("/my-tasks")) return [...base, { label: "My tasks" }]
+    if (tail.startsWith("/reviews")) return [...base, { label: "Reviews" }]
     if (tail.startsWith("/projects/new")) {
       return [...base, { label: "Projects" }, { label: "New project" }]
     }

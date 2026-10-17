@@ -13,6 +13,7 @@ import {
 import type { WorkspaceListItem } from "@/server/services/workspace-service"
 import {
   ClipboardListIcon,
+  EyeIcon,
   FolderKanbanIcon,
   ImagesIcon,
   InboxIcon,
@@ -29,17 +30,24 @@ export interface MyTasksBadgeState {
   count: number
 }
 
+export interface ReviewQueueBadgeState {
+  canReview: boolean
+  count: number
+}
+
 export function AppSidebar({
   workspaces,
   teamCount,
   requestsBadge,
   myTasksBadge,
+  reviewsBadge,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   workspaces: WorkspaceListItem[] | null
   teamCount: number | null
   requestsBadge: RequestBadgeState | null
   myTasksBadge: MyTasksBadgeState | null
+  reviewsBadge: ReviewQueueBadgeState | null
 }) {
   const location = useLocation()
   const match = location.pathname.match(/^\/w\/([^/]+)/)
@@ -58,7 +66,8 @@ export function AppSidebar({
             active:
               !location.pathname.includes("/team") &&
               !location.pathname.includes("/requests") &&
-              !location.pathname.includes("/my-tasks"),
+              !location.pathname.includes("/my-tasks") &&
+              !location.pathname.includes("/reviews"),
           },
           {
             title: "Requests",
@@ -72,6 +81,24 @@ export function AppSidebar({
                 : undefined,
             active: location.pathname.startsWith(`/w/${activeSlug}/requests`),
           },
+          // Reviewers only (server-stamped): a member who never submits work
+          // for others' review has no queue, so the entry doesn't either.
+          ...(reviewsBadge && reviewsBadge.canReview
+            ? [
+                {
+                  title: "Reviews",
+                  url: `/w/${activeSlug}/reviews`,
+                  icon: <EyeIcon />,
+                  badge:
+                    reviewsBadge.count > 0
+                      ? String(reviewsBadge.count)
+                      : undefined,
+                  active: location.pathname.startsWith(
+                    `/w/${activeSlug}/reviews`
+                  ),
+                },
+              ]
+            : []),
           {
             title: "Team",
             url: `/w/${activeSlug}/team`,

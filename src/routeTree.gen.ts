@@ -22,6 +22,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as WWorkspaceSlugMyTasksRouteImport } from './routes/w.$workspaceSlug.my-tasks'
 import { Route as WWorkspaceSlugProjectsRouteImport } from './routes/w.$workspaceSlug.projects'
 import { Route as WWorkspaceSlugRequestsRouteImport } from './routes/w.$workspaceSlug.requests'
+import { Route as WWorkspaceSlugReviewsRouteImport } from './routes/w.$workspaceSlug.reviews'
 import { Route as WWorkspaceSlugTeamRouteImport } from './routes/w.$workspaceSlug.team'
 import { Route as WWorkspaceSlugProjectsIndexRouteImport } from './routes/w.$workspaceSlug.projects.index'
 import { Route as WWorkspaceSlugProjectsProjectSlugRouteImport } from './routes/w.$workspaceSlug.projects.$projectSlug'
@@ -94,6 +95,11 @@ const WWorkspaceSlugRequestsRoute = WWorkspaceSlugRequestsRouteImport.update({
   path: '/requests',
   getParentRoute: () => WWorkspaceSlugRoute,
 } as any)
+const WWorkspaceSlugReviewsRoute = WWorkspaceSlugReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
+  getParentRoute: () => WWorkspaceSlugRoute,
+} as any)
 const WWorkspaceSlugTeamRoute = WWorkspaceSlugTeamRouteImport.update({
   id: '/team',
   path: '/team',
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/my-tasks': typeof WWorkspaceSlugMyTasksRoute
   '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRouteWithChildren
   '/w/$workspaceSlug/requests': typeof WWorkspaceSlugRequestsRouteWithChildren
+  '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
   '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/w/$workspaceSlug/my-tasks': typeof WWorkspaceSlugMyTasksRoute
+  '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
   '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/w/$workspaceSlug/my-tasks': typeof WWorkspaceSlugMyTasksRoute
   '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRouteWithChildren
   '/w/$workspaceSlug/requests': typeof WWorkspaceSlugRequestsRouteWithChildren
+  '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
   '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/my-tasks'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/requests'
+    | '/w/$workspaceSlug/reviews'
     | '/w/$workspaceSlug/team'
     | '/w/$workspaceSlug/projects/$projectSlug'
     | '/w/$workspaceSlug/projects/new'
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/workspaces/new'
     | '/api/auth/$'
     | '/w/$workspaceSlug/my-tasks'
+    | '/w/$workspaceSlug/reviews'
     | '/w/$workspaceSlug/team'
     | '/w/$workspaceSlug/projects/$projectSlug'
     | '/w/$workspaceSlug/projects/new'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/my-tasks'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/requests'
+    | '/w/$workspaceSlug/reviews'
     | '/w/$workspaceSlug/team'
     | '/w/$workspaceSlug/projects/$projectSlug'
     | '/w/$workspaceSlug/projects/new'
@@ -362,6 +374,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WWorkspaceSlugRequestsRouteImport
       parentRoute: typeof WWorkspaceSlugRoute
     }
+    '/w/$workspaceSlug/reviews': {
+      id: '/w/$workspaceSlug/reviews'
+      path: '/reviews'
+      fullPath: '/w/$workspaceSlug/reviews'
+      preLoaderRoute: typeof WWorkspaceSlugReviewsRouteImport
+      parentRoute: typeof WWorkspaceSlugRoute
+    }
     '/w/$workspaceSlug/team': {
       id: '/w/$workspaceSlug/team'
       path: '/team'
@@ -446,6 +465,7 @@ interface WWorkspaceSlugRouteChildren {
   WWorkspaceSlugMyTasksRoute: typeof WWorkspaceSlugMyTasksRoute
   WWorkspaceSlugProjectsRoute: typeof WWorkspaceSlugProjectsRouteWithChildren
   WWorkspaceSlugRequestsRoute: typeof WWorkspaceSlugRequestsRouteWithChildren
+  WWorkspaceSlugReviewsRoute: typeof WWorkspaceSlugReviewsRoute
   WWorkspaceSlugTeamRoute: typeof WWorkspaceSlugTeamRoute
 }
 
@@ -453,6 +473,7 @@ const WWorkspaceSlugRouteChildren: WWorkspaceSlugRouteChildren = {
   WWorkspaceSlugMyTasksRoute: WWorkspaceSlugMyTasksRoute,
   WWorkspaceSlugProjectsRoute: WWorkspaceSlugProjectsRouteWithChildren,
   WWorkspaceSlugRequestsRoute: WWorkspaceSlugRequestsRouteWithChildren,
+  WWorkspaceSlugReviewsRoute: WWorkspaceSlugReviewsRoute,
   WWorkspaceSlugTeamRoute: WWorkspaceSlugTeamRoute,
 }
 

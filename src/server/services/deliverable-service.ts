@@ -1,6 +1,7 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm"
+import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm"
 import { db } from "@/db"
 import { user } from "@/db/schema/auth"
+import { assetVersions, assets } from "@/db/schema/assets"
 import { deliverables } from "@/db/schema/deliverables"
 import { requests } from "@/db/schema/requests"
 import { projects } from "@/db/schema/projects"
@@ -54,6 +55,9 @@ export interface DeliverableCard {
     | null
   /** The accepted request this work came from, when it did. */
   request: RequestRef | null
+  /** Versions recorded across the deliverable's assets — the Work tab's
+   * Versions expander shows the count before fetching the timeline. */
+  versionCount: number
   /** May reassign owner / set the deadline (admin or project lead). */
   viewerCanManage: boolean
   /** May press the production-status chip (admin, lead, or the owner). */
@@ -136,6 +140,26 @@ export async function listProjectDeliverables(
 
   const today = todayIso()
 
+  // One cheap count per deliverable so every card can promise a Versions
+  // expander without fetching its whole timeline.
+  const versionCounts = await db
+    .select({
+      deliverableId: assets.deliverableId,
+      value: count(assetVersions.id),
+    })
+    .from(assets)
+    .innerJoin(assetVersions, eq(assetVersions.assetId, assets.id))
+    .where(
+      and(
+        eq(assets.projectId, projectId),
+        isNotNull(assets.deliverableId)
+      )
+    )
+    .groupBy(assets.deliverableId)
+  const versionCountByDeliverable = new Map(
+    versionCounts.map((row) => [row.deliverableId, row.value])
+  )
+
   const cards: DeliverableCard[] = rows.map((row) => {
     const deadline = isoDayOrNull(row.deadline)
     return {
@@ -145,6 +169,7 @@ export async function listProjectDeliverables(
       type: row.type,
       status: row.status,
       deadline,
+      versionCount: versionCountByDeliverable.get(row.id) ?? 0,
       overdue:
         deadline !== null && deadline < today && row.status !== "completed",
       owner: row.teamId
