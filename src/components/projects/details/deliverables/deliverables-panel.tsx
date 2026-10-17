@@ -53,9 +53,11 @@ export function DeliverablesPanel({
   }
 
   // A write fact from the server, not a guess: the tasks list's viewer says
-  // who can create tasks (project member or admin). Deliverable management
-  // flags are stamped per-row by the same access resolution.
+  // who can create tasks (project member or admin), the deliverables list's
+  // viewer says who can manage deliverables (project lead or admin). The
+  // same access resolution stamps the per-row flags on the cards.
   const canWork = tasksQuery.data?.viewer.canWork ?? false
+  const canManage = deliverablesQuery.data?.viewer.canManage ?? false
 
   const deliverables = deliverablesQuery.data?.deliverables ?? []
   const projectTasks = tasksQuery.data?.tasks ?? []
@@ -63,9 +65,6 @@ export function DeliverablesPanel({
     (task) => task.deliverableId !== null
   )
   const looseTasks = projectTasks.filter((task) => task.deliverableId === null)
-  const anyCanManage = deliverables.some(
-    (deliverable) => deliverable.viewerCanManage
-  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -74,7 +73,7 @@ export function DeliverablesPanel({
           <h2 className="text-sm font-semibold text-muted-foreground">
             Deliverables
           </h2>
-          {anyCanManage && (
+          {canManage && (
             <NewDeliverableDialog
               workspaceId={workspaceId}
               projectId={projectId}
@@ -114,9 +113,11 @@ export function DeliverablesPanel({
           </div>
         ) : (
           <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            {anyCanManage
+            {/* Honest empty state: the button above exists if and only if
+                this line says the viewer can shape the work. */}
+            {canManage
               ? "No deliverables yet. Break this project into its concrete pieces of work."
-              : "No deliverables yet — the project lead will shape the work here."}
+              : "No deliverables yet — the project lead or a workspace admin will shape the work here."}
           </p>
         )}
       </section>

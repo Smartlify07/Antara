@@ -101,7 +101,10 @@ export async function listProjectDeliverables(
   workspaceId: string,
   userId: string,
   projectId: string
-): Promise<{ deliverables: DeliverableCard[] }> {
+): Promise<{
+  deliverables: DeliverableCard[]
+  viewer: { canManage: boolean }
+}> {
   const access = await requireWorkAccess(workspaceId, userId, projectId)
 
   const rows = await db
@@ -161,7 +164,12 @@ export async function listProjectDeliverables(
     }
   })
 
-  return { deliverables: cards }
+  // The create/edit authority is a viewer fact, not a row fact — critical in
+  // the empty state, where the rows otherwise imply "nobody may manage".
+  return {
+    deliverables: cards,
+    viewer: { canManage: canManageDeliverables(access.facts) },
+  }
 }
 
 /**
