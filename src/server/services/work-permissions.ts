@@ -32,6 +32,30 @@ export function canManageDeliverables(facts: WorkPermissionFacts): boolean {
   return facts.isWorkspaceAdmin || facts.isProjectLead
 }
 
+/**
+ * Version submission (FR-020/026). The deliverable's own owner carries the
+ * work, so they send versions of it; the (+ leads) in the plan's permission
+ * row covers admin/lead oversight exactly as deliverable management does.
+ */
+export function canSubmitVersion(
+  facts: WorkPermissionFacts,
+  ownerTeamId: string | null
+): boolean {
+  if (canManageDeliverables(facts)) return true
+  return ownerTeamId !== null && ownerTeamId === facts.viewerTeamId
+}
+
+/**
+ * Review decisions (FR-033). The plan's MVP rule: project lead (+ workspace
+ * admin), and DELIBERATELY NOT the deliverable's own owner — the person who
+ * submits the work cannot also sit as its reviewer. Named separately from
+ * `canManageDeliverables` (which it currently matches) so a later permission
+ * split is a change here, not a hunt.
+ */
+export function canDecideVersion(facts: WorkPermissionFacts): boolean {
+  return facts.isWorkspaceAdmin || facts.isProjectLead
+}
+
 /** The production-status chip. Admin/lead, or the deliverable's own owner. */
 export function canMoveProductionStatus(
   facts: WorkPermissionFacts,

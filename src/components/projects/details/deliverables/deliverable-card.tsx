@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CalendarClockIcon, ChevronDownIcon, MoreHorizontalIcon, UsersIcon } from "lucide-react"
+import { CalendarClockIcon, ChevronDownIcon, ChevronRightIcon, MoreHorizontalIcon, UsersIcon } from "lucide-react"
 import { useState } from "react"
 import { formatDueDate } from "@/lib/time"
 import {
@@ -26,6 +26,7 @@ import {
 import type { AssignableMember } from "@/server/services/project-service"
 import type { DeliverableCard } from "@/server/services/deliverable-service"
 import type { TaskCard } from "@/server/services/task-service"
+import { VersionsSection } from "./versions-section"
 import { TaskComposer } from "./task-composer"
 import { TaskRow } from "./task-row"
 import {
@@ -65,6 +66,7 @@ export function DeliverableCard({
   const [error, setError] = useState<string | null>(null)
   const [ownerOpen, setOwnerOpen] = useState(false)
   const [deadlineOpen, setDeadlineOpen] = useState(false)
+  const [versionsOpen, setVersionsOpen] = useState(false)
 
   const meta = DELIVERABLE_META[deliverable.status]
   const targets = deliverableMoveTargets(deliverable.status)
@@ -219,6 +221,33 @@ export function DeliverableCard({
         <p role="alert" className="mt-2 text-xs text-destructive">
           {error}
         </p>
+      )}
+
+      {/* Versions (FR-021) — a lazy accordion: the timeline fetches only when
+          it is open, while the count rides the already-loaded cards. Latest
+          vs latest-approved live inside the timeline (FR-037). */}
+      <button
+        type="button"
+        onClick={() => setVersionsOpen((current) => !current)}
+        aria-expanded={versionsOpen}
+        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        {versionsOpen ? (
+          <ChevronDownIcon className="size-3.5" />
+        ) : (
+          <ChevronRightIcon className="size-3.5" />
+        )}
+        Versions{deliverable.versionCount > 0 ? ` · ${deliverable.versionCount}` : ""}
+      </button>
+      {versionsOpen && (
+        <div className="mt-2">
+          <VersionsSection
+            workspaceSlug={workspaceSlug}
+            workspaceId={workspaceId}
+            projectId={projectId}
+            deliverableId={deliverable.id}
+          />
+        </div>
       )}
 
       <div className="mt-3 flex flex-col gap-1.5">

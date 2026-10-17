@@ -19,6 +19,7 @@ import {
 import { Link, useParams } from "@tanstack/react-router"
 import { requestBadgeQuery } from "@/lib/queries/requests"
 import { myTasksBadgeQuery } from "@/lib/queries/tasks"
+import { reviewQueueBadgeQuery } from "@/lib/queries/versions"
 import {
   workspaceTeamCountQuery,
   workspacesQuery,
@@ -59,6 +60,11 @@ export function AppShell({
     enabled: !!workspaceSlug,
   })
 
+  const { data: reviewsBadge } = useQuery({
+    ...reviewQueueBadgeQuery(workspaceSlug ?? ""),
+    enabled: !!workspaceSlug,
+  })
+
   useEffect(() => {
     if (!workspaceSlug) return
 
@@ -87,6 +93,7 @@ export function AppShell({
         teamCount={teamCount ?? null}
         requestsBadge={requestsBadge ?? null}
         myTasksBadge={myTasksBadge ?? null}
+        reviewsBadge={reviewsBadge ?? null}
       />
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">

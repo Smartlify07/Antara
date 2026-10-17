@@ -1,5 +1,6 @@
-import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm"
+import { and, desc, eq, inArray, isNotNull, isNull, max, sql } from "drizzle-orm"
 import { db } from "@/db"
+import type { UpdateKind } from "@/db/enums"
 import {
   assetVersions,
   assets,
@@ -9,7 +10,7 @@ import {
   user,
 } from "@/db/schema/index"
 import { requireWorkspaceAccess } from "@/server/services/project-service"
-import type { UpdateKind } from "@/db/enums"
+import { toDeletionQueueEntry } from "./storage-guard"
 
 /**
  * Progress updates: the activity feed and the attachments it carries. Pure DB
@@ -155,7 +156,7 @@ export async function createProjectUpdate(
   kind: UpdateKind,
   attachments: AttachmentInput[]
 ): Promise<{ id: string }> {
-  const [project] = await db
+  const projectRows = await db
     .select({ id: projects.id })
     .from(projects)
     .where(
@@ -167,10 +168,10 @@ export async function createProjectUpdate(
     )
     .limit(1)
 
-  if (!project) throw new Error("Project not found.")
+  if (projectRows.length === 0) throw new Error("Project not found.")
 
   return db.transaction(async (tx) => {
-    const [update] = await tx
+    const updateRows = await tx
       .insert(projectUpdates)
       .values({
         projectId,
@@ -180,10 +181,13 @@ export async function createProjectUpdate(
       })
       .returning({ id: projectUpdates.id })
 
-    if (!update) throw new Error("Could not post the update.")
+    if (updateRows.length === 0) {
+      throw new Error("Could not post the update.")
+    }
+    const updateId = updateRows[0].id
 
     for (const attachment of attachments) {
-      const [existing] = await tx
+      const existingRows = await tx
         .select({ id: assets.id })
         .from(assets)
         .where(
@@ -194,10 +198,12 @@ export async function createProjectUpdate(
         )
         .limit(1)
 
-      let assetId = existing?.id
+      let assetId: string
 
-      if (!assetId) {
-        const [created] = await tx
+      if (existingRows.length > 0) {
+        assetId = existingRows[0].id
+      } else {
+        const createdRows = await tx
           .insert(assets)
           .values({
             projectId,
@@ -205,20 +211,24 @@ export async function createProjectUpdate(
             createdBy: userId,
           })
           .returning({ id: assets.id })
-        if (!created) throw new Error("Could not create the asset.")
-        assetId = created.id
+        if (createdRows.length === 0) {
+          throw new Error("Could not create the asset.")
+        }
+        assetId = createdRows[0].id
       }
 
-      const [highest] = await tx
+      // The aggregate select returns exactly one row; `value` is NULL when
+      // the asset has no versions yet.
+      const highestRows = await tx
         .select({ value: max(assetVersions.versionNo) })
         .from(assetVersions)
         .where(eq(assetVersions.assetId, assetId))
 
-      const versionNo = (highest?.value ?? 0) + 1
+      const versionNo = (highestRows[0].value ?? 0) + 1
 
       await tx.insert(assetVersions).values({
         assetId,
-        updateId: update.id,
+        updateId,
         versionNo,
         label: `v${versionNo}`,
         provider: attachment.provider,
@@ -228,6 +238,22 @@ export async function createProjectUpdate(
         sizeBytes: attachment.sizeBytes,
         uploadedBy: userId,
       })
+
+      // The state machine's rule (workflow-states states it for any new
+      // submission on the asset): earlier versions of THIS file are
+      // superseded — including on the feed, or re-sending keynotes.pdf
+      // would keep its old approval looking live after the workflow has
+      // moved on. Never-submitted drafts (NULL) stay NULL: a replaced
+      // draft had no review state to supersede.
+      await tx
+        .update(assetVersions)
+        .set({ reviewStatus: "superseded" })
+        .where(
+          and(
+            eq(assetVersions.assetId, assetId),
+            isNotNull(assetVersions.reviewStatus)
+          )
+        )
     }
 
     await tx
@@ -238,12 +264,12 @@ export async function createProjectUpdate(
           eq(assets.projectId, projectId),
           inArray(
             assets.id,
-            sql`(select distinct asset_id from asset_versions where update_id = ${update.id})`
+            sql`(select distinct asset_id from asset_versions where update_id = ${updateId})`
           )
         )
       )
 
-    return { id: update.id }
+    return { id: updateId }
   })
 }
 
@@ -251,11 +277,6 @@ export async function createProjectUpdate(
  * Enqueues provider-side deletes for an asset's versions. The bytes are not
  * removed on the request path — the worker in `storage_deletion_queue` does
  * that, so a slow provider cannot fail the user's click.
- *
- * Source guard: only versions whose bytes WE host (`source = 'upload'`) may
- * be enqueued. An external_link version points at a file on someone else's
- * storage; running a delete through that reference would reach into a system
- * Antara does not own. The asset row still goes — the queue is about bytes.
  */
 export async function queueAssetDeletion(
   workspaceId: string,
@@ -279,24 +300,14 @@ export async function queueAssetDeletion(
   if (versions.length === 0) throw new Error("Asset not found.")
 
   await db.transaction(async (tx) => {
-    // Narrowed into a typed list first: the upload-shape check and the insert
-    // need the same predicate, and TS does not carry a two-property filter
-    // narrowing into the map below it.
-    const deletable = versions.filter(
-      (version) =>
-        version.source === "upload" &&
-        version.provider !== null &&
-        version.providerKey !== null
-    )
-    await tx.insert(storageDeletionQueue).values(
-      deletable.map((version) => ({
-        provider: version.provider as "cloudinary" | "aws",
-        providerKey: version.providerKey as string,
-        // The queue keys on the version row (the bytes), though the column
-        // keeps the historical `asset_id` name.
-        assetId: version.id,
-      }))
-    )
+    const entries = versions.flatMap((version) => {
+      const entry = toDeletionQueueEntry(version)
+      return entry ? [entry] : []
+    })
+    if (entries.length > 0) {
+      await tx.insert(storageDeletionQueue).values(entries)
+    }
     await tx.delete(assets).where(eq(assets.id, assetId))
   })
 }
+

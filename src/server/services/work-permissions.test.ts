@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
   assertTaskStatusMove,
+  canDecideVersion,
   canManageDeliverables,
   canMoveProductionStatus,
+  canSubmitVersion,
   canWorkOnTasks,
 } from "./work-permissions"
 import type { WorkPermissionFacts } from "./work-permissions"
@@ -62,6 +64,40 @@ describe("deliverable permission predicates", () => {
     expect(canMoveProductionStatus(facts({ viewerTeamId: null }), null)).toBe(
       false
     )
+  })
+})
+
+describe("version permission predicates", () => {
+  const owned = "team-1"
+
+  it("lets the deliverable's own owner submit versions, plus admin/lead (FR-020)", () => {
+    expect(canSubmitVersion(facts({ viewerTeamId: owned }), owned)).toBe(true)
+    expect(canSubmitVersion(facts({ isProjectLead: true }), owned)).toBe(true)
+    expect(canSubmitVersion(facts({ isWorkspaceAdmin: true }), owned)).toBe(
+      true
+    )
+    // Admins lead even unowned work.
+    expect(canSubmitVersion(facts({ isWorkspaceAdmin: true }), null)).toBe(true)
+  })
+
+  it("refuses co-members of the deliverable", () => {
+    expect(
+      canSubmitVersion(facts({ isProjectMember: true, viewerTeamId: "team-2" }), owned)
+    ).toBe(false)
+    // Owner authority needs an owner; a plain holder of a team id with no
+    // deliverable owner cannot extend it.
+    expect(canSubmitVersion(facts({ viewerTeamId: owned }), null)).toBe(false)
+    expect(canSubmitVersion(facts({}), owned)).toBe(false)
+  })
+
+  it("restricts decisions to project lead + workspace admin (FR-033, MVP rule)", () => {
+    expect(canDecideVersion(facts({ isWorkspaceAdmin: true }))).toBe(true)
+    expect(canDecideVersion(facts({ isProjectLead: true }))).toBe(true)
+    // The submitter is never the reviewer, however involved they are.
+    expect(
+      canDecideVersion(facts({ isProjectMember: true, viewerTeamId: owned }))
+    ).toBe(false)
+    expect(canDecideVersion(facts({}))).toBe(false)
   })
 })
 
