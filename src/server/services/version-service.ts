@@ -39,6 +39,11 @@ import {
   canWorkOnTasks,
 } from "./work-permissions"
 import { getWorkAccess, requireWorkAccess } from "./work-access"
+import {
+  notifyReviewersOfSubmit,
+  notifySubmitterOfDecision,
+  notifySubmitterOfFeedback,
+} from "./notification-service"
 import { assertVersionDecidable, assertVersionReviewTransition } from "./workflow-states"
 import { toDeletionQueueEntry } from "./storage-guard"
 import type {
@@ -196,6 +201,8 @@ async function requireVersionScoped(
   provider: AssetProvider | null
   providerKey: string | null
   ownerId: string | null
+  /** The account behind the submission (asset_versions.uploaded_by). */
+  submitterId: string | null
 }> {
   const rows = await db
     .select({
@@ -205,6 +212,7 @@ async function requireVersionScoped(
       provider: assetVersions.provider,
       providerKey: assetVersions.providerKey,
       ownerId: deliverables.ownerId,
+      submitterId: assetVersions.uploadedBy,
     })
     .from(assetVersions)
     .innerJoin(assets, eq(assetVersions.assetId, assets.id))
@@ -490,6 +498,15 @@ export async function submitForReview(
       "This version's review just changed — refresh and try again."
     )
   }
+
+  // The waiting reviewers' bell (FR-047d): the project's leads plus the
+  // workspace's admins, i.e. exactly the people `canDecideVersion` admits.
+  void notifyReviewersOfSubmit(
+    workspaceId,
+    input.projectId,
+    input.versionId,
+    userId
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +598,16 @@ export async function decideVersion(
       comment: input.comment ?? null,
     })
   })
+
+  // The submitter's bell for the landed decision (FR-047f). The decider is
+  // dropped by the emitter's self-check, and a gone submitter is a no-op.
+  void notifySubmitterOfDecision(
+    workspaceId,
+    input.versionId,
+    version.submitterId,
+    userId,
+    input.decision
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -597,7 +624,11 @@ export async function addVersionFeedback(
   if (!canWorkOnTasks(access.facts)) {
     throw new Error("Only project members can leave feedback on this version.")
   }
-  await requireVersionScoped(workspaceId, input.projectId, input.versionId)
+  const version = await requireVersionScoped(
+    workspaceId,
+    input.projectId,
+    input.versionId
+  )
 
   await db.insert(comments).values({
     workspaceId,
@@ -606,6 +637,15 @@ export async function addVersionFeedback(
     subjectId: input.versionId,
     body: input.body,
   })
+
+  // The submitter's bell for new feedback (FR-047e); the person writing it
+  // never notifies themself.
+  void notifySubmitterOfFeedback(
+    workspaceId,
+    input.versionId,
+    version.submitterId,
+    userId
+  )
 }
 
 export async function listVersionThread(

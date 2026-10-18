@@ -22,6 +22,7 @@ import {
   user,
 } from "@/db/schema/index"
 import * as accessService from "@/server/services/access-service"
+import { notifyProjectMembersAdded } from "@/server/services/notification-service"
 import { resolveTagColor, tagColorFor } from "@/lib/tag-colors"
 import type { ProjectStatus } from "@/db/enums"
 
@@ -465,7 +466,10 @@ export async function createProject(
   slug: string,
   input: CreateProjectInput
 ) {
-  return db.transaction(async (tx) => {
+  // Captured across the commit for the fail-soft member notification below —
+  // the membership rows actually written (FR-047a).
+  let addedMembers: Array<{ userId: string | null; email: string | null }> = []
+  const createdProject = await db.transaction(async (tx) => {
     const [project] = await tx
       .insert(projects)
       .values({
@@ -535,6 +539,10 @@ export async function createProject(
       if (values.length > 0) {
         await tx.insert(projectMembers).values(values)
       }
+      addedMembers = sourceRows.map((row) => ({
+        userId: row.userId,
+        email: row.email,
+      }))
     }
 
     // Tags: reuse by id, create any new labels in the workspace vocabulary.
@@ -570,6 +578,18 @@ export async function createProject(
 
     return project
   })
+
+  // The bell for everyone who just became a member (FR-047a). After commit
+  // and fail-soft: a notification failing must never fail the creation that
+  // already succeeded.
+  void notifyProjectMembersAdded(
+    workspaceId,
+    createdProject.id,
+    input.ownerUserId,
+    addedMembers
+  )
+
+  return createdProject
 }
 
 /**
@@ -794,7 +814,16 @@ export async function addProjectMembers(
     addedBy: userId,
   }))
 
-  await db.insert(projectMembers).values(values).onConflictDoNothing()
+  // Returning is what distinguishes a real add from a re-add that the
+  // partial unique indexes silently swallowed — only rows that landed here
+  // should ring someone's bell (FR-047a).
+  const inserted = await db
+    .insert(projectMembers)
+    .values(values)
+    .onConflictDoNothing()
+    .returning({ userId: projectMembers.userId, email: projectMembers.email })
+
+  void notifyProjectMembersAdded(workspaceId, projectId, userId, inserted)
 }
 
 /**
