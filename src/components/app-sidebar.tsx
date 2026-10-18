@@ -67,7 +67,8 @@ export function AppSidebar({
               !location.pathname.includes("/team") &&
               !location.pathname.includes("/requests") &&
               !location.pathname.includes("/my-tasks") &&
-              !location.pathname.includes("/reviews"),
+              !location.pathname.includes("/reviews") &&
+              !location.pathname.includes("/library"),
           },
           {
             title: "Requests",
@@ -100,6 +101,12 @@ export function AppSidebar({
               ]
             : []),
           {
+            title: "Library",
+            url: `/w/${activeSlug}/library`,
+            icon: <ImagesIcon />,
+            active: location.pathname.startsWith(`/w/${activeSlug}/library`),
+          },
+          {
             title: "Team",
             url: `/w/${activeSlug}/team`,
             icon: <UsersIcon />,
@@ -108,11 +115,6 @@ export function AppSidebar({
           },
         ]
       : []),
-    {
-      title: "Assets",
-      icon: <ImagesIcon />,
-      badge: "Soon",
-    },
   ]
 
   const personalItems = [
@@ -129,9 +131,7 @@ export function AppSidebar({
               myTasksBadge && myTasksBadge.count > 0
                 ? String(myTasksBadge.count)
                 : undefined,
-            active: location.pathname.startsWith(
-              `/w/${activeSlug}/my-tasks`
-            ),
+            active: location.pathname.startsWith(`/w/${activeSlug}/my-tasks`),
           },
         ]
       : []),

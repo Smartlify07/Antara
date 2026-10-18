@@ -15,7 +15,13 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CalendarClockIcon, ChevronDownIcon, ChevronRightIcon, MoreHorizontalIcon, UsersIcon } from "lucide-react"
+import {
+  CalendarClockIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  MoreHorizontalIcon,
+  UsersIcon,
+} from "lucide-react"
 import { useState } from "react"
 import { formatDueDate } from "@/lib/time"
 import {
@@ -29,10 +35,7 @@ import type { TaskCard } from "@/server/services/task-service"
 import { VersionsSection } from "./versions-section"
 import { TaskComposer } from "./task-composer"
 import { TaskRow } from "./task-row"
-import {
-  DELIVERABLE_META,
-  deliverableMoveTargets,
-} from "./deliverable-meta"
+import { DELIVERABLE_META, deliverableMoveTargets } from "./deliverable-meta"
 
 /**
  * One deliverable card (FR-013..017): owner, deadline, production state, and
@@ -225,20 +228,33 @@ export function DeliverableCard({
 
       {/* Versions (FR-021) — a lazy accordion: the timeline fetches only when
           it is open, while the count rides the already-loaded cards. Latest
-          vs latest-approved live inside the timeline (FR-037). */}
-      <button
-        type="button"
-        onClick={() => setVersionsOpen((current) => !current)}
-        aria-expanded={versionsOpen}
-        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        {versionsOpen ? (
-          <ChevronDownIcon className="size-3.5" />
-        ) : (
-          <ChevronRightIcon className="size-3.5" />
-        )}
-        Versions{deliverable.versionCount > 0 ? ` · ${deliverable.versionCount}` : ""}
-      </button>
+          vs latest-approved live inside the timeline (FR-037). The Library
+          link (FR-041) opens this deliverable's files pre-filtered, next to
+          the in-place flow. */}
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setVersionsOpen((current) => !current)}
+          aria-expanded={versionsOpen}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          {versionsOpen ? (
+            <ChevronDownIcon className="size-3.5" />
+          ) : (
+            <ChevronRightIcon className="size-3.5" />
+          )}
+          Versions
+          {deliverable.versionCount > 0 ? ` · ${deliverable.versionCount}` : ""}
+        </button>
+        <Link
+          to="/w/$workspaceSlug/library"
+          params={{ workspaceSlug }}
+          search={{ project: projectId, deliverable: deliverable.id }}
+          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Library
+        </Link>
+      </div>
       {versionsOpen && (
         <div className="mt-2">
           <VersionsSection
@@ -278,8 +294,8 @@ export function DeliverableCard({
           <DialogHeader>
             <DialogTitle>Change owner</DialogTitle>
             <DialogDescription>
-              Owners are workspace members; the person carrying this
-              deadline can move its production status.
+              Owners are workspace members; the person carrying this deadline
+              can move its production status.
             </DialogDescription>
           </DialogHeader>
           <div className="grid max-h-72 gap-1 overflow-y-auto">

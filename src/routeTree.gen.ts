@@ -19,11 +19,14 @@ import { Route as InvitePendingRouteImport } from './routes/invite.pending'
 import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
 import { Route as WorkspacesNewRouteImport } from './routes/workspaces/new'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as WWorkspaceSlugLibraryRouteImport } from './routes/w.$workspaceSlug.library'
 import { Route as WWorkspaceSlugMyTasksRouteImport } from './routes/w.$workspaceSlug.my-tasks'
 import { Route as WWorkspaceSlugProjectsRouteImport } from './routes/w.$workspaceSlug.projects'
 import { Route as WWorkspaceSlugRequestsRouteImport } from './routes/w.$workspaceSlug.requests'
 import { Route as WWorkspaceSlugReviewsRouteImport } from './routes/w.$workspaceSlug.reviews'
 import { Route as WWorkspaceSlugTeamRouteImport } from './routes/w.$workspaceSlug.team'
+import { Route as WWorkspaceSlugLibraryIndexRouteImport } from './routes/w.$workspaceSlug.library.index'
+import { Route as WWorkspaceSlugLibraryAssetIdRouteImport } from './routes/w.$workspaceSlug.library.$assetId'
 import { Route as WWorkspaceSlugProjectsIndexRouteImport } from './routes/w.$workspaceSlug.projects.index'
 import { Route as WWorkspaceSlugProjectsProjectSlugRouteImport } from './routes/w.$workspaceSlug.projects.$projectSlug'
 import { Route as WWorkspaceSlugProjectsNewRouteImport } from './routes/w.$workspaceSlug.projects.new'
@@ -80,6 +83,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WWorkspaceSlugLibraryRoute = WWorkspaceSlugLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => WWorkspaceSlugRoute,
+} as any)
 const WWorkspaceSlugMyTasksRoute = WWorkspaceSlugMyTasksRouteImport.update({
   id: '/my-tasks',
   path: '/my-tasks',
@@ -105,6 +113,18 @@ const WWorkspaceSlugTeamRoute = WWorkspaceSlugTeamRouteImport.update({
   path: '/team',
   getParentRoute: () => WWorkspaceSlugRoute,
 } as any)
+const WWorkspaceSlugLibraryIndexRoute =
+  WWorkspaceSlugLibraryIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => WWorkspaceSlugLibraryRoute,
+  } as any)
+const WWorkspaceSlugLibraryAssetIdRoute =
+  WWorkspaceSlugLibraryAssetIdRouteImport.update({
+    id: '/$assetId',
+    path: '/$assetId',
+    getParentRoute: () => WWorkspaceSlugLibraryRoute,
+  } as any)
 const WWorkspaceSlugProjectsIndexRoute =
   WWorkspaceSlugProjectsIndexRouteImport.update({
     id: '/',
@@ -147,14 +167,17 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/w/$workspaceSlug/library': typeof WWorkspaceSlugLibraryRouteWithChildren
   '/w/$workspaceSlug/my-tasks': typeof WWorkspaceSlugMyTasksRoute
   '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRouteWithChildren
   '/w/$workspaceSlug/requests': typeof WWorkspaceSlugRequestsRouteWithChildren
   '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
+  '/w/$workspaceSlug/library/$assetId': typeof WWorkspaceSlugLibraryAssetIdRoute
   '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
   '/w/$workspaceSlug/requests/$requestId': typeof WWorkspaceSlugRequestsRequestIdRoute
+  '/w/$workspaceSlug/library/': typeof WWorkspaceSlugLibraryIndexRoute
   '/w/$workspaceSlug/projects/': typeof WWorkspaceSlugProjectsIndexRoute
   '/w/$workspaceSlug/requests/': typeof WWorkspaceSlugRequestsIndexRoute
 }
@@ -172,9 +195,11 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug/my-tasks': typeof WWorkspaceSlugMyTasksRoute
   '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
+  '/w/$workspaceSlug/library/$assetId': typeof WWorkspaceSlugLibraryAssetIdRoute
   '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
   '/w/$workspaceSlug/requests/$requestId': typeof WWorkspaceSlugRequestsRequestIdRoute
+  '/w/$workspaceSlug/library': typeof WWorkspaceSlugLibraryIndexRoute
   '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsIndexRoute
   '/w/$workspaceSlug/requests': typeof WWorkspaceSlugRequestsIndexRoute
 }
@@ -190,14 +215,17 @@ export interface FileRoutesById {
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
   '/workspaces/new': typeof WorkspacesNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/w/$workspaceSlug/library': typeof WWorkspaceSlugLibraryRouteWithChildren
   '/w/$workspaceSlug/my-tasks': typeof WWorkspaceSlugMyTasksRoute
   '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsRouteWithChildren
   '/w/$workspaceSlug/requests': typeof WWorkspaceSlugRequestsRouteWithChildren
   '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
+  '/w/$workspaceSlug/library/$assetId': typeof WWorkspaceSlugLibraryAssetIdRoute
   '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
   '/w/$workspaceSlug/requests/$requestId': typeof WWorkspaceSlugRequestsRequestIdRoute
+  '/w/$workspaceSlug/library/': typeof WWorkspaceSlugLibraryIndexRoute
   '/w/$workspaceSlug/projects/': typeof WWorkspaceSlugProjectsIndexRoute
   '/w/$workspaceSlug/requests/': typeof WWorkspaceSlugRequestsIndexRoute
 }
@@ -214,14 +242,17 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
+    | '/w/$workspaceSlug/library'
     | '/w/$workspaceSlug/my-tasks'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/requests'
     | '/w/$workspaceSlug/reviews'
     | '/w/$workspaceSlug/team'
+    | '/w/$workspaceSlug/library/$assetId'
     | '/w/$workspaceSlug/projects/$projectSlug'
     | '/w/$workspaceSlug/projects/new'
     | '/w/$workspaceSlug/requests/$requestId'
+    | '/w/$workspaceSlug/library/'
     | '/w/$workspaceSlug/projects/'
     | '/w/$workspaceSlug/requests/'
   fileRoutesByTo: FileRoutesByTo
@@ -239,9 +270,11 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/my-tasks'
     | '/w/$workspaceSlug/reviews'
     | '/w/$workspaceSlug/team'
+    | '/w/$workspaceSlug/library/$assetId'
     | '/w/$workspaceSlug/projects/$projectSlug'
     | '/w/$workspaceSlug/projects/new'
     | '/w/$workspaceSlug/requests/$requestId'
+    | '/w/$workspaceSlug/library'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/requests'
   id:
@@ -256,14 +289,17 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug'
     | '/workspaces/new'
     | '/api/auth/$'
+    | '/w/$workspaceSlug/library'
     | '/w/$workspaceSlug/my-tasks'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/requests'
     | '/w/$workspaceSlug/reviews'
     | '/w/$workspaceSlug/team'
+    | '/w/$workspaceSlug/library/$assetId'
     | '/w/$workspaceSlug/projects/$projectSlug'
     | '/w/$workspaceSlug/projects/new'
     | '/w/$workspaceSlug/requests/$requestId'
+    | '/w/$workspaceSlug/library/'
     | '/w/$workspaceSlug/projects/'
     | '/w/$workspaceSlug/requests/'
   fileRoutesById: FileRoutesById
@@ -353,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/w/$workspaceSlug/library': {
+      id: '/w/$workspaceSlug/library'
+      path: '/library'
+      fullPath: '/w/$workspaceSlug/library'
+      preLoaderRoute: typeof WWorkspaceSlugLibraryRouteImport
+      parentRoute: typeof WWorkspaceSlugRoute
+    }
     '/w/$workspaceSlug/my-tasks': {
       id: '/w/$workspaceSlug/my-tasks'
       path: '/my-tasks'
@@ -387,6 +430,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/w/$workspaceSlug/team'
       preLoaderRoute: typeof WWorkspaceSlugTeamRouteImport
       parentRoute: typeof WWorkspaceSlugRoute
+    }
+    '/w/$workspaceSlug/library/': {
+      id: '/w/$workspaceSlug/library/'
+      path: '/'
+      fullPath: '/w/$workspaceSlug/library/'
+      preLoaderRoute: typeof WWorkspaceSlugLibraryIndexRouteImport
+      parentRoute: typeof WWorkspaceSlugLibraryRoute
+    }
+    '/w/$workspaceSlug/library/$assetId': {
+      id: '/w/$workspaceSlug/library/$assetId'
+      path: '/$assetId'
+      fullPath: '/w/$workspaceSlug/library/$assetId'
+      preLoaderRoute: typeof WWorkspaceSlugLibraryAssetIdRouteImport
+      parentRoute: typeof WWorkspaceSlugLibraryRoute
     }
     '/w/$workspaceSlug/projects/': {
       id: '/w/$workspaceSlug/projects/'
@@ -426,6 +483,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface WWorkspaceSlugLibraryRouteChildren {
+  WWorkspaceSlugLibraryAssetIdRoute: typeof WWorkspaceSlugLibraryAssetIdRoute
+  WWorkspaceSlugLibraryIndexRoute: typeof WWorkspaceSlugLibraryIndexRoute
+}
+
+const WWorkspaceSlugLibraryRouteChildren: WWorkspaceSlugLibraryRouteChildren = {
+  WWorkspaceSlugLibraryAssetIdRoute: WWorkspaceSlugLibraryAssetIdRoute,
+  WWorkspaceSlugLibraryIndexRoute: WWorkspaceSlugLibraryIndexRoute,
+}
+
+const WWorkspaceSlugLibraryRouteWithChildren =
+  WWorkspaceSlugLibraryRoute._addFileChildren(
+    WWorkspaceSlugLibraryRouteChildren,
+  )
+
 interface WWorkspaceSlugProjectsRouteChildren {
   WWorkspaceSlugProjectsProjectSlugRoute: typeof WWorkspaceSlugProjectsProjectSlugRoute
   WWorkspaceSlugProjectsNewRoute: typeof WWorkspaceSlugProjectsNewRoute
@@ -462,6 +534,7 @@ const WWorkspaceSlugRequestsRouteWithChildren =
   )
 
 interface WWorkspaceSlugRouteChildren {
+  WWorkspaceSlugLibraryRoute: typeof WWorkspaceSlugLibraryRouteWithChildren
   WWorkspaceSlugMyTasksRoute: typeof WWorkspaceSlugMyTasksRoute
   WWorkspaceSlugProjectsRoute: typeof WWorkspaceSlugProjectsRouteWithChildren
   WWorkspaceSlugRequestsRoute: typeof WWorkspaceSlugRequestsRouteWithChildren
@@ -470,6 +543,7 @@ interface WWorkspaceSlugRouteChildren {
 }
 
 const WWorkspaceSlugRouteChildren: WWorkspaceSlugRouteChildren = {
+  WWorkspaceSlugLibraryRoute: WWorkspaceSlugLibraryRouteWithChildren,
   WWorkspaceSlugMyTasksRoute: WWorkspaceSlugMyTasksRoute,
   WWorkspaceSlugProjectsRoute: WWorkspaceSlugProjectsRouteWithChildren,
   WWorkspaceSlugRequestsRoute: WWorkspaceSlugRequestsRouteWithChildren,
