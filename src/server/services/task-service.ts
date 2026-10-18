@@ -11,6 +11,7 @@ import type {
   SetTaskAssigneesInput,
 } from "@/lib/task-schemas"
 import { assertTaskStatusMove, canWorkOnTasks } from "./work-permissions"
+import { notifyTaskAssignees } from "./notification-service"
 import { requireWorkAccess } from "./work-access"
 
 /**
@@ -257,7 +258,7 @@ export async function createTask(
     input.assigneeTeamIds ?? []
   )
 
-  return db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     const createdRows = await tx
       .insert(tasks)
       .values({
@@ -283,6 +284,18 @@ export async function createTask(
     }
     return { id: createdRows[0].id }
   })
+
+  // The new work rings its assignees' bells (FR-047c) — after the commit,
+  // fail-soft, and never to the creator themself.
+  void notifyTaskAssignees(
+    workspaceId,
+    input.projectId,
+    created.id,
+    userId,
+    memberIds
+  )
+
+  return created
 }
 
 async function requireTask(
@@ -371,6 +384,19 @@ export async function setTaskAssignees(
     input.assigneeTeamIds
   )
 
+  // Only the members who BECOME assignees here should ring a bell — re-
+  // setting the same list through the chip is not news (FR-047c).
+  const previousRows = await db
+    .select({ projectMemberId: taskAssignees.projectMemberId })
+    .from(taskAssignees)
+    .where(eq(taskAssignees.taskId, input.taskId))
+  const previousMemberIds = new Set(
+    previousRows.map((row) => row.projectMemberId)
+  )
+  const addedMemberIds = memberIds.filter(
+    (memberId) => !previousMemberIds.has(memberId)
+  )
+
   await db.transaction(async (tx) => {
     await tx
       .delete(taskAssignees)
@@ -384,6 +410,16 @@ export async function setTaskAssignees(
       )
     }
   })
+
+  if (addedMemberIds.length > 0) {
+    void notifyTaskAssignees(
+      workspaceId,
+      input.projectId,
+      input.taskId,
+      userId,
+      addedMemberIds
+    )
+  }
 }
 
 export async function setTaskDueDate(

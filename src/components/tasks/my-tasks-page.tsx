@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { SquareCheckBigIcon } from "lucide-react"
 import { myTasksQuery, taskKeys } from "@/lib/queries/tasks"
 import { TaskRow } from "@/components/projects/details/deliverables/task-row"
+import { cn } from "@/lib/utils"
 
 /**
  * "My tasks" (FR-052, FR-054): the viewer's open assigned work across the
@@ -16,13 +18,30 @@ import { TaskRow } from "@/components/projects/details/deliverables/task-row"
 export function MyTasksPage({
   workspaceSlug,
   workspaceId,
+  focusTaskId,
 }: {
   workspaceSlug: string
   workspaceId: string
+  /** Set by a notification deep-link: land with that task in view. */
+  focusTaskId?: string | undefined
 }) {
   const { data, isPending } = useQuery(myTasksQuery(workspaceId))
   const queryClient = useQueryClient()
   const tasks = data?.tasks ?? []
+  // The subject highlight is brief and self-clearing: enough to land the eye
+  // on the row a notification pointed at, without leaving decoration behind.
+  const [highlightedId, setHighlightedId] = useState<string | null>(
+    focusTaskId ?? null
+  )
+
+  useEffect(() => {
+    if (!focusTaskId || isPending) return
+    document
+      .getElementById(`task-row-${focusTaskId}`)
+      ?.scrollIntoView({ block: "center" })
+    const timer = window.setTimeout(() => setHighlightedId(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [focusTaskId, isPending, tasks.length])
 
   function refresh() {
     void queryClient.invalidateQueries({
@@ -69,16 +88,25 @@ export function MyTasksPage({
       ) : (
         <div className="flex flex-col gap-2">
           {tasks.map((task) => (
-            <TaskRow
+            <div
               key={task.id}
-              workspaceSlug={workspaceSlug}
-              workspaceId={workspaceId}
-              task={{ ...task, deliverableLabel: task.deliverableTitle }}
-              projectTitle={task.projectTitle}
-              projectSlug={task.projectSlug}
-              canWork
-              onChanged={refresh}
-            />
+              id={`task-row-${task.id}`}
+              className={cn(
+                "rounded-lg transition-shadow duration-300",
+                highlightedId === task.id &&
+                  "ring-2 ring-ring/60 ring-offset-2 ring-offset-background"
+              )}
+            >
+              <TaskRow
+                workspaceSlug={workspaceSlug}
+                workspaceId={workspaceId}
+                task={{ ...task, deliverableLabel: task.deliverableTitle }}
+                projectTitle={task.projectTitle}
+                projectSlug={task.projectSlug}
+                canWork
+                onChanged={refresh}
+              />
+            </div>
           ))}
         </div>
       )}

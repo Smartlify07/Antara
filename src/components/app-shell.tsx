@@ -17,6 +17,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Link, useParams } from "@tanstack/react-router"
+import { NotificationsBell } from "@/components/notifications/notification-bell"
 import { requestBadgeQuery } from "@/lib/queries/requests"
 import { myTasksBadgeQuery } from "@/lib/queries/tasks"
 import { reviewQueueBadgeQuery } from "@/lib/queries/versions"
@@ -126,6 +127,13 @@ export function AppShell({
               })}
             </BreadcrumbList>
           </Breadcrumb>
+          {/* The bell is shell furniture, and only means something inside a
+              workspace — its badge and inbox are scoped to the slug. */}
+          {workspaceSlug && (
+            <div className="ml-auto">
+              <NotificationsBell workspaceSlug={workspaceSlug} />
+            </div>
+          )}
         </header>
         <div className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-4 py-4 sm:py-6">
           {children}

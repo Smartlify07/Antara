@@ -13,6 +13,7 @@ import type {
 } from "@/lib/deliverable-schemas"
 import type { DeliverableStatus } from "@/db/enums"
 import { assertDeliverableTransition } from "./workflow-states"
+import { notifyDeliverableOwnerAssigned } from "./notification-service"
 import {
   canManageDeliverables,
   canMoveProductionStatus,
@@ -230,6 +231,18 @@ export async function createDeliverable(
     })
     .returning({ id: deliverables.id })
   if (createdRows.length === 0) throw new Error("Could not create the deliverable.")
+
+  // The owner hears about the work they now carry (FR-047b); fail-soft, so
+  // the card's creation never depends on the bell.
+  if (input.ownerId) {
+    void notifyDeliverableOwnerAssigned(
+      workspaceId,
+      input.projectId,
+      createdRows[0].id,
+      userId,
+      input.ownerId
+    )
+  }
   return { id: createdRows[0].id }
 }
 
@@ -289,6 +302,18 @@ export async function setDeliverableOwner(
     .update(deliverables)
     .set({ ownerId: input.ownerId, updatedAt: new Date() })
     .where(eq(deliverables.id, input.deliverableId))
+
+  // The reassignment rings the new owner's bell (FR-047b) — clearing an
+  // owner is not news for anyone, so `input.ownerId` doubles as the gate.
+  if (input.ownerId) {
+    void notifyDeliverableOwnerAssigned(
+      workspaceId,
+      input.projectId,
+      input.deliverableId,
+      userId,
+      input.ownerId
+    )
+  }
 }
 
 export async function setDeliverableDeadline(
