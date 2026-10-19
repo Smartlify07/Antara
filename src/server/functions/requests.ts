@@ -83,6 +83,13 @@ export const submitRequestFn = createServerFn({ method: "POST" })
     return { id }
   })
 
+export const listRequestCategoriesFn = createServerFn({ method: "GET" })
+  .validator(z.object({ workspaceId: z.string() }))
+  .handler(async ({ data }) => {
+    await resolveWorkspaceId(data.workspaceId)
+    return requestService.listRequestCategories(data.workspaceId)
+  })
+
 export const requestThreadPostFn = createServerFn({ method: "POST" })
   .validator(requestMessageSchema)
   .handler(async ({ data }) => {

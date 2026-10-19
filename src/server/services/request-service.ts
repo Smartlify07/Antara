@@ -1,4 +1,13 @@
-import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm"
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+} from "drizzle-orm"
 import { db } from "@/db"
 import type {
   ProjectStatus,
@@ -147,6 +156,26 @@ export async function getRequest(
   requestId: string
 ): Promise<RequestListItem | null> {
   return loadRequestCard(workspaceId, requestId)
+}
+
+/**
+ * Distinct non-empty categories already in use in this workspace, for the
+ * intake form's category pill — suggestions only; the field stays free text.
+ */
+export async function listRequestCategories(
+  workspaceId: string
+): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ category: requests.category })
+    .from(requests)
+    .where(
+      and(eq(requests.workspaceId, workspaceId), isNotNull(requests.category))
+    )
+    .orderBy(asc(requests.category))
+    .limit(50)
+  return rows
+    .map((row) => row.category?.trim())
+    .filter((category): category is string => Boolean(category?.length))
 }
 
 export interface RequestThreadMessage {
