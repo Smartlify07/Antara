@@ -85,7 +85,8 @@ export function RequestThread({
       // the post was in flight — including other people's messages.
       queryClient.setQueryData<RequestThreadMessage[]>(
         threadKey,
-        (current = []) => current.filter((row) => row.id !== context?.optimisticId)
+        (current = []) =>
+          current.filter((row) => row.id !== context?.optimisticId)
       )
       setServerError("Could not post the message.")
     },

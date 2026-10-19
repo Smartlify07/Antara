@@ -70,7 +70,7 @@ export function RequestCard({
         </span>
 
         <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+          <div className="flex max-w-[60%] min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
             {request.priority && (
               <span className="inline-flex items-center gap-1 capitalize">
                 <FlagIcon aria-hidden className="size-3.5 shrink-0" />
