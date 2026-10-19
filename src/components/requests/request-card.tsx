@@ -1,9 +1,5 @@
 import {
   CalendarIcon,
-  CircleCheckIcon,
-  CircleHelpIcon,
-  CircleIcon,
-  CircleXIcon,
   FlagIcon,
   InboxIcon,
   MessageSquareIcon,
@@ -18,17 +14,14 @@ import type { RequestListItem } from "@/server/services/request-service"
 import type { RequestTriageStatus } from "@/db/enums"
 
 /**
- * State icon + icon tint for the meta row. Labels stay plain muted text —
- * the icon carries the state the way Linear's issue icons do.
+ * Status dot fills, one per triage state — a filled dot carrying the state
+ * (Linear-style), never an outline glyph.
  */
-const STATE_META: Record<
-  RequestTriageStatus,
-  { Icon: typeof CircleIcon; iconClass: string }
-> = {
-  open: { Icon: CircleIcon, iconClass: "text-sky-600" },
-  needs_info: { Icon: CircleHelpIcon, iconClass: "text-amber-600" },
-  accepted: { Icon: CircleCheckIcon, iconClass: "text-emerald-600" },
-  declined: { Icon: CircleXIcon, iconClass: "text-muted-foreground" },
+const STATE_META: Record<RequestTriageStatus, { dotClass: string }> = {
+  open: { dotClass: "bg-sky-500" },
+  needs_info: { dotClass: "bg-amber-500" },
+  accepted: { dotClass: "bg-emerald-600" },
+  declined: { dotClass: "bg-foreground/30" },
 }
 
 function initials(name: string | null): string {
@@ -99,10 +92,10 @@ export function RequestCard({
                 {request.priority}
               </span>
             )}
-            <span className="inline-flex items-center gap-1">
-              <state.Icon
+            <span className="inline-flex items-center gap-1.5">
+              <span
                 aria-hidden
-                className={`size-3.5 shrink-0 ${state.iconClass}`}
+                className={`inline-block size-2 shrink-0 rounded-full ${state.dotClass}`}
               />
               {REQUEST_META[request.triageStatus].label}
             </span>
