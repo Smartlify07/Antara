@@ -73,13 +73,11 @@ export function RequestDetailDialog({
                     {meta?.label}
                   </span>
                   {request.priority && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <FlagIcon aria-hidden className="size-3.5 shrink-0" />
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium capitalize ${PRIORITY_BADGE[request.priority]}`}
-                      >
-                        {request.priority}
-                      </span>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium capitalize ${PRIORITY_BADGE[request.priority]}`}
+                    >
+                      <FlagIcon aria-hidden className="size-3 shrink-0" />
+                      {request.priority}
                     </span>
                   )}
                   {request.category && (
