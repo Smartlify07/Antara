@@ -1,15 +1,21 @@
 import { Link } from "@tanstack/react-router"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDownIcon } from "lucide-react"
+import { CheckIcon, ChevronDownIcon, UserPlusIcon } from "lucide-react"
+import { useState } from "react"
 import { formatDueDate } from "@/lib/time"
-import { moveTaskStatusFn } from "@/server/functions/tasks"
+import { taskKeys } from "@/lib/queries/tasks"
+import type { ProjectTasksCache } from "@/lib/queries/tasks"
+import { moveTaskStatusFn, setTaskAssigneesFn } from "@/server/functions/tasks"
 import type { TaskStatus, TaskPriority } from "@/db/enums"
 import type { TaskAssigneeRef } from "@/server/services/task-service"
+import type { AssignableMember } from "@/server/services/project-service"
 import {
   TASK_PRIORITY_META,
   TASK_STATUS_META,
@@ -49,6 +55,7 @@ export function TaskRow({
   task,
   projectTitle,
   projectSlug,
+  members,
   canWork,
   onChanged,
 }: {
@@ -58,12 +65,32 @@ export function TaskRow({
   /** Shown as a chip when the row renders outside its project (My tasks). */
   projectTitle?: string
   projectSlug?: string
+  /**
+   * The project's member pool. Only the project surfaces have it — on "My
+   * tasks" the row falls back to the static faces with no control.
+   */
+  members?: AssignableMember[]
   canWork: boolean
   onChanged: () => void
 }) {
+  const client = useQueryClient()
+  const [assignError, setAssignError] = useState<string | null>(null)
+
   const status = TASK_STATUS_META[task.status]
   const priority = TASK_PRIORITY_META[task.priority]
   const targets = taskMoveTargets(task.status)
+
+  // The create-composer writes newly created tasks into this same cache with
+  // ids prefixed `optimistic-` while the server side of the round trip is
+  // still running. Such a row does not exist on the server yet, so a status
+  // move or an assign against that id would 404; until the settle refetch
+  // swaps in the real row, both controls render their non-editable static
+  // state (the assignees the placeholder carries still render normally).
+  const isOptimistic = task.id.startsWith("optimistic-")
+  const canMove = canWork && !isOptimistic
+  const canAssign = canMove && members !== undefined
+
+  const tasksKey = taskKeys.byProject(task.projectId)
 
   async function move(target: (typeof targets)[number]) {
     try {
@@ -83,10 +110,117 @@ export function TaskRow({
     }
   }
 
+  /**
+   * Whole-set assigner, mirroring the server fn + TaskComposer's single
+   * assignee: `[teamId]` assigns one person, `[]` clears the task.
+   */
+  const assign = useMutation({
+    mutationFn: (assigneeTeamIds: string[]) =>
+      setTaskAssigneesFn({
+        data: {
+          workspaceId,
+          projectId: task.projectId,
+          taskId: task.id,
+          assigneeTeamIds,
+        },
+      }),
+    onMutate: async (assigneeTeamIds) => {
+      setAssignError(null)
+      await client.cancelQueries({ queryKey: tasksKey })
+      const current = client.getQueryData<ProjectTasksCache>(tasksKey)
+      const currentRow = current?.tasks.find((row) => row.id === task.id)
+
+      // Row not in the cache (or the surface not mounted with one): skip the
+      // patch but still send the request — the settle refetch repaints.
+      if (!current || !currentRow) {
+        return { assignees: null, row: null }
+      }
+
+      // Optimistic refs resolve team ids through the member pool, so the
+      // faces swap instantly. The refs use the team id as a stand-in
+      // identity until the refetch stamps the real `project_members` id —
+      // they only need to render and key. Unknown ids are skipped: the
+      // server refuses half-resolvable sets, and the settle refetch says so.
+      const nextAssignees: TaskAssigneeRef[] = assigneeTeamIds.flatMap(
+        (teamId) => {
+          const person = members?.find((member) => member.teamId === teamId)
+          if (!person) return []
+          return [
+            {
+              projectMemberId: person.teamId,
+              name: person.name,
+              email: person.email,
+              image: person.image,
+            },
+          ]
+        }
+      )
+
+      // Map-by-id so only this row moves — the rest of the cached list,
+      // including the create-composer's optimistic rows, stays as it is.
+      client.setQueryData<ProjectTasksCache>(tasksKey, {
+        ...current,
+        tasks: current.tasks.map((row) =>
+          row.id === task.id ? { ...row, assignees: nextAssignees } : row
+        ),
+      })
+
+      // Snapshot only what this write can break: the row's previous
+      // assignees (the row itself carried defensively), not the whole list.
+      return { assignees: currentRow.assignees, row: currentRow }
+    },
+    onError: (caught, _variables, context) => {
+      // Restore only this row's assignees, never the full-list snapshot that
+      // onMutate saw: would also revert every assign change that landed in
+      // the cache while this request was in flight — including other
+      // people's. Same surgical rollback the update composer applies.
+      const previous = context?.assignees
+      if (previous) {
+        client.setQueryData<ProjectTasksCache>(tasksKey, (current) => {
+          if (!current) return current
+          return {
+            ...current,
+            tasks: current.tasks.map((row) =>
+              row.id === task.id ? { ...row, assignees: previous } : row
+            ),
+          }
+        })
+      }
+      setAssignError(
+        caught instanceof Error ? caught.message : "Could not update assignees."
+      )
+    },
+    onSettled: () => {
+      // The parent repaints the project lists; assignment also moves the
+      // viewer in and out of "my tasks", so the server-derived badge and
+      // page counts follow the write.
+      onChanged()
+      void client.invalidateQueries({ queryKey: taskKeys.badge(workspaceSlug) })
+      void client.invalidateQueries({ queryKey: taskKeys.mine(workspaceId) })
+    },
+  })
+
+  const assignees = task.assignees ?? []
+  const assigneeLabel = assignees
+    .map((assignee) => assignee.name ?? assignee.email ?? "Member")
+    .join(" and ")
+
+  // Best-effort "who is marked assigned" per picker row: fresh from the
+  // optimistic patch the ref carries the team id; server-fetched refs carry
+  // the membership id, where a shared email is the closest identity the two
+  // id spaces have.
+  function isAssigned(member: AssignableMember) {
+    return assignees.some(
+      (assignee) =>
+        assignee.projectMemberId === member.teamId ||
+        (assignee.email !== null && assignee.email === member.email)
+    )
+  }
+
   return (
     <div className="flex flex-col gap-1 rounded-md border bg-background/60 px-2.5 py-2">
       <div className="flex flex-wrap items-center gap-2">
-        {canWork ? (
+        {canMove ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -165,7 +299,74 @@ export function TaskRow({
             </Link>
           )}
 
-          {(task.assignees?.length ?? 0) > 0 && (
+          {canAssign ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 py-0.5 hover:opacity-80"
+                  aria-label={
+                    assigneeLabel
+                      ? `Assignees: ${assigneeLabel}. Change assignees.`
+                      : "Assign someone"
+                  }
+                >
+                  {assignees.length > 0 ? (
+                    <span aria-hidden className="flex -space-x-1.5">
+                      {assignees.map((assignee) => (
+                        <span
+                          key={assignee.projectMemberId}
+                          title={assignee.name ?? assignee.email ?? "Member"}
+                          className="flex size-5 items-center justify-center rounded-full border bg-muted text-[10px] font-medium"
+                        >
+                          {(assignee.name?.trim()[0] ?? "?").toUpperCase()}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="flex size-5 items-center justify-center rounded-full border bg-muted"
+                    >
+                      <UserPlusIcon className="size-3" />
+                    </span>
+                  )}
+                  <ChevronDownIcon className="size-3 opacity-70" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {members.map((member) => {
+                  const assigned = isAssigned(member)
+                  return (
+                    <DropdownMenuItem
+                      key={member.teamId}
+                      disabled={assigned}
+                      onClick={() => assign.mutate([member.teamId])}
+                    >
+                      <CheckIcon
+                        aria-hidden
+                        className={assigned ? "size-3" : "invisible size-3"}
+                      />
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                        {(member.name?.trim()[0] ?? "?").toUpperCase()}
+                      </span>
+                      <span className="truncate">
+                        {member.name ?? member.email ?? "Member"}
+                      </span>
+                    </DropdownMenuItem>
+                  )
+                })}
+                {assignees.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => assign.mutate([])}>
+                      Unassign
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (task.assignees?.length ?? 0) > 0 ? (
             <span className="flex -space-x-1.5" aria-label="Assignees">
               {task.assignees?.map((assignee) => (
                 <span
@@ -177,13 +378,19 @@ export function TaskRow({
                 </span>
               ))}
             </span>
-          )}
+          ) : undefined}
         </div>
       </div>
 
       {task.description && (
         <p className="line-clamp-1 text-xs text-muted-foreground">
           {task.description}
+        </p>
+      )}
+
+      {assignError && (
+        <p role="alert" className="text-xs text-destructive">
+          {assignError}
         </p>
       )}
     </div>

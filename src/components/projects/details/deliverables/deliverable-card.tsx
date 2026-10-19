@@ -273,6 +273,7 @@ export function DeliverableCard({
             workspaceSlug={workspaceSlug}
             workspaceId={workspaceId}
             task={task}
+            members={members}
             canWork={canWork}
             onChanged={onChanged}
           />
