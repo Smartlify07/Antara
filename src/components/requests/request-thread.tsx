@@ -48,25 +48,6 @@ export function RequestThread({
     },
   })
 
-  if (isPending) {
-    return (
-      <div className="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">
-        Loading the thread…
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div
-        role="alert"
-        className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive"
-      >
-        {error instanceof Error ? error.message : "Could not load the thread."}
-      </div>
-    )
-  }
-
   return (
     <section className="rounded-xl bg-muted/40">
       <h2 className="px-4 pt-3 pb-1 text-sm font-medium tracking-tight">
@@ -74,14 +55,25 @@ export function RequestThread({
       </h2>
 
       <div className="flex flex-col">
-        {messages.length === 0 && (
+        {isPending ? (
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            Loading messages…
+          </p>
+        ) : error ? (
+          <div role="alert" className="px-4 py-3 text-sm text-destructive">
+            {error instanceof Error
+              ? error.message
+              : "Could not load the thread."}
+          </div>
+        ) : messages.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
             No messages yet. Questions and answers about this request live here.
           </p>
+        ) : (
+          messages.map((message) => (
+            <MessageRow key={message.id} message={message} />
+          ))
         )}
-        {messages.map((message) => (
-          <MessageRow key={message.id} message={message} />
-        ))}
       </div>
 
       <form

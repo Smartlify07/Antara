@@ -57,9 +57,6 @@ export function RequestTriageBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/40 p-3">
-      <span className="mr-auto text-sm text-muted-foreground">
-        Triage this request:
-      </span>
       <AcceptDialog workspaceId={workspaceId} requestId={requestId} />
       <NeedsInfoDialog workspaceId={workspaceId} requestId={requestId} />
       <DeclineDialog workspaceId={workspaceId} requestId={requestId} />
