@@ -59,7 +59,7 @@ export function RequestDetailDialog({
       }}
     >
       <DialogContent className="flex max-h-[85vh] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl lg:max-w-4xl">
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-0">
           {request ? (
             <>
               <DialogTitle className="font-heading text-xl leading-snug font-medium">
@@ -183,6 +183,7 @@ export function RequestDetailDialog({
                 <RequestThread
                   workspaceId={workspaceId}
                   requestId={request.id}
+                  flush
                 />
               </div>
             </>

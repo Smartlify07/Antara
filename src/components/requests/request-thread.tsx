@@ -3,6 +3,7 @@ import { Loader2Icon, SendIcon } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/time"
 import { requestKeys, requestThreadQuery } from "@/lib/queries/requests"
 import { requestThreadPostFn } from "@/server/functions/requests"
@@ -18,9 +19,16 @@ import type { RequestThreadMessage } from "@/server/services/request-service"
 export function RequestThread({
   workspaceId,
   requestId,
+  flush = false,
 }: {
   workspaceId: string
   requestId: string
+  /**
+   * Flush bottom: squares off the panel's bottom corners so it sits flush
+   * against the end of its container (the dialog clips the rounded edge).
+   * The standalone route keeps the fully rounded panel.
+   */
+  flush?: boolean
 }) {
   const queryClient = useQueryClient()
   const [body, setBody] = useState("")
@@ -49,7 +57,12 @@ export function RequestThread({
   })
 
   return (
-    <section className="rounded-xl bg-muted/40">
+    <section
+      className={cn(
+        "bg-muted/40",
+        flush ? "rounded-t-xl rounded-b-none" : "rounded-xl"
+      )}
+    >
       <h2 className="px-4 pt-3 text-sm font-medium tracking-tight">
         Brief thread
       </h2>
@@ -77,40 +90,43 @@ export function RequestThread({
       </div>
 
       <form
-        className="flex items-end gap-2 p-3"
+        className="p-3"
         onSubmit={(event) => {
           event.preventDefault()
           if (body.trim().length > 0) post.mutate()
         }}
       >
-        <Textarea
-          aria-label="Write a message"
-          rows={2}
-          className="min-h-11"
-          placeholder="Ask or answer something…"
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          onKeyDown={(event) => {
-            // Enter sends; Shift+Enter keeps the line. Deliberate for a
-            // chat-shaped surface, unlike the multi-paragraph brief form.
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault()
-              if (body.trim().length > 0) post.mutate()
-            }
-          }}
-        />
-        <Button
-          type="submit"
-          size="icon"
-          disabled={body.trim().length === 0 || post.isPending}
-        >
-          {post.isPending ? (
-            <Loader2Icon className="animate-spin" />
-          ) : (
-            <SendIcon />
-          )}
-          <span className="sr-only">Post message</span>
-        </Button>
+        <div className="relative">
+          <Textarea
+            aria-label="Write a message"
+            rows={2}
+            className="min-h-11 resize-none pr-11"
+            placeholder="Ask or answer something…"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            onKeyDown={(event) => {
+              // Enter sends; Shift+Enter keeps the line. Deliberate for a
+              // chat-shaped surface, unlike the multi-paragraph brief form.
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault()
+                if (body.trim().length > 0) post.mutate()
+              }
+            }}
+          />
+          <Button
+            type="submit"
+            size="icon"
+            className="absolute right-2 bottom-2 h-7 w-7"
+            disabled={body.trim().length === 0 || post.isPending}
+          >
+            {post.isPending ? (
+              <Loader2Icon className="animate-spin" />
+            ) : (
+              <SendIcon />
+            )}
+            <span className="sr-only">Post message</span>
+          </Button>
+        </div>
       </form>
 
       {serverError && (
