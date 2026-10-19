@@ -127,8 +127,11 @@ export function RequestDetailDialog({
                 </div>
               </DialogDescription>
 
-              <div className="mt-4 text-sm leading-relaxed break-words whitespace-pre-wrap">
-                {request.brief}
+              <div className="mt-4">
+                <p className="text-sm font-medium tracking-tight">Brief</p>
+                <div className="mt-2 text-sm leading-relaxed break-words whitespace-pre-wrap">
+                  {request.brief}
+                </div>
               </div>
 
               {request.referenceLinks && request.referenceLinks.length > 0 && (
