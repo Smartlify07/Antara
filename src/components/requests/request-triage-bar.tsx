@@ -359,7 +359,7 @@ function NeedsInfoPanel({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.15, delay: 0.1 } }}
       exit={{ opacity: 0, transition: { duration: 0.1 } }}
-      className="flex h-[200px] flex-col gap-2"
+      className="flex h-[200px] flex-col gap-2 px-1 pb-1"
     >
       {error ? (
         <p role="alert" className="text-sm text-destructive">
