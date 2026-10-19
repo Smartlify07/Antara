@@ -5,10 +5,9 @@ import {
   MessageSquareIcon,
   TagIcon,
 } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
+import { RequesterAvatar } from "@/components/requests/request-avatar"
 import { formatDueDate, isOverdue } from "@/lib/time"
-import { avatarTint } from "@/lib/avatar-tint"
 import { REQUEST_META } from "./request-meta"
 import type { RequestListItem } from "@/server/services/request-service"
 import type { RequestTriageStatus } from "@/db/enums"
@@ -22,17 +21,6 @@ const STATE_META: Record<RequestTriageStatus, { dotClass: string }> = {
   needs_info: { dotClass: "bg-amber-500" },
   accepted: { dotClass: "bg-emerald-600" },
   declined: { dotClass: "bg-foreground/30" },
-}
-
-function initials(name: string | null): string {
-  return (
-    name
-      ?.split(" ")
-      .map((part) => part[0])
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || "?"
-  )
 }
 
 /**
@@ -59,9 +47,6 @@ export function RequestCard({
       ? request.desiredDeadline
       : null
   const deadlineOverdue = deadlineLive !== null && isOverdue(deadlineLive)
-  // Same seed the team page uses, so a person keeps their colour everywhere.
-  const tintSeed =
-    request.requesterId ?? request.requesterName ?? "former-member"
 
   return (
     <Card className="relative gap-0 py-0 shadow-xs transition-shadow duration-150 focus-within:ring-2 focus-within:ring-ring hover:shadow-sm">
@@ -125,16 +110,11 @@ export function RequestCard({
             )}
           </div>
 
-          <Avatar size="sm" aria-hidden>
-            {request.requesterImage ? (
-              <AvatarImage src={request.requesterImage} alt="" />
-            ) : null}
-            <AvatarFallback
-              className={`text-[10px] font-medium ${avatarTint(tintSeed)}`}
-            >
-              {initials(request.requesterName)}
-            </AvatarFallback>
-          </Avatar>
+          <RequesterAvatar
+            userId={request.requesterId}
+            name={request.requesterName}
+            image={request.requesterImage}
+          />
         </div>
       </CardContent>
     </Card>

@@ -21,7 +21,11 @@ import {
 } from "@/components/ui/dialog"
 import { RequestTriageBar } from "@/components/requests/request-triage-bar"
 import { RequestThread } from "@/components/requests/request-thread"
-import { REQUEST_META } from "@/components/requests/request-meta"
+import { RequesterAvatar } from "@/components/requests/request-avatar"
+import {
+  PRIORITY_BADGE,
+  REQUEST_META,
+} from "@/components/requests/request-meta"
 import { formatDueDate, formatRelativeTime, isOverdue } from "@/lib/time"
 import type { RequestListItem } from "@/server/services/request-service"
 
@@ -69,9 +73,13 @@ export function RequestDetailDialog({
                     {meta?.label}
                   </span>
                   {request.priority && (
-                    <span className="inline-flex items-center gap-1 capitalize">
+                    <span className="inline-flex items-center gap-1.5">
                       <FlagIcon aria-hidden className="size-3.5 shrink-0" />
-                      {request.priority} priority
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium capitalize ${PRIORITY_BADGE[request.priority]}`}
+                      >
+                        {request.priority}
+                      </span>
                     </span>
                   )}
                   {request.category && (
@@ -82,6 +90,7 @@ export function RequestDetailDialog({
                   )}
                   {request.desiredDeadline && (
                     <span
+                      title={`Wanted by ${formatDueDate(request.desiredDeadline)}`}
                       className={
                         deadlineOverdue
                           ? "inline-flex items-center gap-1 font-medium text-destructive"
@@ -89,7 +98,7 @@ export function RequestDetailDialog({
                       }
                     >
                       <CalendarIcon aria-hidden className="size-3.5 shrink-0" />
-                      wanted by {formatDueDate(request.desiredDeadline)}
+                      {formatDueDate(request.desiredDeadline)}
                     </span>
                   )}
                   {request.messageCount > 0 && (
@@ -102,9 +111,20 @@ export function RequestDetailDialog({
                       {request.messageCount === 1 ? "message" : "messages"}
                     </span>
                   )}
-                  <span>
-                    requested {formatRelativeTime(request.createdAt)} by{" "}
-                    {request.requesterName ?? "Former member"}
+                  <span className="inline-flex items-center gap-1.5">
+                    <RequesterAvatar
+                      userId={request.requesterId}
+                      name={request.requesterName}
+                      image={request.requesterImage}
+                    />
+                    <span className="font-medium text-foreground">
+                      {request.requesterName ?? "Former member"}
+                    </span>
+                    <span
+                      aria-hidden
+                      className="inline-block size-1 rounded-full bg-muted-foreground/50"
+                    />
+                    <span>{formatRelativeTime(request.createdAt)}</span>
                   </span>
                 </div>
               </DialogDescription>
@@ -114,21 +134,29 @@ export function RequestDetailDialog({
               </div>
 
               {request.referenceLinks && request.referenceLinks.length > 0 && (
-                <ul className="mt-4 flex flex-col gap-1">
-                  {request.referenceLinks.map((link) => (
-                    <li key={link}>
-                      <a
-                        href={link}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="inline-flex items-center gap-1 text-sm underline underline-offset-2 hover:text-foreground"
-                      >
-                        <ExternalLinkIcon className="size-3 shrink-0" />
-                        <span className="truncate">{link}</span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-4">
+                  <p className="text-sm font-medium tracking-tight">
+                    Reference links{" "}
+                    <span className="font-normal text-muted-foreground">
+                      (attached when the request was submitted)
+                    </span>
+                  </p>
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {request.referenceLinks.map((link) => (
+                      <li key={link}>
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="inline-flex items-center gap-1 text-sm underline underline-offset-2 hover:text-foreground"
+                        >
+                          <ExternalLinkIcon className="size-3 shrink-0" />
+                          <span className="truncate">{link}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               {request.linkedProjectId && request.linkedProjectSlug && (

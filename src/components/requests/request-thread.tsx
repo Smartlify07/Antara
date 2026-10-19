@@ -50,7 +50,7 @@ export function RequestThread({
 
   if (isPending) {
     return (
-      <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+      <div className="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">
         Loading the thread…
       </div>
     )
@@ -60,7 +60,7 @@ export function RequestThread({
     return (
       <div
         role="alert"
-        className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
+        className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive"
       >
         {error instanceof Error ? error.message : "Could not load the thread."}
       </div>
@@ -68,12 +68,12 @@ export function RequestThread({
   }
 
   return (
-    <section className="rounded-xl border bg-card">
-      <h2 className="border-b px-4 py-3 text-sm font-medium tracking-tight">
+    <section className="rounded-xl bg-muted/40">
+      <h2 className="px-4 pt-3 pb-1 text-sm font-medium tracking-tight">
         Brief thread
       </h2>
 
-      <div className="flex flex-col divide-y">
+      <div className="flex flex-col">
         {messages.length === 0 && (
           <p className="px-4 py-3 text-sm text-muted-foreground">
             No messages yet. Questions and answers about this request live here.
@@ -85,7 +85,7 @@ export function RequestThread({
       </div>
 
       <form
-        className="flex items-end gap-2 border-t p-3"
+        className="flex items-end gap-2 p-3"
         onSubmit={(event) => {
           event.preventDefault()
           if (body.trim().length > 0) post.mutate()
@@ -122,7 +122,7 @@ export function RequestThread({
       </form>
 
       {serverError && (
-        <p role="alert" className="border-t px-4 py-2 text-sm text-destructive">
+        <p role="alert" className="px-4 pb-3 text-sm text-destructive">
           {serverError}
         </p>
       )}

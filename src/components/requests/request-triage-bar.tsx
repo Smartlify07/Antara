@@ -56,7 +56,7 @@ export function RequestTriageBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/40 p-3">
       <span className="mr-auto text-sm text-muted-foreground">
         Triage this request:
       </span>
@@ -167,7 +167,7 @@ function AcceptDialog({
               <Button
                 key={candidate}
                 type="button"
-                variant={mode === candidate ? "default" : "outline"}
+                variant={mode === candidate ? "default" : "secondary"}
                 size="sm"
                 role="tab"
                 aria-selected={mode === candidate}
@@ -246,7 +246,7 @@ function AcceptDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {error}
             </div>
@@ -314,7 +314,7 @@ function NeedsInfoDialog({
       <Button
         type="button"
         size="sm"
-        variant="outline"
+        variant="secondary"
         onClick={() => setOpen(true)}
       >
         <CircleHelpIcon />
@@ -342,7 +342,7 @@ function NeedsInfoDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {error}
             </div>
@@ -432,7 +432,7 @@ function DeclineDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {error}
             </div>
