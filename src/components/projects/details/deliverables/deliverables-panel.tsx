@@ -144,6 +144,7 @@ export function DeliverablesPanel({
                 workspaceSlug={workspaceSlug}
                 workspaceId={workspaceId}
                 task={task}
+                members={members}
                 canWork={canWork}
                 onChanged={refresh}
               />
