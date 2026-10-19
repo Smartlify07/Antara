@@ -1,10 +1,4 @@
-import {
-  CalendarIcon,
-  FlagIcon,
-  InboxIcon,
-  MessageSquareIcon,
-  TagIcon,
-} from "lucide-react"
+import { CalendarIcon, FlagIcon, InboxIcon } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { RequesterAvatar } from "@/components/requests/request-avatar"
 import { formatDueDate, isOverdue } from "@/lib/time"
@@ -84,12 +78,6 @@ export function RequestCard({
               />
               {REQUEST_META[request.triageStatus].label}
             </span>
-            {request.category && (
-              <span className="inline-flex items-center gap-1">
-                <TagIcon aria-hidden className="size-3.5 shrink-0" />
-                {request.category}
-              </span>
-            )}
             {deadlineLive && (
               <span
                 className={
@@ -100,12 +88,6 @@ export function RequestCard({
               >
                 <CalendarIcon aria-hidden className="size-3.5 shrink-0" />
                 {formatDueDate(deadlineLive)}
-              </span>
-            )}
-            {request.messageCount > 0 && (
-              <span className="inline-flex items-center gap-1">
-                <MessageSquareIcon aria-hidden className="size-3.5 shrink-0" />
-                {request.messageCount}
               </span>
             )}
           </div>
