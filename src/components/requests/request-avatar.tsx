@@ -13,23 +13,27 @@ function initials(name: string | null): string {
 }
 
 /**
- * The requester's avatar — one component so the card and the dialog can
- * never drift apart: the shadcn Avatar with the per-person tint the team
- * page assigns (seeded by the requester's user id, name as fallback).
- * Always decorative; the accompanying name text is always rendered next
- * to it in whatever surface places it.
+ * A person's avatar — one component so the card, the dialog and the thread
+ * can never drift apart: the shadcn Avatar with the per-person tint the team
+ * page assigns (seeded by the user's id, name as fallback). Always
+ * decorative; the accompanying name text is rendered next to it in whatever
+ * surface places it. `className` is for row-positioning niceties (margins,
+ * flex behaviour) only — the footprint stays the `sm` preset, whose
+ * `data-[size=sm]` sizing intentionally wins over plain size utilities.
  */
 export function RequesterAvatar({
   userId,
   name,
   image,
+  className,
 }: {
   userId: string | null
   name: string | null
   image: string | null
+  className?: string
 }) {
   return (
-    <Avatar size="sm" aria-hidden>
+    <Avatar size="sm" aria-hidden className={className}>
       {image ? <AvatarImage src={image} alt="" /> : null}
       <AvatarFallback
         className={`text-[10px] font-medium ${avatarTint(userId ?? name ?? "former-member")}`}

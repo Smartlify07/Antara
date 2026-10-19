@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2Icon, SendIcon } from "lucide-react"
+import { SendIcon } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { RequesterAvatar } from "@/components/requests/request-avatar"
 import { useSession } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/time"
@@ -164,11 +165,7 @@ export function RequestThread({
             className="absolute right-2 bottom-2 h-7 w-7"
             disabled={body.trim().length === 0 || post.isPending}
           >
-            {post.isPending ? (
-              <Loader2Icon className="animate-spin" />
-            ) : (
-              <SendIcon />
-            )}
+            <SendIcon />
             <span className="sr-only">Post message</span>
           </Button>
         </div>
@@ -186,12 +183,12 @@ export function RequestThread({
 function MessageRow({ message }: { message: RequestThreadMessage }) {
   return (
     <div className="flex gap-3 px-4 py-3">
-      <span
-        aria-hidden
-        className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium"
-      >
-        {(message.authorName?.trim()[0] ?? "?").toUpperCase()}
-      </span>
+      <RequesterAvatar
+        userId={message.authorId}
+        name={message.authorName}
+        image={message.authorImage}
+        className="mt-0.5 shrink-0"
+      />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">
           <span className="font-medium text-foreground">
