@@ -49,6 +49,8 @@ export interface RequestListItem {
   desiredDeadline: Date | null
   createdAt: Date
   referenceLinks: string[] | null
+  /** The requester's user id — the seed the team page uses for avatar tints. */
+  requesterId: string | null
   requesterName: string | null
   requesterImage: string | null
   linkedProjectId: string | null
@@ -72,6 +74,7 @@ const requestCard = {
   desiredDeadline: requests.desiredDeadline,
   createdAt: requests.createdAt,
   referenceLinks: requests.referenceLinks,
+  requesterId: user.id,
   requesterName: user.name,
   requesterImage: user.image,
   linkedProjectId: projects.id,

@@ -135,7 +135,7 @@ export function AppShell({
             </div>
           )}
         </header>
-        <div className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-4 px-4 py-4 sm:py-6">
+        <div className="mx-auto flex w-full max-w-[1640px] flex-1 flex-col gap-4 px-4 py-4 sm:py-6">
           {children}
         </div>
       </SidebarInset>

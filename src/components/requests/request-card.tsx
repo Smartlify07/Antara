@@ -9,8 +9,10 @@ import {
   MessageSquareIcon,
   TagIcon,
 } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
-import { formatDueDate, formatRelativeTime, isOverdue } from "@/lib/time"
+import { formatDueDate, isOverdue } from "@/lib/time"
+import { avatarTint } from "@/lib/avatar-tint"
 import { REQUEST_META } from "./request-meta"
 import type { RequestListItem } from "@/server/services/request-service"
 import type { RequestTriageStatus } from "@/db/enums"
@@ -29,11 +31,23 @@ const STATE_META: Record<
   declined: { Icon: CircleXIcon, iconClass: "text-muted-foreground" },
 }
 
+function initials(name: string | null): string {
+  return (
+    name
+      ?.split(" ")
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  )
+}
+
 /**
  * A request card in the intake grid, in the reviewed style: compact white
  * card, the title inside a slightly rounded badge with a request icon,
  * metadata right underneath it, and the requester's avatar pushed to the
- * far right of that row (justify-between). No gradients anywhere.
+ * far right of that row (justify-between). Avatars tint by the same
+ * per-person colour the team page assigns (seeded by user id).
  *
  * The whole card opens the detail dialog in place — a stretched button
  * covers the card so clicking anywhere opens the modal immediately.
@@ -52,9 +66,12 @@ export function RequestCard({
       ? request.desiredDeadline
       : null
   const deadlineOverdue = deadlineLive !== null && isOverdue(deadlineLive)
+  // Same seed the team page uses, so a person keeps their colour everywhere.
+  const tintSeed =
+    request.requesterId ?? request.requesterName ?? "former-member"
 
   return (
-    <Card className="relative gap-0 py-0 shadow-sm transition-shadow duration-150 focus-within:ring-2 focus-within:ring-ring hover:shadow-md">
+    <Card className="relative gap-0 py-0 shadow-xs transition-shadow duration-150 focus-within:ring-2 focus-within:ring-ring hover:shadow-sm">
       {/* Stretched open affordance: the card IS the button. */}
       <button
         type="button"
@@ -75,7 +92,7 @@ export function RequestCard({
         </span>
 
         <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
             {request.priority && (
               <span className="inline-flex items-center gap-1 capitalize">
                 <FlagIcon aria-hidden className="size-3.5 shrink-0" />
@@ -115,25 +132,17 @@ export function RequestCard({
             )}
           </div>
 
-          <span
-            aria-hidden
-            className="flex size-6 shrink-0 items-center overflow-hidden rounded-full bg-muted text-[10px] font-medium"
-          >
+          <Avatar size="sm" aria-hidden>
             {request.requesterImage ? (
-              <img
-                src={request.requesterImage}
-                alt=""
-                className="size-6 object-cover"
-              />
-            ) : (
-              (request.requesterName?.trim()[0] ?? "?").toUpperCase()
-            )}
-          </span>
+              <AvatarImage src={request.requesterImage} alt="" />
+            ) : null}
+            <AvatarFallback
+              className={`text-[10px] font-medium ${avatarTint(tintSeed)}`}
+            >
+              {initials(request.requesterName)}
+            </AvatarFallback>
+          </Avatar>
         </div>
-
-        <span aria-hidden className="sr-only">
-          requested {formatRelativeTime(request.createdAt)}
-        </span>
       </CardContent>
     </Card>
   )
