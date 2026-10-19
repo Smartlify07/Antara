@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query"
+import type { VersionThreadMessage } from "@/server/services/version-service"
 import {
   listDeliverableVersionsFn,
   listReviewQueueFn,
@@ -64,4 +65,30 @@ export function reviewQueueBadgeQuery(workspaceSlug: string) {
     queryKey: versionKeys.badge(workspaceSlug),
     queryFn: () => reviewQueueBadgeFn({ data: { workspaceSlug } }),
   })
+}
+
+/**
+ * Builds the feedback entry rendered between the submit and the server's
+ * response — same `optimistic-` prefix convention as the brief thread and the
+ * updates feed. Each post carries its own stamp, so overlapping sends roll
+ * back independently.
+ */
+export function buildOptimisticVersionFeedback(
+  body: string,
+  author: {
+    authorId: string
+    authorName: string | null
+    authorEmail: string | null
+  }
+): VersionThreadMessage {
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+  return {
+    id: `optimistic-${stamp}`,
+    body,
+    createdAt: new Date(),
+    authorId: author.authorId,
+    authorName: author.authorName,
+    authorEmail: author.authorEmail,
+  }
 }

@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query"
+import type { RequestThreadMessage } from "@/server/services/request-service"
 import {
   getRequestFn,
   listRequestsFn,
@@ -53,4 +54,31 @@ export function requestBadgeQuery(workspaceSlug: string) {
     queryKey: requestKeys.badge(workspaceSlug),
     queryFn: () => requestBadgeFn({ data: { workspaceSlug } }),
   })
+}
+
+/**
+ * Builds the message rendered between the submit and the server's response —
+ * the `optimistic-` prefix is what marks it, the same convention the updates
+ * feed and the task composer use, so nothing needs a special type beyond a
+ * prefix check. The author is the session's user, since that is what the
+ * server will stamp on the real row.
+ */
+export function buildOptimisticThreadMessage(
+  body: string,
+  author: {
+    authorId: string
+    authorName: string | null
+    authorImage: string | null
+  }
+): RequestThreadMessage {
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+  return {
+    id: `optimistic-${stamp}`,
+    body,
+    authorId: author.authorId,
+    authorName: author.authorName,
+    authorImage: author.authorImage,
+    createdAt: new Date(),
+  }
 }
