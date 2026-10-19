@@ -3,17 +3,24 @@ import { Loader2Icon, SendIcon } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { useSession } from "@/lib/auth-client"
 import { formatRelativeTime } from "@/lib/time"
-import { requestKeys, requestThreadQuery } from "@/lib/queries/requests"
+import {
+  buildOptimisticThreadMessage,
+  requestKeys,
+  requestThreadQuery,
+} from "@/lib/queries/requests"
 import { requestThreadPostFn } from "@/server/functions/requests"
 import type { RequestThreadMessage } from "@/server/services/request-service"
 
 /**
  * The brief thread (FR-009): every workspace member can read it and post to
  * it — the requester answering, the lead asking, the triage decision landing.
- * Invalidation is deliberately blunt: any write repaints the whole
- * request-scoped family (thread, card, inbox, sidebar badge) because they are
- * all facets of the same record.
+ * Posting is optimistic: the message renders instantly under the session
+ * user's name and is dropped again if the write fails. The settle invalidation
+ * is deliberately blunt: any write repaints the whole request-scoped family
+ * (thread, card, inbox, sidebar badge) because they are all facets of the same
+ * record.
  */
 export function RequestThread({
   workspaceId,
@@ -23,6 +30,7 @@ export function RequestThread({
   requestId: string
 }) {
   const queryClient = useQueryClient()
+  const { data: session } = useSession()
   const [body, setBody] = useState("")
   const [serverError, setServerError] = useState<string | null>(null)
 
@@ -32,19 +40,55 @@ export function RequestThread({
     error,
   } = useQuery(requestThreadQuery(workspaceId, requestId))
 
+  const threadKey = requestKeys.thread(requestId)
+
   const post = useMutation({
-    mutationFn: async () => {
-      await requestThreadPostFn({
-        data: { workspaceId, requestId, body: body.trim() },
+    // The body rides in as the mutation variable: the optimistic row is built
+    // from what was typed at mutate time, not from whatever state holds later.
+    mutationFn: (messageBody: string) =>
+      requestThreadPostFn({
+        data: { workspaceId, requestId, body: messageBody },
+      }),
+    onMutate: async (messageBody) => {
+      await queryClient.cancelQueries({ queryKey: threadKey })
+
+      // Coalesced to an empty thread on purpose: the very first post happens
+      // against a cache that does not exist yet, and skipping the write there
+      // would strand the row. Oldest-first thread, so the entry lands at the
+      // end — where the server's row will sit after the settle refetch.
+      const snapshot =
+        queryClient.getQueryData<RequestThreadMessage[]>(threadKey) ?? []
+      const optimistic = buildOptimisticThreadMessage(messageBody, {
+        authorId: session?.user.id ?? "",
+        authorName: session?.user.name ?? null,
+        authorImage: session?.user.image ?? null,
       })
+      queryClient.setQueryData<RequestThreadMessage[]>(threadKey, [
+        ...snapshot,
+        optimistic,
+      ])
+
+      return { optimisticId: optimistic.id }
     },
-    onSuccess: async () => {
+    onError: (_error, _messageBody, context) => {
+      // Rollback drops just this message by its optimistic id: restoring the
+      // snapshot would also revert anything that landed in the thread while
+      // the post was in flight — including other people's messages.
+      queryClient.setQueryData<RequestThreadMessage[]>(
+        threadKey,
+        (current = []) =>
+          current.filter((row) => row.id !== context?.optimisticId)
+      )
+      setServerError("Could not post the message.")
+    },
+    onSuccess: () => {
+      // Cleared only once the server has the message — a rejected post keeps
+      // what was typed and can be retried.
       setBody("")
       setServerError(null)
-      await queryClient.invalidateQueries({ queryKey: requestKeys.all })
     },
-    onError: () => {
-      setServerError("Could not post the message.")
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: requestKeys.all })
     },
   })
 
@@ -88,7 +132,7 @@ export function RequestThread({
         className="flex items-end gap-2 border-t p-3"
         onSubmit={(event) => {
           event.preventDefault()
-          if (body.trim().length > 0) post.mutate()
+          if (body.trim().length > 0) post.mutate(body.trim())
         }}
       >
         <Textarea
@@ -103,7 +147,7 @@ export function RequestThread({
             // chat-shaped surface, unlike the multi-paragraph brief form.
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault()
-              if (body.trim().length > 0) post.mutate()
+              if (body.trim().length > 0) post.mutate(body.trim())
             }
           }}
         />
