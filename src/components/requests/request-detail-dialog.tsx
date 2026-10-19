@@ -1,14 +1,15 @@
 /**
- * The Linear-style request dialog: opens in place over the intake grid with
- * the Radix (shadcn Dialog) transition, fed by the data the card already
- * carries — no detail fetch, no routing. Only the conversation loads on
- * open (it lives off the list payload), and `?request=` stays shareable:
- * closing (Esc, backdrop, ✕) drops the param and returns to the grid.
+ * The Linear-style request dialog: opens immediately on card click — no
+ * router involvement at all. The content is fed from the data the card
+ * already carries (the grid owns the one list fetch), so nothing loads on
+ * open. Radix/shadcn Dialog gives the transition; only the conversation
+ * thread fetches as it mounts, since it lives off the list payload.
  */
 import { Link } from "@tanstack/react-router"
 import {
   CalendarIcon,
   ExternalLinkIcon,
+  FlagIcon,
   MessageSquareIcon,
   TagIcon,
 } from "lucide-react"
@@ -23,7 +24,6 @@ import { RequestThread } from "@/components/requests/request-thread"
 import { REQUEST_META } from "@/components/requests/request-meta"
 import { formatDueDate, formatRelativeTime, isOverdue } from "@/lib/time"
 import type { RequestListItem } from "@/server/services/request-service"
-import { coverGradientStyle } from "./gradient-recipes"
 
 export function RequestDetailDialog({
   workspaceId,
@@ -42,7 +42,8 @@ export function RequestDetailDialog({
   const open = request !== null
   const meta = request ? REQUEST_META[request.triageStatus] : null
   const deadlineOverdue =
-    request?.desiredDeadline != null &&
+    request != null &&
+    request.desiredDeadline != null &&
     isOverdue(request.desiredDeadline) &&
     (request.triageStatus === "open" || request.triageStatus === "needs_info")
 
@@ -54,12 +55,6 @@ export function RequestDetailDialog({
       }}
     >
       <DialogContent className="flex max-h-[85vh] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl lg:max-w-4xl">
-        <div
-          aria-hidden
-          className="h-24 w-full shrink-0"
-          style={request ? coverGradientStyle(request.id) : undefined}
-        />
-
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {request ? (
             <>
@@ -69,12 +64,13 @@ export function RequestDetailDialog({
               <DialogDescription asChild>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${meta?.badgeClass ?? ""}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium ${meta?.badgeClass ?? ""}`}
                   >
                     {meta?.label}
                   </span>
                   {request.priority && (
-                    <span className="capitalize">
+                    <span className="inline-flex items-center gap-1 capitalize">
+                      <FlagIcon aria-hidden className="size-3.5 shrink-0" />
                       {request.priority} priority
                     </span>
                   )}
@@ -142,7 +138,7 @@ export function RequestDetailDialog({
                     workspaceSlug,
                     projectSlug: request.linkedProjectSlug,
                   }}
-                  className="mt-4 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:underline dark:bg-emerald-500/15 dark:text-emerald-300"
+                  className="mt-4 inline-flex w-fit items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:underline dark:bg-emerald-500/15 dark:text-emerald-300"
                 >
                   → {request.linkedProjectTitle ?? "Project"}
                 </Link>
@@ -164,9 +160,7 @@ export function RequestDetailDialog({
                 />
               </div>
             </>
-          ) : (
-            <p className="text-sm text-muted-foreground">Opening request…</p>
-          )}
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

@@ -1,29 +1,44 @@
-import { Link } from "@tanstack/react-router"
 import {
   CalendarIcon,
-  ChevronRightIcon,
+  CircleCheckIcon,
+  CircleHelpIcon,
+  CircleIcon,
+  CircleXIcon,
+  FlagIcon,
+  InboxIcon,
   MessageSquareIcon,
-  PenLineIcon,
   TagIcon,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatDueDate, formatRelativeTime, isOverdue } from "@/lib/time"
-import type { RequestListItem } from "@/server/services/request-service"
 import { REQUEST_META } from "./request-meta"
-import { coverGradientStyle } from "./gradient-recipes"
+import type { RequestListItem } from "@/server/services/request-service"
+import type { RequestTriageStatus } from "@/db/enums"
 
 /**
- * A request card in the intake grid: the system's white card with one
- * gradient cover across the top — the only colour on an otherwise monochrome
- * surface — and title + metadata below it, iconed because words are chrome.
+ * State icon + icon tint for the meta row. Labels stay plain muted text —
+ * the icon carries the state the way Linear's issue icons do.
+ */
+const STATE_META: Record<
+  RequestTriageStatus,
+  { Icon: typeof CircleIcon; iconClass: string }
+> = {
+  open: { Icon: CircleIcon, iconClass: "text-sky-600" },
+  needs_info: { Icon: CircleHelpIcon, iconClass: "text-amber-600" },
+  accepted: { Icon: CircleCheckIcon, iconClass: "text-emerald-600" },
+  declined: { Icon: CircleXIcon, iconClass: "text-muted-foreground" },
+}
+
+/**
+ * A request card in the intake grid, in the reviewed style: compact white
+ * card, the title inside a slightly rounded badge with a request icon,
+ * metadata right underneath it, and the requester's avatar pushed to the
+ * far right of that row (justify-between). No gradients anywhere.
  *
- * The whole card opens the detail dialog in place (no routing, no detail
- * fetch): a stretched button covers the card, and the only interactive
- * element inside it — the linked-project chip, once accepted — sits above
- * that button in stacking order.
+ * The whole card opens the detail dialog in place — a stretched button
+ * covers the card so clicking anywhere opens the modal immediately.
  */
 export function RequestCard({
-  workspaceSlug,
   request,
   onOpen,
 }: {
@@ -31,7 +46,7 @@ export function RequestCard({
   request: RequestListItem
   onOpen: (requestId: string) => void
 }) {
-  const meta = REQUEST_META[request.triageStatus]
+  const state = STATE_META[request.triageStatus]
   const deadlineLive =
     request.triageStatus === "open" || request.triageStatus === "needs_info"
       ? request.desiredDeadline
@@ -39,7 +54,7 @@ export function RequestCard({
   const deadlineOverdue = deadlineLive !== null && isOverdue(deadlineLive)
 
   return (
-    <Card className="relative gap-0 py-0 transition-colors duration-150 focus-within:ring-2 focus-within:ring-ring hover:ring-foreground/20">
+    <Card className="relative gap-0 py-0 shadow-sm transition-shadow duration-150 focus-within:ring-2 focus-within:ring-ring hover:shadow-md">
       {/* Stretched open affordance: the card IS the button. */}
       <button
         type="button"
@@ -48,30 +63,32 @@ export function RequestCard({
         className="absolute inset-0 rounded-xl outline-none"
       />
 
-      <div
-        aria-hidden
-        className="h-32 w-full rounded-t-xl"
-        style={coverGradientStyle(request.id)}
-      />
-
-      <CardContent className="flex flex-col gap-3 px-4 pt-3 pb-4">
-        <h3 className="line-clamp-2 font-heading text-base leading-snug font-medium text-card-foreground">
-          {request.title}
-        </h3>
-
-        <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <span
-            className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${meta.badgeClass}`}
-          >
-            {meta.label}
+      <CardContent className="flex flex-col gap-2.5 px-3.5 py-3.5">
+        <span className="inline-flex max-w-full items-center gap-2 self-start rounded-md bg-muted px-2 py-1">
+          <InboxIcon
+            aria-hidden
+            className="size-3.5 shrink-0 text-foreground/70"
+          />
+          <span className="line-clamp-2 text-sm leading-snug font-medium text-foreground">
+            {request.title}
           </span>
+        </span>
 
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {request.priority && (
               <span className="inline-flex items-center gap-1 capitalize">
-                {request.priority} priority
+                <FlagIcon aria-hidden className="size-3.5 shrink-0" />
+                {request.priority}
               </span>
             )}
+            <span className="inline-flex items-center gap-1">
+              <state.Icon
+                aria-hidden
+                className={`size-3.5 shrink-0 ${state.iconClass}`}
+              />
+              {REQUEST_META[request.triageStatus].label}
+            </span>
             {request.category && (
               <span className="inline-flex items-center gap-1">
                 <TagIcon aria-hidden className="size-3.5 shrink-0" />
@@ -87,7 +104,7 @@ export function RequestCard({
                 }
               >
                 <CalendarIcon aria-hidden className="size-3.5 shrink-0" />
-                wanted by {formatDueDate(deadlineLive)}
+                {formatDueDate(deadlineLive)}
               </span>
             )}
             {request.messageCount > 0 && (
@@ -98,48 +115,26 @@ export function RequestCard({
             )}
           </div>
 
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className="flex size-4 items-center overflow-hidden rounded-full bg-muted text-[9px] font-medium"
-            >
-              {request.requesterImage ? (
-                <img
-                  src={request.requesterImage}
-                  alt=""
-                  className="size-4 object-cover"
-                />
-              ) : (
-                (request.requesterName?.trim()[0] ?? "?").toUpperCase()
-              )}
-            </span>
-            {request.requesterName ?? "Former member"}
-            <span aria-hidden className="text-foreground/30">
-              ·
-            </span>
-            <span>{formatRelativeTime(request.createdAt)}</span>
+          <span
+            aria-hidden
+            className="flex size-6 shrink-0 items-center overflow-hidden rounded-full bg-muted text-[10px] font-medium"
+          >
+            {request.requesterImage ? (
+              <img
+                src={request.requesterImage}
+                alt=""
+                className="size-6 object-cover"
+              />
+            ) : (
+              (request.requesterName?.trim()[0] ?? "?").toUpperCase()
+            )}
           </span>
         </div>
 
-        <span
-          aria-hidden
-          className="inline-flex w-fit items-center gap-1 text-xs font-medium text-foreground/60"
-        >
-          <PenLineIcon className="size-3.5" />
-          Open request
-          <ChevronRightIcon className="size-3.5" />
+        <span aria-hidden className="sr-only">
+          requested {formatRelativeTime(request.createdAt)}
         </span>
       </CardContent>
-
-      {request.linkedProjectId && request.linkedProjectSlug && (
-        <Link
-          to="/w/$workspaceSlug/projects/$projectSlug"
-          params={{ workspaceSlug, projectSlug: request.linkedProjectSlug }}
-          className="absolute right-3 bottom-3 z-10 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:underline dark:bg-emerald-500/15 dark:text-emerald-300"
-        >
-          → {request.linkedProjectTitle ?? "Project"}
-        </Link>
-      )}
     </Card>
   )
 }

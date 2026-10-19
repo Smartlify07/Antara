@@ -14,18 +14,7 @@ import { requestsQuery } from "@/lib/queries/requests"
 import { workspaceRoleCanTriage } from "@/lib/request-schemas"
 import type { RequestTriageStatus } from "@/db/enums"
 
-/**
- * `request` opens the detail dialog in place (shareable URL state — no
- * route change, no detail fetch: the dialog is fed from the list payload
- * already on the client). Anything not understood parses back undefined.
- */
 export const Route = createFileRoute("/w/$workspaceSlug/requests/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    request:
-      typeof search.request === "string" && search.request
-        ? search.request
-        : undefined,
-  }),
   component: RequestsPage,
 })
 
@@ -34,18 +23,21 @@ export const Route = createFileRoute("/w/$workspaceSlug/requests/")({
  * submitting and triage both invalidate `requestKeys.all`, keeping this list
  * and the sidebar badge on the same wire trip.
  *
- * Cards render on a four-column grid; clicking one opens the detail dialog
- * in place, from data the card already holds.
+ * Cards render on a four-column grid. Clicking one opens the detail dialog
+ * immediately: the open request is local state (search params made the
+ * Radix transition stutter and were never worth a router pass — the dialog
+ * is fed from the list payload already on the client, so nothing loads).
  */
 function RequestsPage() {
   const { workspace, workspaceRole, isWorkspaceOwner, workspaceId } =
     Route.useRouteContext()
   const workspaceSlug = workspace.slug
-  const search = Route.useSearch()
-  const navigate = Route.useNavigate()
   const [statusFilter, setStatusFilter] = useState<"all" | RequestTriageStatus>(
     "all"
   )
+  // Only the id lives in state; the dialog reads the live list payload, so
+  // an accept/decline inside the dialog re-renders it from fresh data.
+  const [openRequestId, setOpenRequestId] = useState<string | null>(null)
 
   const {
     data: requests = [],
@@ -67,14 +59,6 @@ function RequestsPage() {
       ])
     ),
   } as Record<"all" | RequestTriageStatus, number>
-
-  const openRequest = (requestId: string) => {
-    void navigate({ search: (prev) => ({ ...prev, request: requestId }) })
-  }
-
-  const closeRequest = () => {
-    void navigate({ search: (prev) => ({ ...prev, request: undefined }) })
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,7 +140,7 @@ function RequestsPage() {
               key={request.id}
               workspaceSlug={workspaceSlug}
               request={request}
-              onOpen={openRequest}
+              onOpen={setOpenRequestId}
             />
           ))}
         </div>
@@ -166,12 +150,12 @@ function RequestsPage() {
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         request={
-          search.request
-            ? (requests.find((r) => r.id === search.request) ?? null)
+          openRequestId
+            ? (requests.find((r) => r.id === openRequestId) ?? null)
             : null
         }
         canTriage={workspaceRoleCanTriage(workspaceRole, isWorkspaceOwner)}
-        onClose={closeRequest}
+        onClose={() => setOpenRequestId(null)}
       />
     </div>
   )
