@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { AnimatePresence, motion } from "framer-motion"
 import {
   CircleCheckIcon,
   CircleHelpIcon,
@@ -47,6 +48,8 @@ export function RequestTriageBar({
   triageStatus: RequestTriageStatus
   canTriage: boolean
 }) {
+  const [askingInfo, setAskingInfo] = useState(false)
+
   if (
     !canTriage ||
     triageStatus === "accepted" ||
@@ -56,10 +59,42 @@ export function RequestTriageBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/40 p-3">
-      <AcceptDialog workspaceId={workspaceId} requestId={requestId} />
-      <NeedsInfoDialog workspaceId={workspaceId} requestId={requestId} />
-      <DeclineDialog workspaceId={workspaceId} requestId={requestId} />
+    <div className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <AcceptDialog workspaceId={workspaceId} requestId={requestId} />
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          aria-expanded={askingInfo}
+          aria-controls="needs-info-panel"
+          onClick={() => setAskingInfo((open) => !open)}
+        >
+          <CircleHelpIcon />
+          Ask for info
+        </Button>
+        <DeclineDialog workspaceId={workspaceId} requestId={requestId} />
+      </div>
+
+      {/* The ask expands in place — no nested dialog in a dialog. */}
+      <AnimatePresence initial={false}>
+        {askingInfo && (
+          <motion.div
+            id="needs-info-panel"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 200, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="w-full overflow-hidden"
+          >
+            <NeedsInfoPanel
+              workspaceId={workspaceId}
+              requestId={requestId}
+              onClose={() => setAskingInfo(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -264,15 +299,21 @@ function AcceptDialog({
   )
 }
 
-function NeedsInfoDialog({
+/**
+ * The ask, inline: expands under the triage actions instead of opening a
+ * nested dialog on top of one. The message posts to the brief thread as the
+ * ask, the audit record for the needs-info state.
+ */
+function NeedsInfoPanel({
   workspaceId,
   requestId,
+  onClose,
 }: {
   workspaceId: string
   requestId: string
+  onClose: () => void
 }) {
   const settled = useTriageSettled()
-  const [open, setOpen] = useState(false)
   const [message, setMessage] = useState("")
   const [error, setError] = useState<string | null>(null)
 
@@ -282,8 +323,9 @@ function NeedsInfoDialog({
         data: { workspaceId, requestId, message: message.trim() },
       }),
     onSuccess: async () => {
-      setOpen(false)
       setMessage("")
+      setError(null)
+      onClose()
       await settled()
     },
     onError: (mutationError) => {
@@ -307,55 +349,43 @@ function NeedsInfoDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        onClick={() => setOpen(true)}
-      >
-        <CircleHelpIcon />
-        Ask for info
-      </Button>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Ask for more information</DialogTitle>
-          <DialogDescription>
-            The request stays open while you wait, and your question is visible
-            to the requester on the thread.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <Field>
-            <FieldLabel htmlFor="needs-info-message">Message</FieldLabel>
-            <Textarea
-              id="needs-info-message"
-              rows={3}
-              placeholder="What's unclear — scope, audience, deadline?"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-            />
-          </Field>
-          {error && (
-            <div
-              role="alert"
-              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {error}
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+    <div className="flex h-[200px] flex-col gap-2">
+      <Textarea
+        aria-label="Question for the requester"
+        rows={5}
+        className="field-sizing-fixed min-h-0 flex-1 resize-none"
+        placeholder="What's unclear — scope, audience, deadline?"
+        autoFocus
+        value={message}
+        onChange={(event) => setMessage(event.target.value)}
+      />
+      <div className="flex items-center justify-between gap-2">
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            The request stays open while you wait; your question is visible to
+            the requester on the thread.
+          </p>
+        )}
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" onClick={submit} disabled={needsInfo.isPending}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={submit}
+            disabled={needsInfo.isPending}
+          >
             {needsInfo.isPending && <Loader2Icon className="animate-spin" />}
             Send question
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </div>
   )
 }
 
