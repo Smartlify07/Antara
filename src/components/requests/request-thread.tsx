@@ -50,23 +50,23 @@ export function RequestThread({
 
   return (
     <section className="rounded-xl bg-muted/40">
-      <h2 className="px-4 pt-3 pb-1 text-sm font-medium tracking-tight">
+      <h2 className="px-4 pt-3 text-sm font-medium tracking-tight">
         Brief thread
       </h2>
 
       <div className="flex flex-col">
         {isPending ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
+          <p className="px-4 pt-1 pb-3 text-sm text-muted-foreground">
             Loading messages…
           </p>
         ) : error ? (
-          <div role="alert" className="px-4 py-3 text-sm text-destructive">
+          <div role="alert" className="px-4 pt-1 pb-3 text-sm text-destructive">
             {error instanceof Error
               ? error.message
               : "Could not load the thread."}
           </div>
         ) : messages.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
+          <p className="px-4 pt-1 pb-3 text-sm text-muted-foreground">
             Be the first to ask a question
           </p>
         ) : (
