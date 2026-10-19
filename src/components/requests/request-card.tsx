@@ -1,98 +1,145 @@
 import { Link } from "@tanstack/react-router"
+import {
+  CalendarIcon,
+  ChevronRightIcon,
+  MessageSquareIcon,
+  PenLineIcon,
+  TagIcon,
+} from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 import { formatDueDate, formatRelativeTime, isOverdue } from "@/lib/time"
 import type { RequestListItem } from "@/server/services/request-service"
 import { REQUEST_META } from "./request-meta"
+import { coverGradientStyle } from "./gradient-recipes"
 
 /**
- * A line in the triage inbox. Two separate anchors live in here — the title
- * (this request's detail) and, once accepted, the linked project chip — so
- * the card root stays a plain div: nested anchors would be mangled by the
- * browser long before any router sees them.
+ * A request card in the intake grid: the system's white card with one
+ * gradient cover across the top — the only colour on an otherwise monochrome
+ * surface — and title + metadata below it, iconed because words are chrome.
+ *
+ * The whole card opens the detail dialog in place (no routing, no detail
+ * fetch): a stretched button covers the card, and the only interactive
+ * element inside it — the linked-project chip, once accepted — sits above
+ * that button in stacking order.
  */
 export function RequestCard({
   workspaceSlug,
   request,
+  onOpen,
 }: {
   workspaceSlug: string
   request: RequestListItem
+  onOpen: (requestId: string) => void
 }) {
   const meta = REQUEST_META[request.triageStatus]
   const deadlineLive =
     request.triageStatus === "open" || request.triageStatus === "needs_info"
       ? request.desiredDeadline
       : null
+  const deadlineOverdue = deadlineLive !== null && isOverdue(deadlineLive)
 
   return (
-    <div className="rounded-xl border bg-card p-4 transition-colors hover:border-ring/60">
-      <div className="flex items-center gap-2">
+    <Card className="relative gap-0 py-0 transition-colors duration-150 focus-within:ring-2 focus-within:ring-ring hover:ring-foreground/20">
+      {/* Stretched open affordance: the card IS the button. */}
+      <button
+        type="button"
+        onClick={() => onOpen(request.id)}
+        aria-label={`Open request: ${request.title}`}
+        className="absolute inset-0 rounded-xl outline-none"
+      />
+
+      <div
+        aria-hidden
+        className="h-32 w-full rounded-t-xl"
+        style={coverGradientStyle(request.id)}
+      />
+
+      <CardContent className="flex flex-col gap-3 px-4 pt-3 pb-4">
+        <h3 className="line-clamp-2 font-heading text-base leading-snug font-medium text-card-foreground">
+          {request.title}
+        </h3>
+
+        <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <span
+            className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${meta.badgeClass}`}
+          >
+            {meta.label}
+          </span>
+
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+            {request.priority && (
+              <span className="inline-flex items-center gap-1 capitalize">
+                {request.priority} priority
+              </span>
+            )}
+            {request.category && (
+              <span className="inline-flex items-center gap-1">
+                <TagIcon aria-hidden className="size-3.5 shrink-0" />
+                {request.category}
+              </span>
+            )}
+            {deadlineLive && (
+              <span
+                className={
+                  deadlineOverdue
+                    ? "inline-flex items-center gap-1 font-medium text-destructive"
+                    : "inline-flex items-center gap-1"
+                }
+              >
+                <CalendarIcon aria-hidden className="size-3.5 shrink-0" />
+                wanted by {formatDueDate(deadlineLive)}
+              </span>
+            )}
+            {request.messageCount > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <MessageSquareIcon aria-hidden className="size-3.5 shrink-0" />
+                {request.messageCount}
+              </span>
+            )}
+          </div>
+
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="flex size-4 items-center overflow-hidden rounded-full bg-muted text-[9px] font-medium"
+            >
+              {request.requesterImage ? (
+                <img
+                  src={request.requesterImage}
+                  alt=""
+                  className="size-4 object-cover"
+                />
+              ) : (
+                (request.requesterName?.trim()[0] ?? "?").toUpperCase()
+              )}
+            </span>
+            {request.requesterName ?? "Former member"}
+            <span aria-hidden className="text-foreground/30">
+              ·
+            </span>
+            <span>{formatRelativeTime(request.createdAt)}</span>
+          </span>
+        </div>
+
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${meta.badgeClass}`}
+          aria-hidden
+          className="inline-flex w-fit items-center gap-1 text-xs font-medium text-foreground/60"
         >
-          {meta.label}
+          <PenLineIcon className="size-3.5" />
+          Open request
+          <ChevronRightIcon className="size-3.5" />
         </span>
-        {request.priority && (
-          <span className="text-xs text-muted-foreground capitalize">
-            {request.priority}
-          </span>
-        )}
-        <span className="ml-auto text-xs text-muted-foreground">
-          {formatRelativeTime(request.createdAt)}
-        </span>
-      </div>
+      </CardContent>
 
-      <Link
-        to="/w/$workspaceSlug/requests/$requestId"
-        params={{ workspaceSlug, requestId: request.id }}
-        className="mt-2 block font-medium tracking-tight hover:underline"
-      >
-        {request.title}
-      </Link>
-      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-        {request.brief}
-      </p>
-
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden
-            className="flex size-5 items-center justify-center rounded-full bg-muted text-[10px] font-medium"
-          >
-            {(request.requesterName?.trim()[0] ?? "?").toUpperCase()}
-          </span>
-          {request.requesterName ?? "Former member"}
-        </span>
-
-        {request.category && <span>{request.category}</span>}
-
-        {request.messageCount > 0 && (
-          <span>
-            {request.messageCount}{" "}
-            {request.messageCount === 1 ? "message" : "messages"}
-          </span>
-        )}
-
-        {deadlineLive && (
-          <span
-            className={
-              isOverdue(deadlineLive)
-                ? "font-medium text-destructive"
-                : undefined
-            }
-          >
-            wanted by {formatDueDate(deadlineLive)}
-          </span>
-        )}
-
-        {request.linkedProjectId && request.linkedProjectSlug && (
-          <Link
-            to="/w/$workspaceSlug/projects/$projectSlug"
-            params={{ workspaceSlug, projectSlug: request.linkedProjectSlug }}
-            className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700 hover:underline dark:bg-emerald-500/15 dark:text-emerald-300"
-          >
-            → {request.linkedProjectTitle ?? "Project"}
-          </Link>
-        )}
-      </div>
-    </div>
+      {request.linkedProjectId && request.linkedProjectSlug && (
+        <Link
+          to="/w/$workspaceSlug/projects/$projectSlug"
+          params={{ workspaceSlug, projectSlug: request.linkedProjectSlug }}
+          className="absolute right-3 bottom-3 z-10 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:underline dark:bg-emerald-500/15 dark:text-emerald-300"
+        >
+          → {request.linkedProjectTitle ?? "Project"}
+        </Link>
+      )}
+    </Card>
   )
 }

@@ -3,43 +3,27 @@ import { createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, InboxIcon, PlusIcon } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { RequestCard } from "@/components/requests/request-card"
 import { RequestDetailDialog } from "@/components/requests/request-detail-dialog"
 import {
   REQUEST_META,
   REQUEST_STATUS_ORDER,
 } from "@/components/requests/request-meta"
 import { SubmitRequestForm } from "@/components/requests/submit-request-form"
-import {
-  DEFAULT_REQUEST_VARIANT,
-  REQUEST_VARIANTS,
-  REQUEST_VARIANT_IDS,
-} from "@/components/requests/variants/registry"
-import {
-  persistVariant,
-  readStoredVariant,
-  RequestVariantProvider,
-  useRequestVariant,
-} from "@/components/requests/variants/variant-context"
 import { requestsQuery } from "@/lib/queries/requests"
 import { workspaceRoleCanTriage } from "@/lib/request-schemas"
 import type { RequestTriageStatus } from "@/db/enums"
 
 /**
- * `request` opens the detail dialog in place (a shareable URL state — no
- * route change); `requestVariant` pins the card-design flag, and is
- * persisted to localStorage so the choice outlives the URL. Both parse
- * losslessly: anything not understood comes back undefined.
+ * `request` opens the detail dialog in place (shareable URL state — no
+ * route change, no detail fetch: the dialog is fed from the list payload
+ * already on the client). Anything not understood parses back undefined.
  */
 export const Route = createFileRoute("/w/$workspaceSlug/requests/")({
   validateSearch: (search: Record<string, unknown>) => ({
     request:
       typeof search.request === "string" && search.request
         ? search.request
-        : undefined,
-    requestVariant:
-      typeof search.requestVariant === "string" &&
-      REQUEST_VARIANT_IDS.includes(search.requestVariant)
-        ? search.requestVariant
         : undefined,
   }),
   component: RequestsPage,
@@ -50,8 +34,8 @@ export const Route = createFileRoute("/w/$workspaceSlug/requests/")({
  * submitting and triage both invalidate `requestKeys.all`, keeping this list
  * and the sidebar badge on the same wire trip.
  *
- * Cards render on a four-column grid; each card is a design variant (the
- * registry drives which). Clicking a card opens the Linear-style dialog.
+ * Cards render on a four-column grid; clicking one opens the detail dialog
+ * in place, from data the card already holds.
  */
 function RequestsPage() {
   const { workspace, workspaceRole, isWorkspaceOwner, workspaceId } =
@@ -59,65 +43,6 @@ function RequestsPage() {
   const workspaceSlug = workspace.slug
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
-
-  // Resolve the variant once: URL wins (and persists), then the stored
-  // choice, then the default. Stale stored ids fall back cleanly.
-  const [variant, setVariantState] = useState<string>(() => {
-    if (search.requestVariant) {
-      persistVariant(search.requestVariant)
-      return search.requestVariant
-    }
-    const stored = readStoredVariant()
-    return stored && REQUEST_VARIANT_IDS.includes(stored)
-      ? stored
-      : DEFAULT_REQUEST_VARIANT
-  })
-
-  const setVariant = (id: string) => {
-    persistVariant(id)
-    setVariantState(id)
-    void navigate({
-      search: (prev) => ({ ...prev, requestVariant: id }),
-      replace: true,
-    })
-  }
-
-  const openRequest = (requestId: string) => {
-    void navigate({ search: (prev) => ({ ...prev, request: requestId }) })
-  }
-
-  const closeRequest = () => {
-    void navigate({ search: (prev) => ({ ...prev, request: undefined }) })
-  }
-
-  return (
-    <RequestVariantProvider variant={variant} setVariant={setVariant}>
-      <RequestsInbox
-        workspaceId={workspaceId}
-        workspaceSlug={workspaceSlug}
-        onOpenRequest={openRequest}
-      />
-      <RequestDetailDialog
-        workspaceId={workspaceId}
-        workspaceSlug={workspaceSlug}
-        requestId={search.request ?? null}
-        canTriage={workspaceRoleCanTriage(workspaceRole, isWorkspaceOwner)}
-        onClose={closeRequest}
-      />
-    </RequestVariantProvider>
-  )
-}
-
-function RequestsInbox({
-  workspaceId,
-  workspaceSlug,
-  onOpenRequest,
-}: {
-  workspaceId: string
-  workspaceSlug: string
-  onOpenRequest: (requestId: string) => void
-}) {
-  const { variant, setVariant } = useRequestVariant()
   const [statusFilter, setStatusFilter] = useState<"all" | RequestTriageStatus>(
     "all"
   )
@@ -143,6 +68,14 @@ function RequestsInbox({
     ),
   } as Record<"all" | RequestTriageStatus, number>
 
+  const openRequest = (requestId: string) => {
+    void navigate({ search: (prev) => ({ ...prev, request: requestId }) })
+  }
+
+  const closeRequest = () => {
+    void navigate({ search: (prev) => ({ ...prev, request: undefined }) })
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
@@ -166,37 +99,21 @@ function RequestsInbox({
       </div>
 
       {requests.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex flex-wrap gap-1.5" role="tablist">
-            {(["all", ...REQUEST_STATUS_ORDER] as const).map((status) => (
-              <Button
-                key={status}
-                type="button"
-                size="sm"
-                variant={statusFilter === status ? "default" : "outline"}
-                role="tab"
-                aria-selected={statusFilter === status}
-                onClick={() => setStatusFilter(status)}
-              >
-                {status === "all" ? "All" : REQUEST_META[status].label}
-                <span className="ml-1 text-xs opacity-70">{counts[status]}</span>
-              </Button>
-            ))}
-          </div>
-          <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-            Card style
-            <select
-              value={variant}
-              onChange={(e) => setVariant(e.target.value)}
-              className="rounded-lg bg-card px-2 py-1 text-xs text-foreground ring-1 ring-foreground/10 outline-none"
+        <div className="flex flex-wrap gap-1.5" role="tablist">
+          {(["all", ...REQUEST_STATUS_ORDER] as const).map((status) => (
+            <Button
+              key={status}
+              type="button"
+              size="sm"
+              variant={statusFilter === status ? "default" : "outline"}
+              role="tab"
+              aria-selected={statusFilter === status}
+              onClick={() => setStatusFilter(status)}
             >
-              {REQUEST_VARIANT_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {REQUEST_VARIANTS[id].label}
-                </option>
-              ))}
-            </select>
-          </label>
+              {status === "all" ? "All" : REQUEST_META[status].label}
+              <span className="ml-1 text-xs opacity-70">{counts[status]}</span>
+            </Button>
+          ))}
         </div>
       )}
 
@@ -234,21 +151,28 @@ function RequestsInbox({
 
       {visible.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {visible.map((request) => {
-            const Card =
-              (REQUEST_VARIANTS[variant] ?? REQUEST_VARIANTS[DEFAULT_REQUEST_VARIANT])
-                .Card
-            return (
-              <Card
-                key={request.id}
-                workspaceSlug={workspaceSlug}
-                request={request}
-                onOpen={onOpenRequest}
-              />
-            )
-          })}
+          {visible.map((request) => (
+            <RequestCard
+              key={request.id}
+              workspaceSlug={workspaceSlug}
+              request={request}
+              onOpen={openRequest}
+            />
+          ))}
         </div>
       )}
+
+      <RequestDetailDialog
+        workspaceId={workspaceId}
+        workspaceSlug={workspaceSlug}
+        request={
+          search.request
+            ? (requests.find((r) => r.id === search.request) ?? null)
+            : null
+        }
+        canTriage={workspaceRoleCanTriage(workspaceRole, isWorkspaceOwner)}
+        onClose={closeRequest}
+      />
     </div>
   )
 }

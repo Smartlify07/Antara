@@ -1,13 +1,17 @@
 /**
- * The Linear-style request dialog: the whole triage surface (brief, meta,
- * triage toolbar, brief thread) opens in place over the inbox instead of
- * routing to a page. `requestId` comes from `?request=` on the list route,
- * so a dialog state is a shareable URL; closing (Esc, backdrop, ✕) drops
- * the param and returns to the grid untouched.
+ * The Linear-style request dialog: opens in place over the intake grid with
+ * the Radix (shadcn Dialog) transition, fed by the data the card already
+ * carries — no detail fetch, no routing. Only the conversation loads on
+ * open (it lives off the list payload), and `?request=` stays shareable:
+ * closing (Esc, backdrop, ✕) drops the param and returns to the grid.
  */
-import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { ExternalLinkIcon } from "lucide-react"
+import {
+  CalendarIcon,
+  ExternalLinkIcon,
+  MessageSquareIcon,
+  TagIcon,
+} from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -17,125 +21,99 @@ import {
 import { RequestTriageBar } from "@/components/requests/request-triage-bar"
 import { RequestThread } from "@/components/requests/request-thread"
 import { REQUEST_META } from "@/components/requests/request-meta"
-import { requestQuery } from "@/lib/queries/requests"
 import { formatDueDate, formatRelativeTime, isOverdue } from "@/lib/time"
-import {
-  GRADIENT_SCRIM_CLASS,
-  GRADIENT_TEXT,
-  requestGradient,
-} from "./variants/card-gradient"
+import type { RequestListItem } from "@/server/services/request-service"
+import { coverGradientStyle } from "./gradient-recipes"
 
 export function RequestDetailDialog({
   workspaceId,
   workspaceSlug,
-  requestId,
+  request,
   canTriage,
   onClose,
 }: {
   workspaceId: string
   workspaceSlug: string
-  requestId: string | null
+  /** The list item whose card opened this dialog — already on the client. */
+  request: RequestListItem | null
   canTriage: boolean
   onClose: () => void
 }) {
-  // "" is a never-fetched placeholder key for the closed state.
-  const { data: request = null, isPending, error } = useQuery({
-    ...requestQuery(workspaceId, requestId ?? ""),
-    enabled: requestId !== null,
-  })
-
-  // Artwork from the id alone, so the header gradient is up while loading.
-  const headerGradient = requestGradient({ id: requestId ?? "" })
+  const open = request !== null
   const meta = request ? REQUEST_META[request.triageStatus] : null
   const deadlineOverdue =
-    request?.desiredDeadline !== null &&
-    request?.desiredDeadline !== undefined &&
+    request?.desiredDeadline != null &&
     isOverdue(request.desiredDeadline) &&
     (request.triageStatus === "open" || request.triageStatus === "needs_info")
 
   return (
     <Dialog
-      open={requestId !== null}
-      onOpenChange={(open) => {
-        if (!open) onClose()
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose()
       }}
     >
-      <DialogContent className="flex max-h-[85vh] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl lg:max-w-5xl">
-        <div className="relative shrink-0 overflow-hidden">
-          <div className="absolute inset-0" style={headerGradient} />
-          <div className={GRADIENT_SCRIM_CLASS} />
-          <div className="relative flex flex-col gap-2 p-5 pr-10">
-            <DialogTitle className={GRADIENT_TEXT.title + " line-clamp-2 text-xl leading-snug"}>
-              {request ? request.title : "Loading request…"}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-white/75">
-              {request
-                ? `requested ${formatRelativeTime(request.createdAt)}${
-                    request.requesterName
-                      ? ` by ${request.requesterName}`
-                      : ""
-                  }`
-                : "…"}
-            </DialogDescription>
-            {request && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {meta && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${GRADIENT_TEXT.chip}`}>
-                    {meta.label}
-                  </span>
-                )}
-                {request.category && (
-                  <span className={`text-xs ${GRADIENT_TEXT.meta}`}>{request.category}</span>
-                )}
-                {request.priority && (
-                  <span className={`text-xs capitalize ${GRADIENT_TEXT.accent}`}>
-                    {request.priority} priority
-                  </span>
-                )}
-                {request.desiredDeadline && (
-                  <span
-                    className={
-                      deadlineOverdue
-                        ? "text-xs font-medium text-rose-200"
-                        : `text-xs ${GRADIENT_TEXT.meta}`
-                    }
-                  >
-                    wanted by {formatDueDate(request.desiredDeadline)}
-                  </span>
-                )}
-                {request.linkedProjectId && request.linkedProjectSlug && (
-                  <Link
-                    to="/w/$workspaceSlug/projects/$projectSlug"
-                    params={{ workspaceSlug, projectSlug: request.linkedProjectSlug }}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-500/25 px-1.5 py-0.5 text-xs font-medium text-white ring-1 ring-white/25 hover:bg-emerald-500/35"
-                  >
-                    → {request.linkedProjectTitle ?? "Project"}
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+      <DialogContent className="flex max-h-[85vh] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl lg:max-w-4xl">
+        <div
+          aria-hidden
+          className="h-24 w-full shrink-0"
+          style={request ? coverGradientStyle(request.id) : undefined}
+        />
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          {isPending && (
-            <p className="text-sm text-muted-foreground">Loading request…</p>
-          )}
-
-          {error && (
-            <div
-              role="alert"
-              className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
-            >
-              {error instanceof Error
-                ? error.message
-                : "Could not load the request."}
-            </div>
-          )}
-
-          {request && !isPending && (
+          {request ? (
             <>
-              <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+              <DialogTitle className="font-heading text-xl leading-snug font-medium">
+                {request.title}
+              </DialogTitle>
+              <DialogDescription asChild>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${meta?.badgeClass ?? ""}`}
+                  >
+                    {meta?.label}
+                  </span>
+                  {request.priority && (
+                    <span className="capitalize">
+                      {request.priority} priority
+                    </span>
+                  )}
+                  {request.category && (
+                    <span className="inline-flex items-center gap-1">
+                      <TagIcon aria-hidden className="size-3.5 shrink-0" />
+                      {request.category}
+                    </span>
+                  )}
+                  {request.desiredDeadline && (
+                    <span
+                      className={
+                        deadlineOverdue
+                          ? "inline-flex items-center gap-1 font-medium text-destructive"
+                          : "inline-flex items-center gap-1"
+                      }
+                    >
+                      <CalendarIcon aria-hidden className="size-3.5 shrink-0" />
+                      wanted by {formatDueDate(request.desiredDeadline)}
+                    </span>
+                  )}
+                  {request.messageCount > 0 && (
+                    <span className="inline-flex items-center gap-1">
+                      <MessageSquareIcon
+                        aria-hidden
+                        className="size-3.5 shrink-0"
+                      />
+                      {request.messageCount}{" "}
+                      {request.messageCount === 1 ? "message" : "messages"}
+                    </span>
+                  )}
+                  <span>
+                    requested {formatRelativeTime(request.createdAt)} by{" "}
+                    {request.requesterName ?? "Former member"}
+                  </span>
+                </div>
+              </DialogDescription>
+
+              <div className="mt-4 text-sm leading-relaxed break-words whitespace-pre-wrap">
                 {request.brief}
               </div>
 
@@ -157,19 +135,37 @@ export function RequestDetailDialog({
                 </ul>
               )}
 
+              {request.linkedProjectId && request.linkedProjectSlug && (
+                <Link
+                  to="/w/$workspaceSlug/projects/$projectSlug"
+                  params={{
+                    workspaceSlug,
+                    projectSlug: request.linkedProjectSlug,
+                  }}
+                  className="mt-4 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 hover:underline dark:bg-emerald-500/15 dark:text-emerald-300"
+                >
+                  → {request.linkedProjectTitle ?? "Project"}
+                </Link>
+              )}
+
               <div className="mt-4">
                 <RequestTriageBar
                   workspaceId={workspaceId}
-                  requestId={requestId ?? ""}
+                  requestId={request.id}
                   triageStatus={request.triageStatus}
                   canTriage={canTriage}
                 />
               </div>
 
               <div className="mt-4">
-                <RequestThread workspaceId={workspaceId} requestId={requestId ?? ""} />
+                <RequestThread
+                  workspaceId={workspaceId}
+                  requestId={request.id}
+                />
               </div>
             </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Opening request…</p>
           )}
         </div>
       </DialogContent>
