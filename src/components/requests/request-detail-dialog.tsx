@@ -6,13 +6,7 @@
  * thread fetches as it mounts, since it lives off the list payload.
  */
 import { Link } from "@tanstack/react-router"
-import {
-  CalendarIcon,
-  ExternalLinkIcon,
-  FlagIcon,
-  MessageSquareIcon,
-  TagIcon,
-} from "lucide-react"
+import { CalendarIcon, ExternalLinkIcon, FlagIcon, TagIcon } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -97,16 +91,6 @@ export function RequestDetailDialog({
                     >
                       <CalendarIcon aria-hidden className="size-3.5 shrink-0" />
                       {formatDueDate(request.desiredDeadline)}
-                    </span>
-                  )}
-                  {request.messageCount > 0 && (
-                    <span className="inline-flex items-center gap-1">
-                      <MessageSquareIcon
-                        aria-hidden
-                        className="size-3.5 shrink-0"
-                      />
-                      {request.messageCount}{" "}
-                      {request.messageCount === 1 ? "message" : "messages"}
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5">
