@@ -77,13 +77,16 @@ export function RequestTriageBar({
       </div>
 
       {/* The ask expands in place — no nested dialog in a dialog. */}
+      {/* Height on the clipper alone: the container grows; the panel's
+          content fades in place inside it (see NeedsInfoPanel), so the input
+          never looks like it is stretching with the height. */}
       <AnimatePresence initial={false}>
         {askingInfo && (
           <motion.div
             id="needs-info-panel"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 200, opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0 }}
+            animate={{ height: 200 }}
+            exit={{ height: 0 }}
             transition={{ duration: 0.3 }}
             className="w-full overflow-hidden"
           >
@@ -349,34 +352,51 @@ function NeedsInfoPanel({
   }
 
   return (
-    <div className="flex h-[200px] flex-col gap-2">
-      <Textarea
-        aria-label="Question for the requester"
-        rows={5}
-        className="field-sizing-fixed min-h-0 flex-1 resize-none"
-        placeholder="What's unclear — scope, audience, deadline?"
-        autoFocus
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-      />
-      <div className="flex items-center justify-between gap-2">
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            The request stays open while you wait; your question is visible to
-            the requester on the thread.
-          </p>
-        )}
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+    <motion.div
+      // Fade choreography inside the height clipper: the content is at its
+      // final size from the first frame and materializes as the container
+      // opens; the input never adjusts to the container's height.
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: 0.15, delay: 0.1 } }}
+      exit={{ opacity: 0, transition: { duration: 0.1 } }}
+      className="flex h-[200px] flex-col gap-2"
+    >
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          The request stays open while you wait; your question is visible to the
+          requester on the thread.
+        </p>
+      )}
+
+      {/* Send and cancel live inside the input, matching the thread composer. */}
+      <div className="relative min-h-0 flex-1">
+        <Textarea
+          aria-label="Question for the requester"
+          rows={4}
+          className="field-sizing-fixed h-full resize-none pr-[12rem]"
+          placeholder="What's unclear — scope, audience, deadline?"
+          autoFocus
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+        />
+        <div className="absolute right-2 bottom-2 flex items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2.5 text-xs"
+            onClick={onClose}
+          >
             Cancel
           </Button>
           <Button
             type="button"
             size="sm"
+            className="h-7 px-2.5 text-xs"
             onClick={submit}
             disabled={needsInfo.isPending}
           >
@@ -385,7 +405,7 @@ function NeedsInfoPanel({
           </Button>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
