@@ -1,9 +1,7 @@
-import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2Icon, PlusIcon } from "lucide-react"
 import { useNavigate } from "@tanstack/react-router"
+import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,36 +12,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
 import {
-  submitRequestSchema,
-  requestPrioritySchema,
-} from "@/lib/request-schemas"
+  CategoryChip,
+  DeadlineChip,
+  PriorityChip,
+  ReferenceLinksChip,
+  toDateString,
+} from "@/components/requests/request-form-chips"
+import { requestCategoriesQuery } from "@/lib/queries/requests"
 import { submitRequestFn } from "@/server/functions/requests"
 import { navigateWithTransition } from "@/lib/navigate-with-transition"
+import type { TaskPriority } from "@/db/enums"
 
 /**
- * The intake form (FR-006/007). The server's `submitRequestSchema` stays the
- * single truth; this form schema only adds the one raw input the wire schema
- * shouldn't know about — links arrive as one-per-line text by nature of a
- * textarea, and get split clean on the way out.
+ * The intake form (FR-006/007), in the project-create-form style: a big
+ * borderless title, a pill row for the metadata, and the brief at the bottom.
+ * The server's `submitRequestSchema` stays the single truth — the only client
+ * checks here are the two the schema names in its own copy, so the messages
+ * never drift between layers.
  */
-const submitRequestFormSchema = submitRequestSchema
-  .omit({ referenceLinks: true })
-  .extend({
-    linksRaw: z.string().max(4096).optional(),
-  })
-
-type SubmitRequestFormInput = z.input<typeof submitRequestFormSchema>
-
 export function SubmitRequestForm({
   workspaceId,
   workspaceSlug,
@@ -55,48 +43,60 @@ export function SubmitRequestForm({
 }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [serverError, setServerError] = useState<string | null>(null)
+  const [title, setTitle] = useState("")
+  const [brief, setBrief] = useState("")
+  const [category, setCategory] = useState<string | null>(null)
+  const [priority, setPriority] = useState<TaskPriority | null>(null)
+  const [deadline, setDeadline] = useState<Date | null>(null)
+  const [links, setLinks] = useState<string[]>([])
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const form = useForm<SubmitRequestFormInput>({
-    resolver: zodResolver(submitRequestFormSchema),
-    defaultValues: {
-      workspaceId,
-      title: "",
-      brief: "",
-      category: undefined,
-      priority: undefined,
-      desiredDeadline: undefined,
-      linksRaw: undefined,
-    },
+  // Suggestions only; suggestions meaningfully change while the dialog is
+  // open, so the query follows its lifecycle instead of running always.
+  const categories = useQuery({
+    ...requestCategoriesQuery(workspaceId),
+    enabled: open,
   })
 
-  async function onSubmit(values: SubmitRequestFormInput) {
-    setServerError(null)
-    const links = (values.linksRaw ?? "")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
+  function resetForm() {
+    setTitle("")
+    setBrief("")
+    setCategory(null)
+    setPriority(null)
+    setDeadline(null)
+    setLinks([])
+  }
 
-    if (links.length > 10) {
-      form.setError("linksRaw", {
-        message: "Ten links is plenty for a brief.",
-      })
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    if (pending) return
+
+    if (title.trim().length === 0) {
+      setError("Give the request a title.")
       return
     }
+    if (brief.trim().length < 20) {
+      setError("Describe the work — at least a sentence or two.")
+      return
+    }
+
+    setPending(true)
+    setError(null)
 
     try {
       const submitted = await submitRequestFn({
         data: {
           workspaceId,
-          title: values.title,
-          brief: values.brief,
-          category: values.category || undefined,
-          priority: values.priority,
-          desiredDeadline: values.desiredDeadline || undefined,
+          title: title.trim(),
+          brief: brief.trim(),
+          category: category?.trim() || undefined,
+          priority: priority ?? undefined,
+          desiredDeadline: deadline ? toDateString(deadline) : undefined,
           referenceLinks: links.length ? links : undefined,
         },
       })
-      form.reset()
+      resetForm()
       setOpen(false)
       await navigateWithTransition(() =>
         navigate({
@@ -105,10 +105,14 @@ export function SubmitRequestForm({
           replace: true,
         })
       )
-    } catch (error) {
-      setServerError(
-        error instanceof Error ? error.message : "Could not submit the request."
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not submit the request."
       )
+    } finally {
+      setPending(false)
     }
   }
 
@@ -117,140 +121,84 @@ export function SubmitRequestForm({
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (next) setServerError(null)
+        if (next) setError(null)
+        else setPending(false)
       }}
     >
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
+        {/* The big title input below is the visible identity; the dialog
+            header stays for Radix's labelled-dialog contract. */}
+        <DialogHeader className="sr-only">
           <DialogTitle>Submit a request</DialogTitle>
           <DialogDescription>
             What does this workspace need made? A lead will pick it up from
             here.
           </DialogDescription>
         </DialogHeader>
+
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex flex-col gap-2"
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-4"
           noValidate
         >
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="request-title">Title</FieldLabel>
-              <Input
-                id="request-title"
-                placeholder="Teaser video for the spring drop"
-                {...form.register("title")}
-              />
-              <FieldError errors={[form.formState.errors.title]} />
-            </Field>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Request title"
+            aria-label="Request title"
+            maxLength={200}
+            autoFocus
+            className="w-full bg-transparent text-2xl font-medium tracking-tight outline-none placeholder:text-muted-foreground"
+          />
 
-            <Field>
-              <FieldLabel htmlFor="request-brief">Brief</FieldLabel>
-              <Textarea
-                id="request-brief"
-                rows={6}
-                placeholder="What's the work, who is it for, and what does done look like?"
-                {...form.register("brief")}
-              />
-              <FieldDescription>
-                This is what the creative team reads first — rich briefs get
-                triaged faster.
-              </FieldDescription>
-              <FieldError errors={[form.formState.errors.brief]} />
-            </Field>
+          <div className="flex flex-wrap items-center gap-2">
+            <CategoryChip
+              options={categories.data ?? []}
+              value={category}
+              onChange={setCategory}
+            />
+            <PriorityChip value={priority} onChange={setPriority} />
+            <DeadlineChip deadline={deadline} onChange={setDeadline} />
+            <ReferenceLinksChip links={links} onChange={setLinks} />
+          </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="request-category">
-                  Category{" "}
-                  <span className="text-muted-foreground">(optional)</span>
-                </FieldLabel>
-                <Input
-                  id="request-category"
-                  placeholder="video, landing page, brand…"
-                  {...form.register("category")}
-                />
-                <FieldError errors={[form.formState.errors.category]} />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="request-priority">
-                  Priority{" "}
-                  <span className="text-muted-foreground">(optional)</span>
-                </FieldLabel>
-                <select
-                  id="request-priority"
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none"
-                  {...form.register("priority")}
-                  defaultValue=""
-                >
-                  <option value="">—</option>
-                  {requestPrioritySchema.options.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priority[0].toUpperCase() + priority.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                <FieldError errors={[form.formState.errors.priority]} />
-              </Field>
-            </div>
+          <div className="border-b" />
 
-            <Field>
-              <FieldLabel htmlFor="request-deadline">
-                Desired deadline{" "}
-                <span className="text-muted-foreground">(optional)</span>
-              </FieldLabel>
-              <Input
-                id="request-deadline"
-                type="date"
-                {...form.register("desiredDeadline")}
-              />
-              <FieldError errors={[form.formState.errors.desiredDeadline]} />
-            </Field>
+          <Textarea
+            value={brief}
+            onChange={(event) => setBrief(event.target.value)}
+            placeholder="What's the work, who is it for, and what does done look like?"
+            aria-label="Request brief"
+            maxLength={20000}
+            className="min-h-[200px] w-full resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+          />
 
-            <Field>
-              <FieldLabel htmlFor="request-links">
-                Reference links{" "}
-                <span className="text-muted-foreground">
-                  (one per line, optional)
-                </span>
-              </FieldLabel>
-              <Textarea
-                id="request-links"
-                rows={3}
-                placeholder={
-                  "https://mood.board/spring\nhttps://competitor.example/teaser"
-                }
-                {...form.register("linksRaw")}
-              />
-              <FieldError errors={[form.formState.errors.linksRaw]} />
-            </Field>
-          </FieldGroup>
-
-          {serverError && (
-            <div
-              role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {serverError}
-            </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
           )}
 
           <DialogFooter>
             <Button
               type="button"
               variant="ghost"
+              disabled={pending}
               onClick={() => setOpen(false)}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? (
+            <Button
+              type="submit"
+              disabled={pending || title.trim().length === 0}
+            >
+              {pending ? (
                 <Loader2Icon className="animate-spin" />
               ) : (
                 <PlusIcon />
               )}
-              Submit request
+              {pending ? "Submitting…" : "Submit request"}
             </Button>
           </DialogFooter>
         </form>

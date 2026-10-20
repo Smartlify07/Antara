@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query"
 import type { RequestThreadMessage } from "@/server/services/request-service"
 import {
   getRequestFn,
+  listRequestCategoriesFn,
   listRequestsFn,
   requestBadgeFn,
   requestThreadFn,
@@ -37,6 +38,17 @@ export function requestQuery(workspaceId: string, requestId: string) {
   return queryOptions({
     queryKey: requestKeys.card(requestId),
     queryFn: () => getRequestFn({ data: { workspaceId, requestId } }),
+  })
+}
+
+/**
+ * Distinct categories in use in the workspace — suggestions for the intake
+ * form's category pill (the field itself stays free text).
+ */
+export function requestCategoriesQuery(workspaceId: string) {
+  return queryOptions({
+    queryKey: ["requests", "categories", workspaceId] as const,
+    queryFn: () => listRequestCategoriesFn({ data: { workspaceId } }),
   })
 }
 

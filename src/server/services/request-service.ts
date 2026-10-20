@@ -1,4 +1,13 @@
-import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm"
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+} from "drizzle-orm"
 import { db } from "@/db"
 import type {
   ProjectStatus,
@@ -49,6 +58,8 @@ export interface RequestListItem {
   desiredDeadline: Date | null
   createdAt: Date
   referenceLinks: string[] | null
+  /** The requester's user id — the seed the team page uses for avatar tints. */
+  requesterId: string | null
   requesterName: string | null
   requesterImage: string | null
   linkedProjectId: string | null
@@ -72,6 +83,7 @@ const requestCard = {
   desiredDeadline: requests.desiredDeadline,
   createdAt: requests.createdAt,
   referenceLinks: requests.referenceLinks,
+  requesterId: user.id,
   requesterName: user.name,
   requesterImage: user.image,
   linkedProjectId: projects.id,
@@ -144,6 +156,26 @@ export async function getRequest(
   requestId: string
 ): Promise<RequestListItem | null> {
   return loadRequestCard(workspaceId, requestId)
+}
+
+/**
+ * Distinct non-empty categories already in use in this workspace, for the
+ * intake form's category pill — suggestions only; the field stays free text.
+ */
+export async function listRequestCategories(
+  workspaceId: string
+): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ category: requests.category })
+    .from(requests)
+    .where(
+      and(eq(requests.workspaceId, workspaceId), isNotNull(requests.category))
+    )
+    .orderBy(asc(requests.category))
+    .limit(50)
+  return rows
+    .map((row) => row.category?.trim())
+    .filter((category): category is string => Boolean(category?.length))
 }
 
 export interface RequestThreadMessage {
@@ -392,7 +424,21 @@ export async function acceptRequest(
   requestId: string,
   destination:
     | { projectId: string }
-    | { newProjectTitle: string; newProjectDescription?: string },
+    | {
+        newProjectTitle: string
+        newProjectDescription?: string | null
+        /** Field semantics mirror `createProjectSchema` / the create form. */
+        newProjectStatus?: ProjectStatus
+        newProjectStartDate?: Date | null
+        newProjectDeadline?: Date | null
+        /** Workspace member ids (`team.id`) to add as plain members. */
+        newProjectMemberIds?: string[]
+        /** `team.id` assigned the project lead role, or null for none. */
+        newProjectLeadId?: string | null
+        /** Existing tag ids, plus labels to create when missing. */
+        newProjectTagIds?: string[]
+        newProjectTagLabels?: string[]
+      },
   message?: string
 ): Promise<TriageOutcome> {
   const access = await requireWorkspaceAccess(workspaceId, actorId)
@@ -431,12 +477,17 @@ export async function acceptRequest(
     const created = await createProject(workspaceId, candidate, {
       title: destination.newProjectTitle,
       description: destination.newProjectDescription ?? null,
-      // Work is ahead, deliverables are not yet — planning is the honest state.
-      status: "planning" satisfies ProjectStatus,
-      memberTeamIds: [],
-      leadTeamId: null,
-      tagIds: [],
-      newTagLabels: [],
+      // The chips ride along from the accept dialog, mirroring the create
+      // form; planning stays the sensible default when an older client
+      // sends only a title — work is ahead, deliverables are not yet.
+      status:
+        destination.newProjectStatus ?? ("planning" satisfies ProjectStatus),
+      startDate: destination.newProjectStartDate ?? null,
+      deadline: destination.newProjectDeadline ?? null,
+      memberTeamIds: destination.newProjectMemberIds ?? [],
+      leadTeamId: destination.newProjectLeadId ?? null,
+      tagIds: destination.newProjectTagIds ?? [],
+      newTagLabels: destination.newProjectTagLabels ?? [],
       ownerUserId: actorId,
     })
     projectId = created.id

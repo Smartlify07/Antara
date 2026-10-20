@@ -83,6 +83,13 @@ export const submitRequestFn = createServerFn({ method: "POST" })
     return { id }
   })
 
+export const listRequestCategoriesFn = createServerFn({ method: "GET" })
+  .validator(z.object({ workspaceId: z.string() }))
+  .handler(async ({ data }) => {
+    await resolveWorkspaceId(data.workspaceId)
+    return requestService.listRequestCategories(data.workspaceId)
+  })
+
 export const requestThreadPostFn = createServerFn({ method: "POST" })
   .validator(requestMessageSchema)
   .handler(async ({ data }) => {
@@ -106,6 +113,16 @@ export const acceptRequestFn = createServerFn({ method: "POST" })
         ? {
             newProjectTitle: data.newProjectTitle,
             newProjectDescription: data.newProjectDescription,
+            // Validator output status/ids are always populated (the reused
+            // schema fields carry create-time defaults), but the service
+            // contract keeps them optional via its own nullish fallbacks.
+            newProjectStatus: data.newProjectStatus,
+            newProjectStartDate: data.newProjectStartDate ?? null,
+            newProjectDeadline: data.newProjectDeadline ?? null,
+            newProjectMemberIds: data.newProjectMemberIds,
+            newProjectLeadId: data.newProjectLeadId ?? null,
+            newProjectTagIds: data.newProjectTagIds,
+            newProjectTagLabels: data.newProjectTagLabels,
           }
         : null
     if (!destination) {
