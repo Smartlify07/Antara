@@ -180,22 +180,21 @@ export function AcceptDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* One ghost switcher under the header instead of a two-button
-            shouldered tablist: it always names the path you'd leave for.
-            Plain-button semantics on purpose — the label swaps with the mode,
-            so aria-pressed would never be true and role="tab" would imply
+        {/* One underlined switch link under the header instead of a
+            two-button shouldered tablist: it always names the path you'd
+            leave for. Left-aligned in foreground text; plain-button
+            semantics on purpose — the label swaps with the mode, so
+            aria-pressed would never be true and role="tab" would imply
             tab panels that don't exist. */}
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="justify-self-start text-muted-foreground"
+          className="justify-self-start text-sm text-foreground underline underline-offset-2 transition-colors hover:text-muted-foreground"
           onClick={() => switchMode(mode === "new" ? "existing" : "new")}
         >
           {mode === "new"
             ? "Use an existing project instead"
             : "Create a new project instead"}
-        </Button>
+        </button>
 
         {/* Padded div instead of a form onSubmit — the footer button below is
             the only submit affordance and completing the action from here is
