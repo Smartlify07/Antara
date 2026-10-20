@@ -424,7 +424,21 @@ export async function acceptRequest(
   requestId: string,
   destination:
     | { projectId: string }
-    | { newProjectTitle: string; newProjectDescription?: string },
+    | {
+        newProjectTitle: string
+        newProjectDescription?: string | null
+        /** Field semantics mirror `createProjectSchema` / the create form. */
+        newProjectStatus?: ProjectStatus
+        newProjectStartDate?: Date | null
+        newProjectDeadline?: Date | null
+        /** Workspace member ids (`team.id`) to add as plain members. */
+        newProjectMemberIds?: string[]
+        /** `team.id` assigned the project lead role, or null for none. */
+        newProjectLeadId?: string | null
+        /** Existing tag ids, plus labels to create when missing. */
+        newProjectTagIds?: string[]
+        newProjectTagLabels?: string[]
+      },
   message?: string
 ): Promise<TriageOutcome> {
   const access = await requireWorkspaceAccess(workspaceId, actorId)
@@ -463,12 +477,17 @@ export async function acceptRequest(
     const created = await createProject(workspaceId, candidate, {
       title: destination.newProjectTitle,
       description: destination.newProjectDescription ?? null,
-      // Work is ahead, deliverables are not yet — planning is the honest state.
-      status: "planning" satisfies ProjectStatus,
-      memberTeamIds: [],
-      leadTeamId: null,
-      tagIds: [],
-      newTagLabels: [],
+      // The chips ride along from the accept dialog, mirroring the create
+      // form; planning stays the sensible default when an older client
+      // sends only a title — work is ahead, deliverables are not yet.
+      status:
+        destination.newProjectStatus ?? ("planning" satisfies ProjectStatus),
+      startDate: destination.newProjectStartDate ?? null,
+      deadline: destination.newProjectDeadline ?? null,
+      memberTeamIds: destination.newProjectMemberIds ?? [],
+      leadTeamId: destination.newProjectLeadId ?? null,
+      tagIds: destination.newProjectTagIds ?? [],
+      newTagLabels: destination.newProjectTagLabels ?? [],
       ownerUserId: actorId,
     })
     projectId = created.id

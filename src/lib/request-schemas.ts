@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { createProjectSchema } from "@/lib/project-schemas"
 
 /**
  * Validation for the Requests module (FR-006..011). Server functions use
@@ -75,6 +76,12 @@ export const requestIdSchema = z.object({
  * workspace, or a title to mint a new one. Both filled is a form bug; neither
  * is a no-op acceptance, which invites a "what did that button do" support
  * ticket.
+ *
+ * Minting a project can also carry the rest of the create-form's shape
+ * (status, dates, people, tags). Those fields reuse `createProjectSchema`'s
+ * field schemas verbatim so the accept dialog and the create form cannot
+ * drift apart on limits — and the ones carrying defaults are optional on the
+ * wire: older clients that send only a title still validate.
  */
 export const acceptRequestSchema = z
   .object({
@@ -88,12 +95,29 @@ export const acceptRequestSchema = z
       .max(120)
       .optional(),
     newProjectDescription: z.string().trim().max(2000).optional(),
+    newProjectStatus: createProjectSchema.shape.status,
+    newProjectStartDate: createProjectSchema.shape.startDate,
+    newProjectDeadline: createProjectSchema.shape.deadline,
+    newProjectMemberIds: createProjectSchema.shape.memberIds,
+    newProjectLeadId: createProjectSchema.shape.leadId,
+    newProjectTagIds: createProjectSchema.shape.tagIds,
+    newProjectTagLabels: createProjectSchema.shape.newTagLabels,
     // Optional decision note; becomes the thread's audit entry.
     note: z.string().trim().max(2000).optional(),
   })
   .refine((v) => Boolean(v.projectId) !== Boolean(v.newProjectTitle), {
     message: "Pick an existing project or name a new one — not both.",
   })
+  .refine(
+    (v) =>
+      !v.newProjectStartDate ||
+      !v.newProjectDeadline ||
+      v.newProjectDeadline >= v.newProjectStartDate,
+    {
+      message: "End date must be on or after the start date",
+      path: ["newProjectDeadline"],
+    }
+  )
 
 export type AcceptRequestInput = z.input<typeof acceptRequestSchema>
 
