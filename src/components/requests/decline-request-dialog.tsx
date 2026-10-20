@@ -65,7 +65,7 @@ export function DeclineDialog({
         <CircleXIcon />
         Decline
       </Button>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-3xl lg:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Decline request</DialogTitle>
           <DialogDescription>
@@ -73,28 +73,27 @@ export function DeclineDialog({
             final.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <Field>
-            <FieldLabel htmlFor="decline-note">
-              Reason <span className="text-muted-foreground">(optional)</span>
-            </FieldLabel>
-            <Textarea
-              id="decline-note"
-              rows={3}
-              placeholder="Why the workspace won't do this work."
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-            />
-          </Field>
-          {error && (
-            <div
-              role="alert"
-              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {error}
-            </div>
-          )}
-        </div>
+        <Field>
+          <FieldLabel htmlFor="decline-note">
+            Reason <span className="text-muted-foreground">(optional)</span>
+          </FieldLabel>
+          <div className="border-b" />
+          <Textarea
+            id="decline-note"
+            placeholder="Why the workspace won't do this work."
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            className="min-h-[200px] w-full resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+          />
+        </Field>
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
+          </div>
+        )}
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
             Cancel
