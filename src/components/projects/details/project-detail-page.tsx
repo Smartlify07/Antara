@@ -102,7 +102,13 @@ export function ProjectDetailPage({
           </p>
         </div>
 
-        <ProjectPills {...pillState} tagOptions={tagOptions} />
+        {/* Pills live in the side panel from lg up; below that the panel is
+            stacked under the content, so they move into the header here. Same
+            unit, same shared state — whichever breakpoint is active, the
+            pills show once. */}
+        <div className="lg:hidden">
+          <ProjectPills {...pillState} tagOptions={tagOptions} />
+        </div>
       </header>
 
       {error && (
@@ -128,16 +134,10 @@ export function ProjectDetailPage({
         <TabsContent value="overview">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="flex flex-col gap-8">
-              {/* Status is deliberately absent: the right column's Status row
-                  already shows it, next to the pill that edits it. Repeating it
-                  here put the same value on screen twice with no new
-                  information. */}
-              <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
-                <Stat label="Start" value={project.startDate} />
-                <Stat label="Deadline" value={project.deadline} />
-                <Stat label="Created" value={project.createdAt} />
-              </dl>
-
+              {/* Dates and dates-adjacent facts are not repeated here: the
+                  pill row (header on mobile, side panel on desktop) already
+                  carries them, and typing them twice meant reading them
+                  twice. */}
               {selectedTags.length > 0 && (
                 <ul className="flex flex-wrap items-center gap-2">
                   {selectedTags.map((tag) => (
@@ -256,36 +256,4 @@ export function ProjectDetailPage({
       />
     </div>
   )
-}
-
-function Stat({
-  label,
-  value,
-}: {
-  label: string
-  value: string | Date | null
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">
-        {value ? (
-          formatValue(value)
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </dd>
-    </div>
-  )
-}
-
-function formatValue(value: string | Date) {
-  if (value instanceof Date) {
-    return new Intl.DateTimeFormat("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }).format(value)
-  }
-  return value.replace(/_/g, " ")
 }

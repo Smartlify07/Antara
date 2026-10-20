@@ -15,13 +15,15 @@ import type {
 import type { ProjectStatus } from "@/db/enums"
 
 /**
- * The right column: the same editable pills, plus the Linear-style labelled
- * property rows.
+ * The right column: the same pills as the mobile header row, plus the
+ * Linear-style labelled property rows.
  *
- * The pills are duplicated from the header row on purpose — same props, same
- * handlers, one shared query — so they cannot show different values. The rows
- * below are read-only and exist so the current state is scannable without
- * opening five popovers.
+ * The pills are shared with the header's — same unit, same props, one shared
+ * query — but breakpoint-exclusive rather than duplicated on screen: this
+ * wrapper is hidden below `lg` (the header shows the pills there) and shown
+ * here from `lg` up, where the panel sits beside the content. The read-only
+ * rows exist so the current state is scannable without opening five
+ * popovers.
  */
 export function ProjectProperties({
   project,
@@ -59,12 +61,16 @@ export function ProjectProperties({
 
   return (
     <div className="flex flex-col gap-4">
-      <ProjectPills
-        {...pills}
-        tagOptions={tagOptions}
-        onInviteClick={onInviteClick}
-        disabled={saving}
-      />
+      {/* Desktop-only half of the pill switch: below lg the header row shows
+          these pills instead, so the properties panel keeps its rows only. */}
+      <div className="hidden lg:block">
+        <ProjectPills
+          {...pills}
+          tagOptions={tagOptions}
+          onInviteClick={onInviteClick}
+          disabled={saving}
+        />
+      </div>
 
       <dl className="flex flex-col gap-2.5 text-sm">
         <Row label="Status">
