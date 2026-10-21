@@ -552,16 +552,11 @@ function BookSheet({
 export function LibraryFoldersShelf({
   folder,
   onBack,
-  initialExpandedAssetId = null,
 }: {
   folder: MockFolder
   onBack: () => void
-  /** A record the shelf starts with open — the demo uses it for its SSR. */
-  initialExpandedAssetId?: string | null
 }) {
-  const [expandedId, setExpandedId] = useState<string | null>(
-    initialExpandedAssetId
-  )
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const backRef = useRef<HTMLButtonElement>(null)
 
   // The page change lands focus on the back affordance, the way a real
@@ -635,19 +630,10 @@ export function LibraryFoldersShelf({
 /**
  * Holds the index ⇄ shelf screen state and demos the page change with a
  * crossfade/slide (softened for prefers-reduced-motion).
- *
- * For the server-rendered review, the very first screen is the shelf with
- * its first record open, so the record sheet — its version history
- * included — is present in the HTML before any JavaScript runs. Once the
- * reader closes that record or steps back, the demo behaves as a plain
- * click-through again.
  */
 export default function LibraryFoldersA() {
   const reduce = useReducedMotion()
-  const [openSlug, setOpenSlug] = useState<string | null>(
-    MOCK_FOLDERS[0]?.slug ?? null
-  )
-  const [preexpanded, setPreexpanded] = useState(true)
+  const [openSlug, setOpenSlug] = useState<string | null>(null)
   const folder = openSlug
     ? (MOCK_FOLDERS.find((f) => f.slug === openSlug) ?? null)
     : null
@@ -671,13 +657,7 @@ export default function LibraryFoldersA() {
         <motion.div key={`shelf-${folder.slug}`} {...screenMotion}>
           <LibraryFoldersShelf
             folder={folder}
-            onBack={() => {
-              setPreexpanded(false)
-              setOpenSlug(null)
-            }}
-            initialExpandedAssetId={
-              preexpanded ? (folder.assets[0]?.id ?? null) : null
-            }
+            onBack={() => setOpenSlug(null)}
           />
         </motion.div>
       ) : (
