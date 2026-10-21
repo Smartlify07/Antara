@@ -42,6 +42,9 @@ import type {
 /** The repo's standard ease-out curve (same family projects-grid uses). */
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
+/** History rows shown before an inline toggle offers the earlier ones. */
+const HISTORY_PREVIEW_COUNT = 4
+
 /** "docs.google.com" — the quiet domain line under a link row. */
 function domainOf(url: string): string {
   try {
@@ -301,7 +304,10 @@ function ShelfBook({
  * The record beneath the lifted cover. Left column: the facts — who created
  * it and when, the latest version with its review dot, the last ever
  * approved version, the version count and the whole-history approval state.
- * Right column: the working link and the reserved artwork zone.
+ * Right column: the working link and the reserved artwork zone. Beneath
+ * both, the asset's whole version timeline as quiet rows, newest first,
+ * with the earlier ones behind an inline toggle so long histories never
+ * dominate the sheet.
  */
 function BookSheet({
   asset,
@@ -316,6 +322,7 @@ function BookSheet({
     ? REVIEW_DOTS[latest.reviewStatus]
     : null
   const approval = APPROVAL_META[asset.approvalState]
+  const [showAllHistory, setShowAllHistory] = useState(false)
 
   return (
     <motion.div
@@ -448,6 +455,95 @@ function BookSheet({
           </div>
         </div>
       </div>
+
+      {/* Version history — the asset's whole timeline, newest first, as a
+          quiet list under the two-column record. Additive: the sheet grows
+          to hold it, and long histories fold behind an inline toggle. */}
+      {asset.versionHistory.length > 0 && (
+        <section aria-label="Version history" className="pt-3">
+          <h4 className="text-[11px] font-medium tracking-widest text-muted-foreground uppercase">
+            Version history ·{" "}
+            {countOf(asset.versionHistory.length, "version", "versions")}
+          </h4>
+          <ul className="mt-2 flex flex-col gap-1">
+            {(showAllHistory
+              ? asset.versionHistory
+              : asset.versionHistory.slice(0, HISTORY_PREVIEW_COUNT)
+            ).map((version, index) => {
+              const review = version.reviewStatus
+                ? REVIEW_DOTS[version.reviewStatus]
+                : null
+              const provider =
+                version.source === "external_link"
+                  ? version.externalProvider
+                  : null
+              return (
+                <li
+                  key={version.versionNo}
+                  className={cn(
+                    "flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg px-2 py-1.5",
+                    index === 0 && "bg-muted/50"
+                  )}
+                >
+                  <span className="text-xs font-medium tabular-nums">
+                    {version.label}
+                  </span>
+                  <span className="flex items-baseline gap-1.5 text-[11px] text-muted-foreground">
+                    {review ? (
+                      <>
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "size-2 shrink-0 rounded-full",
+                            review.dot
+                          )}
+                        />
+                        {review.label}
+                      </>
+                    ) : (
+                      "(draft)"
+                    )}
+                  </span>
+                  {provider ? (
+                    <span className="text-[10px] text-muted-foreground/70">
+                      {provider}
+                    </span>
+                  ) : null}
+                  <span className="ml-auto min-w-0 truncate text-[11px] text-muted-foreground/80">
+                    {formatRelative(version.createdAt)} ·{" "}
+                    {version.submitter.name}
+                  </span>
+                  {index === 0 && (
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Latest
+                    </span>
+                  )}
+                  {version.label === asset.latestApprovedLabel && (
+                    <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                      Approved
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          {asset.versionHistory.length > HISTORY_PREVIEW_COUNT && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                setShowAllHistory((current) => !current)
+              }}
+              aria-expanded={showAllHistory}
+              className="mt-1 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              {showAllHistory
+                ? "Show fewer versions"
+                : `Show ${countOf(asset.versionHistory.length - HISTORY_PREVIEW_COUNT, "earlier version", "earlier versions")}`}
+            </button>
+          )}
+        </section>
+      )}
     </motion.div>
   )
 }
@@ -456,11 +552,16 @@ function BookSheet({
 export function LibraryFoldersShelf({
   folder,
   onBack,
+  initialExpandedAssetId = null,
 }: {
   folder: MockFolder
   onBack: () => void
+  /** A record the shelf starts with open — the demo uses it for its SSR. */
+  initialExpandedAssetId?: string | null
 }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(
+    initialExpandedAssetId
+  )
   const backRef = useRef<HTMLButtonElement>(null)
 
   // The page change lands focus on the back affordance, the way a real
@@ -534,10 +635,19 @@ export function LibraryFoldersShelf({
 /**
  * Holds the index ⇄ shelf screen state and demos the page change with a
  * crossfade/slide (softened for prefers-reduced-motion).
+ *
+ * For the server-rendered review, the very first screen is the shelf with
+ * its first record open, so the record sheet — its version history
+ * included — is present in the HTML before any JavaScript runs. Once the
+ * reader closes that record or steps back, the demo behaves as a plain
+ * click-through again.
  */
 export default function LibraryFoldersA() {
   const reduce = useReducedMotion()
-  const [openSlug, setOpenSlug] = useState<string | null>(null)
+  const [openSlug, setOpenSlug] = useState<string | null>(
+    MOCK_FOLDERS[0]?.slug ?? null
+  )
+  const [preexpanded, setPreexpanded] = useState(true)
   const folder = openSlug
     ? (MOCK_FOLDERS.find((f) => f.slug === openSlug) ?? null)
     : null
@@ -561,7 +671,13 @@ export default function LibraryFoldersA() {
         <motion.div key={`shelf-${folder.slug}`} {...screenMotion}>
           <LibraryFoldersShelf
             folder={folder}
-            onBack={() => setOpenSlug(null)}
+            onBack={() => {
+              setPreexpanded(false)
+              setOpenSlug(null)
+            }}
+            initialExpandedAssetId={
+              preexpanded ? (folder.assets[0]?.id ?? null) : null
+            }
           />
         </motion.div>
       ) : (
