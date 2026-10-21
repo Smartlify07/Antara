@@ -10,23 +10,26 @@ import type { LibraryApprovalState } from "@/lib/library-schemas"
  */
 export const ASSET_STATE_META: Record<
   LibraryApprovalState,
-  { label: string; badgeClass: string; hint: string }
+  { label: string; badgeClass: string; hint: string; dot: string }
 > = {
   approved: {
     label: "Approved",
     badgeClass:
       "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
     hint: "A version of this file has been approved.",
+    dot: "bg-emerald-500",
   },
   not_approved: {
     label: "Not approved",
     badgeClass: "bg-muted text-muted-foreground",
     hint: "No version of this file has been approved yet.",
+    dot: "bg-sky-500",
   },
   superseded: {
     label: "Superseded",
     badgeClass:
       "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
     hint: "Reviewed work on this file was replaced by newer versions.",
+    dot: "bg-muted-foreground/40",
   },
 }
