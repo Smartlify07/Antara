@@ -261,8 +261,8 @@ export function TaskRow({
 
         {projectSlug ? (
           <Link
-            to="/w/$workspaceSlug/projects/$projectSlug"
-            params={{ workspaceSlug, projectSlug }}
+            to="/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId"
+            params={{ workspaceSlug, projectSlug, taskId: task.id }}
             className="text-sm font-medium hover:underline"
           >
             {task.title}

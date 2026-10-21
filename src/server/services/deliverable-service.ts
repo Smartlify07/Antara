@@ -2,12 +2,14 @@ import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm"
 import { db } from "@/db"
 import { user } from "@/db/schema/auth"
 import { assetVersions, assets } from "@/db/schema/assets"
+import { comments } from "@/db/schema/comments"
 import { deliverables } from "@/db/schema/deliverables"
 import { requests } from "@/db/schema/requests"
 import { projects } from "@/db/schema/projects"
 import { team } from "@/db/schema/workspaces"
 import type {
   CreateDeliverableInput,
+  DeliverableCommentInput,
   SetDeliverableDeadlineInput,
   SetDeliverableOwnerInput,
 } from "@/lib/deliverable-schemas"
@@ -17,6 +19,7 @@ import { notifyDeliverableOwnerAssigned } from "./notification-service"
 import {
   canManageDeliverables,
   canMoveProductionStatus,
+  canWorkOnTasks,
 } from "./work-permissions"
 import { requireWorkAccess } from "./work-access"
 
@@ -51,9 +54,12 @@ export interface DeliverableCard {
   deadline: string | null
   /** Server-computed so every surface agrees on what "late" means. */
   overdue: boolean
-  owner:
-    | { teamId: string; name: string | null; email: string | null; image: string | null }
-    | null
+  owner: {
+    teamId: string
+    name: string | null
+    email: string | null
+    image: string | null
+  } | null
   /** The accepted request this work came from, when it did. */
   request: RequestRef | null
   /** Versions recorded across the deliverable's assets — the Work tab's
@@ -151,10 +157,7 @@ export async function listProjectDeliverables(
     .from(assets)
     .innerJoin(assetVersions, eq(assetVersions.assetId, assets.id))
     .where(
-      and(
-        eq(assets.projectId, projectId),
-        isNotNull(assets.deliverableId)
-      )
+      and(eq(assets.projectId, projectId), isNotNull(assets.deliverableId))
     )
     .groupBy(assets.deliverableId)
   const versionCountByDeliverable = new Map(
@@ -209,7 +212,9 @@ export async function createDeliverable(
 ): Promise<{ id: string }> {
   const access = await requireWorkAccess(workspaceId, userId, input.projectId)
   if (!canManageDeliverables(access.facts)) {
-    throw new Error("Only project leads or workspace admins can create deliverables.")
+    throw new Error(
+      "Only project leads or workspace admins can create deliverables."
+    )
   }
   await requireLiveProject(workspaceId, input.projectId)
 
@@ -230,7 +235,8 @@ export async function createDeliverable(
       createdBy: userId,
     })
     .returning({ id: deliverables.id })
-  if (createdRows.length === 0) throw new Error("Could not create the deliverable.")
+  if (createdRows.length === 0)
+    throw new Error("Could not create the deliverable.")
 
   // The owner hears about the work they now carry (FR-047b); fail-soft, so
   // the card's creation never depends on the bell.
@@ -255,7 +261,13 @@ async function requireTeamMember(
   const rows = await db
     .select({ joinedAt: team.joinedAt })
     .from(team)
-    .where(and(eq(team.id, teamId), eq(team.workspaceId, workspaceId), eq(team.status, "active")))
+    .where(
+      and(
+        eq(team.id, teamId),
+        eq(team.workspaceId, workspaceId),
+        eq(team.status, "active")
+      )
+    )
     .limit(1)
   if (rows.length === 0 || !rows[0].joinedAt) {
     throw new Error("Pick a workspace member who has joined.")
@@ -265,7 +277,11 @@ async function requireTeamMember(
 async function requireDeliverable(
   workspaceId: string,
   input: { projectId: string; deliverableId: string }
-): Promise<{ ownerId: string | null; productionStatus: DeliverableStatus; deadline: Date | null }> {
+): Promise<{
+  ownerId: string | null
+  productionStatus: DeliverableStatus
+  deadline: Date | null
+}> {
   const rows = await db
     .select({
       ownerId: deliverables.ownerId,
@@ -345,12 +361,19 @@ export async function setDeliverableDeadline(
 export async function setDeliverableStatus(
   workspaceId: string,
   userId: string,
-  input: { workspaceId: string; projectId: string; deliverableId: string; status: DeliverableStatus }
+  input: {
+    workspaceId: string
+    projectId: string
+    deliverableId: string
+    status: DeliverableStatus
+  }
 ): Promise<void> {
   const access = await requireWorkAccess(workspaceId, userId, input.projectId)
   const current = await requireDeliverable(workspaceId, input)
   if (!canMoveProductionStatus(access.facts, current.ownerId)) {
-    throw new Error("Only admins, the project lead, or the owner can move this deliverable's status.")
+    throw new Error(
+      "Only admins, the project lead, or the owner can move this deliverable's status."
+    )
   }
 
   assertDeliverableTransition(current.productionStatus, input.status)
@@ -367,6 +390,83 @@ export async function setDeliverableStatus(
     .returning({ id: deliverables.id })
 
   if (moved.length === 0) {
-    throw new Error("This deliverable was just updated — refresh and try again.")
+    throw new Error(
+      "This deliverable was just updated — refresh and try again."
+    )
   }
+}
+
+// ---------------------------------------------------------------------------
+// Threads (comments on the deliverable itself, subjectType "deliverable")
+// ---------------------------------------------------------------------------
+
+/** One post in the deliverable's conversation, oldest first. */
+export interface DeliverableThreadMessage {
+  id: string
+  body: string
+  createdAt: Date
+  authorId: string | null
+  authorName: string | null
+  authorEmail: string | null
+}
+
+/** The deliverable's own thread, oldest first. Same access as the card list. */
+export async function listDeliverableThread(
+  workspaceId: string,
+  userId: string,
+  input: { projectId: string; deliverableId: string }
+): Promise<DeliverableThreadMessage[]> {
+  await requireWorkAccess(workspaceId, userId, input.projectId)
+  await requireDeliverable(workspaceId, {
+    projectId: input.projectId,
+    deliverableId: input.deliverableId,
+  })
+
+  return db
+    .select({
+      id: comments.id,
+      body: comments.body,
+      createdAt: comments.createdAt,
+      authorId: comments.authorId,
+      authorName: user.name,
+      authorEmail: user.email,
+    })
+    .from(comments)
+    .leftJoin(user, eq(comments.authorId, user.id))
+    .where(
+      and(
+        eq(comments.workspaceId, workspaceId),
+        eq(comments.subjectType, "deliverable"),
+        eq(comments.subjectId, input.deliverableId)
+      )
+    )
+    .orderBy(asc(comments.createdAt))
+}
+
+/**
+ * A project member posts to the deliverable's thread. The notification
+ * inventory has no deliverable-comment event yet — add one there before
+ * wiring a bell, the same way every other emitter earned its FR line first.
+ */
+export async function addDeliverableComment(
+  workspaceId: string,
+  userId: string,
+  input: DeliverableCommentInput
+): Promise<void> {
+  const access = await requireWorkAccess(workspaceId, userId, input.projectId)
+  if (!canWorkOnTasks(access.facts)) {
+    throw new Error("Only project members can add to this thread.")
+  }
+  await requireDeliverable(workspaceId, {
+    projectId: input.projectId,
+    deliverableId: input.deliverableId,
+  })
+
+  await db.insert(comments).values({
+    workspaceId,
+    authorId: userId,
+    subjectType: "deliverable",
+    subjectId: input.deliverableId,
+    body: input.body,
+  })
 }

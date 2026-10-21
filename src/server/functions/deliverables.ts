@@ -5,6 +5,8 @@ import { z } from "zod"
 import { auth } from "@/lib/auth"
 import {
   createDeliverableSchema,
+  deliverableCommentSchema,
+  deliverableIdSchema,
   setDeliverableDeadlineSchema,
   setDeliverableOwnerSchema,
   setDeliverableStatusSchema,
@@ -70,7 +72,11 @@ export const setDeliverableDeadlineFn = createServerFn({ method: "POST" })
   .validator(setDeliverableDeadlineSchema)
   .handler(async ({ data }) => {
     const userId = await resolveWorkspaceId(data.workspaceId)
-    await deliverableService.setDeliverableDeadline(data.workspaceId, userId, data)
+    await deliverableService.setDeliverableDeadline(
+      data.workspaceId,
+      userId,
+      data
+    )
     return { ok: true }
   })
 
@@ -78,6 +84,32 @@ export const setDeliverableStatusFn = createServerFn({ method: "POST" })
   .validator(setDeliverableStatusSchema)
   .handler(async ({ data }) => {
     const userId = await resolveWorkspaceId(data.workspaceId)
-    await deliverableService.setDeliverableStatus(data.workspaceId, userId, data)
+    await deliverableService.setDeliverableStatus(
+      data.workspaceId,
+      userId,
+      data
+    )
+    return { ok: true }
+  })
+
+export const listDeliverableThreadFn = createServerFn({ method: "GET" })
+  .validator(deliverableIdSchema)
+  .handler(async ({ data }) => {
+    const userId = await resolveWorkspaceId(data.workspaceId)
+    return deliverableService.listDeliverableThread(data.workspaceId, userId, {
+      projectId: data.projectId,
+      deliverableId: data.deliverableId,
+    })
+  })
+
+export const addDeliverableCommentFn = createServerFn({ method: "POST" })
+  .validator(deliverableCommentSchema)
+  .handler(async ({ data }) => {
+    const userId = await resolveWorkspaceId(data.workspaceId)
+    await deliverableService.addDeliverableComment(
+      data.workspaceId,
+      userId,
+      data
+    )
     return { ok: true }
   })

@@ -187,6 +187,7 @@ export function ProjectDetailPage({
             workspaceSlug={workspaceSlug}
             workspaceId={workspaceId}
             projectId={project.id}
+            projectSlug={project.slug}
             members={members}
           />
         </TabsContent>

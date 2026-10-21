@@ -1,6 +1,7 @@
 import { and, asc, count, eq, inArray, isNull, ne, or, sql } from "drizzle-orm"
 import { db } from "@/db"
 import { user } from "@/db/schema/auth"
+import { comments } from "@/db/schema/comments"
 import { deliverables } from "@/db/schema/deliverables"
 import { projectMembers, projects } from "@/db/schema/projects"
 import { statusHistory, taskAssignees, tasks } from "@/db/schema/tasks"
@@ -9,6 +10,7 @@ import type { TaskPriority, TaskStatus } from "@/db/enums"
 import type {
   CreateTaskInput,
   SetTaskAssigneesInput,
+  TaskCommentInput,
 } from "@/lib/task-schemas"
 import { assertTaskStatusMove, canWorkOnTasks } from "./work-permissions"
 import { notifyTaskAssignees } from "./notification-service"
@@ -29,7 +31,8 @@ import { requireWorkAccess } from "./work-access"
 /** A date-only wire value ("2026-02-01") pinned to UTC midnight. */
 function parseDayDate(value: string): Date {
   const date = new Date(`${value}T00:00:00.000Z`)
-  if (Number.isNaN(date.getTime())) throw new Error("That date could not be read.")
+  if (Number.isNaN(date.getTime()))
+    throw new Error("That date could not be read.")
   return date
 }
 
@@ -170,7 +173,10 @@ async function loadProjectTasks(
     })
     .from(tasks)
     .leftJoin(taskAssignees, eq(taskAssignees.taskId, tasks.id))
-    .leftJoin(projectMembers, eq(projectMembers.id, taskAssignees.projectMemberId))
+    .leftJoin(
+      projectMembers,
+      eq(projectMembers.id, taskAssignees.projectMemberId)
+    )
     .leftJoin(
       team,
       and(
@@ -201,7 +207,11 @@ async function loadProjectTasks(
         status: row.status,
         priority: row.priority,
         dueDate,
-        overdue: dueDate !== null && dueDate < today && row.status !== "done" && row.status !== "approved",
+        overdue:
+          dueDate !== null &&
+          dueDate < today &&
+          row.status !== "done" &&
+          row.status !== "approved",
         assignees: [],
       }
       byId.set(row.id, card)
@@ -250,7 +260,11 @@ export async function createTask(
   }
   await requireLiveProject(workspaceId, input.projectId)
   if (input.deliverableId) {
-    await requireDeliverableInProject(workspaceId, input.projectId, input.deliverableId)
+    await requireDeliverableInProject(
+      workspaceId,
+      input.projectId,
+      input.deliverableId
+    )
   }
   const memberIds = await resolveProjectMemberIds(
     input.projectId,
@@ -302,7 +316,11 @@ async function requireTask(
   workspaceId: string,
   projectId: string,
   taskId: string
-): Promise<{ status: TaskStatus; projectId: string; deliverableId: string | null }> {
+): Promise<{
+  status: TaskStatus
+  projectId: string
+  deliverableId: string | null
+}> {
   const rows = await db
     .select({
       status: tasks.status,
@@ -398,9 +416,7 @@ export async function setTaskAssignees(
   )
 
   await db.transaction(async (tx) => {
-    await tx
-      .delete(taskAssignees)
-      .where(eq(taskAssignees.taskId, input.taskId))
+    await tx.delete(taskAssignees).where(eq(taskAssignees.taskId, input.taskId))
     if (memberIds.length > 0) {
       await tx.insert(taskAssignees).values(
         memberIds.map((projectMemberId) => ({
@@ -437,7 +453,10 @@ export async function setTaskDueDate(
 
   await db
     .update(tasks)
-    .set({ dueDate: dueDate ? parseDayDate(dueDate) : null, updatedAt: new Date() })
+    .set({
+      dueDate: dueDate ? parseDayDate(dueDate) : null,
+      updatedAt: new Date(),
+    })
     .where(eq(tasks.id, taskId))
 }
 
@@ -558,4 +577,73 @@ export async function countMyTasks(
       )
     )
   return rows.length > 0 ? rows[0].total : 0
+}
+
+// ---------------------------------------------------------------------------
+// Threads (comments on the task itself, subjectType "task")
+// ---------------------------------------------------------------------------
+
+/** One post in the task's conversation, oldest first. */
+export interface TaskThreadMessage {
+  id: string
+  body: string
+  createdAt: Date
+  authorId: string | null
+  authorName: string | null
+  authorEmail: string | null
+}
+
+/** The task's own thread, oldest first. Same access as the project task list. */
+export async function listTaskThread(
+  workspaceId: string,
+  userId: string,
+  input: { projectId: string; taskId: string }
+): Promise<TaskThreadMessage[]> {
+  await requireWorkAccess(workspaceId, userId, input.projectId)
+  await requireTask(workspaceId, input.projectId, input.taskId)
+
+  return db
+    .select({
+      id: comments.id,
+      body: comments.body,
+      createdAt: comments.createdAt,
+      authorId: comments.authorId,
+      authorName: user.name,
+      authorEmail: user.email,
+    })
+    .from(comments)
+    .leftJoin(user, eq(comments.authorId, user.id))
+    .where(
+      and(
+        eq(comments.workspaceId, workspaceId),
+        eq(comments.subjectType, "task"),
+        eq(comments.subjectId, input.taskId)
+      )
+    )
+    .orderBy(asc(comments.createdAt))
+}
+
+/**
+ * A project member posts to the task's thread. The notification inventory has
+ * no task-comment event yet — add one there before wiring a bell, the same way
+ * every other emitter earned its FR line first.
+ */
+export async function addTaskComment(
+  workspaceId: string,
+  userId: string,
+  input: TaskCommentInput
+): Promise<void> {
+  const access = await requireWorkAccess(workspaceId, userId, input.projectId)
+  if (!canWorkOnTasks(access.facts)) {
+    throw new Error("Only project members can add to this thread.")
+  }
+  await requireTask(workspaceId, input.projectId, input.taskId)
+
+  await db.insert(comments).values({
+    workspaceId,
+    authorId: userId,
+    subjectType: "task",
+    subjectId: input.taskId,
+    body: input.body,
+  })
 }
