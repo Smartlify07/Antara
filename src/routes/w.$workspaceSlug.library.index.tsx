@@ -1,10 +1,18 @@
 import { useQuery } from "@tanstack/react-query"
-import { useRef } from "react"
-import { createFileRoute } from "@tanstack/react-router"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, ImagesIcon } from "lucide-react"
-import { AssetCard } from "@/components/library/asset-card"
+import {
+  AssetBook,
+  LibraryFolderWall,
+  folderMetaLine,
+} from "@/components/library/library-folders"
+import {
+  groupAssetsIntoFolders,
+} from "@/components/library/folder-grouping"
 import { LibraryFilters } from "@/components/library/library-filters"
 import type { LibraryFilterPatch } from "@/components/library/library-filters"
+import { ProjectCoverArt } from "@/components/workspace/project-cover-art"
 import { libraryQuery } from "@/lib/queries/library"
 import { projectDeliverablesQuery } from "@/lib/queries/deliverables"
 import { projectsQuery } from "@/lib/queries/projects"
@@ -15,14 +23,18 @@ export const Route = createFileRoute("/w/$workspaceSlug/library/")({
 })
 
 /**
- * The Library (FR-039..044) — the workspace's whole file inventory,
- * searchable and filterable. Every filter word lives in the URL (the layout
- * validates it), so a filtered view survives a refresh and can be linked
- * from a deliverable card or anywhere else.
+ * The Library (FR-039..044) — the workspace's whole file inventory, held as
+ * folder cutouts that stand for projects: an unfiltered library is the
+ * folder wall, and every named filter — a project, a search, a state —
+ * reads the matching files as standing book covers whose record sheets open
+ * in place. Every filter word lives in the URL (the layout validates it),
+ * so a filtered view survives a refresh and can be linked from a deliverable
+ * card or anywhere else; a cutout's link is that same contract (`?project=…`).
  *
  * react-query rather than a route loader, like every other list in the app:
  * the fetch rides the filters key, so the wire trip carries exactly what the
- * visible state needs.
+ * visible state needs. The list payload carries each asset's whole version
+ * timeline (see `library-service`), so an opened book costs no second fetch.
  */
 function LibraryPage() {
   const { workspaceId, workspace } = Route.useRouteContext()
@@ -44,9 +56,13 @@ function LibraryPage() {
   )
 
   // The project facet (and the deliverables inside the picked one) ride
-  // their existing queries — the same data the grid and the Work tab cache
+  // their existing queries — the same data the wall and the Work tab cache
   // already hold, composed rather than duplicated.
-  const { data: projects = [] } = useQuery(projectsQuery(workspaceId))
+  const {
+    data: projectsData,
+    isPending: projectsPending,
+  } = useQuery(projectsQuery(workspaceId))
+  const projects = projectsData ?? []
   const { data: deliverableData } = useQuery({
     ...projectDeliverablesQuery(workspaceId, filters.project ?? ""),
     enabled: Boolean(filters.project),
@@ -103,19 +119,91 @@ function LibraryPage() {
     Boolean(filters.deliverable) ||
     Boolean(filters.state)
   const unscopableDeliverable = Boolean(filters.deliverable) && !filters.project
+  const wallMode = !hasFilter
+
+  // The wall's folders: the assets folded into the projects they live in —
+  // a folder is a project, titled by its name, whether or not files have
+  // arrived yet. A project scope (and nothing else) is that folder's own
+  // shelf, so its header answers "where am I" with the folder's identity.
+  const folders = useMemo(
+    () => groupAssetsIntoFolders(assets, projects),
+    [assets, projects]
+  )
+  const scopedFolder = useMemo(
+    () =>
+      filters.project
+        ? (folders.find((folder) => folder.id === filters.project) ?? null)
+        : null,
+    [folders, filters.project]
+  )
+  const projectOnly =
+    Boolean(filters.project) &&
+    !filters.q &&
+    !filters.type &&
+    !filters.deliverable &&
+    !filters.state
+
+  // One book open at a time; Escape closes it, whichever cell holds focus.
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!expandedId) return
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpandedId(null)
+    }
+    window.addEventListener("keydown", handleKey)
+    return () => window.removeEventListener("keydown", handleKey)
+  }, [expandedId])
+
+  const loading = isPending || (wallMode && projectsPending)
   const showEmpty =
-    !isPending && !error && (assets.length === 0 || unscopableDeliverable)
+    !loading &&
+    !error &&
+    (wallMode
+      ? folders.length === 0
+      : assets.length === 0 || unscopableDeliverable)
+  // A scoped folder with no files is an empty folder, not a failed filter.
+  const projectScopedEmpty = projectOnly && assets.length === 0
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-medium tracking-tighter">Library</h1>
-          <p className="text-sm tracking-tight text-muted-foreground">
-            Every file this workspace can account for, with its version history
-            and what was approved of it.
-          </p>
-        </div>
+      <div className="flex flex-col gap-4">
+        {hasFilter && (
+          <Link
+            to="/w/$workspaceSlug/library"
+            params={{ workspaceSlug }}
+            className="w-fit rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            {"← All folders"}
+          </Link>
+        )}
+        {projectOnly && scopedFolder ? (
+          <div className="flex items-center gap-3">
+            <ProjectCoverArt
+              seed={scopedFolder.slug}
+              gradient={{
+                start: scopedFolder.gradientStart,
+                end: scopedFolder.gradientEnd,
+              }}
+              className="h-7 w-11 shrink-0 rounded-lg"
+            />
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-medium tracking-tighter">
+                {scopedFolder.title}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {folderMetaLine(scopedFolder)}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <h1 className="text-2xl font-medium tracking-tighter">Library</h1>
+            <p className="text-sm tracking-tight text-muted-foreground">
+              Every file this workspace can account for, with its version history
+              and what was approved of it.
+            </p>
+          </div>
+        )}
       </div>
 
       <LibraryFilters
@@ -127,7 +215,7 @@ function LibraryPage() {
         onPatch={patchFilters}
       />
 
-      {isPending && (
+      {loading && (
         <p className="text-sm text-muted-foreground">Loading the library…</p>
       )}
 
@@ -150,24 +238,42 @@ function LibraryPage() {
           </div>
           <div className="flex max-w-md flex-col gap-2">
             <h2 className="text-xl font-medium tracking-tighter">
-              {hasFilter ? "Nothing matches these filters" : "No files yet"}
+              {!hasFilter || projectScopedEmpty
+                ? "No files yet"
+                : "Nothing matches these filters"}
             </h2>
             <p className="text-sm tracking-tight text-balance text-muted-foreground">
-              {hasFilter
-                ? "Loosen a filter or clear them all — the library only shows what its filters allow."
-                : "Files arrive through project deliverables and feed posts. Submit the first version of a file and it will appear here."}
+              {projectScopedEmpty
+                ? "Files arrive through project deliverables and feed posts. Submit the first version of a file and it will appear in this folder."
+                : hasFilter
+                  ? "Loosen a filter or clear them all — the library only shows what its filters allow."
+                  : "Files arrive through project deliverables and feed posts. Submit the first version of a file and it will appear here."}
             </p>
           </div>
         </div>
       )}
 
-      {assets.length > 0 && !unscopableDeliverable && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {wallMode && folders.length > 0 && (
+        <LibraryFolderWall
+          workspaceSlug={workspaceSlug}
+          folders={folders}
+        />
+      )}
+
+      {!wallMode && assets.length > 0 && !unscopableDeliverable && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {assets.map((asset) => (
-            <AssetCard
+            <AssetBook
               key={asset.id}
               workspaceSlug={workspaceSlug}
               asset={asset}
+              showProject={!filters.project}
+              expanded={expandedId === asset.id}
+              onToggle={() =>
+                setExpandedId((current) =>
+                  current === asset.id ? null : asset.id
+                )
+              }
             />
           ))}
         </div>
