@@ -231,7 +231,7 @@ function FolderCutout({
           {/* Paper strips: the newest asset titles peek out of the pocket. */}
           <div
             aria-hidden
-            className="absolute right-10 bottom-[55%] left-6 flex flex-col items-start gap-1"
+            className="absolute right-10 bottom-[64%] left-6 flex flex-col items-start gap-1"
           >
             {peek.map((asset, i) => (
               <span
