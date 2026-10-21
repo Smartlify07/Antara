@@ -129,3 +129,36 @@ describe("inbox copy", () => {
     ).toBe("Cut was assigned to you")
   })
 })
+
+describe("inbox copy parts", () => {
+  it("splits the actor's name into its own segment so the inbox can bold it", () => {
+    const copy = describeNotification(
+      "task_assigned",
+      "task",
+      "Ada",
+      "Cut the intro"
+    )
+    expect(copy.parts).toEqual([
+      { text: "Ada", actor: true },
+      { text: " assigned " },
+      { text: "Cut the intro" },
+      { text: " to you" },
+    ])
+  })
+
+  it("keeps the plain message the exact join of the parts", () => {
+    const copy = describeNotification(
+      "version_feedback",
+      "asset_version",
+      "Ada",
+      "trailer.mov (v3)"
+    )
+    expect(copy.message).toBe(copy.parts.map((part) => part.text).join(""))
+  })
+
+  it("leaves impersonal copy without an actor segment", () => {
+    expect(
+      describeNotification("project_assigned", "project", null, "Rebrand").parts
+    ).toEqual([{ text: "You were added to Rebrand" }])
+  })
+})
