@@ -14,6 +14,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as DevLibraryBooksARouteImport } from './routes/dev.library-books-a'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as InvitePendingRouteImport } from './routes/invite.pending'
 import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
@@ -56,6 +57,11 @@ const SignupRoute = SignupRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevLibraryBooksARoute = DevLibraryBooksARouteImport.update({
+  id: '/dev/library-books-a',
+  path: '/dev/library-books-a',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/dev/library-books-a': typeof DevLibraryBooksARoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/dev/library-books-a': typeof DevLibraryBooksARoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -210,6 +218,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/dev/library-books-a': typeof DevLibraryBooksARoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -237,6 +246,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/dev/library-books-a'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/dev/library-books-a'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/dev/library-books-a'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -310,6 +322,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  DevLibraryBooksARoute: typeof DevLibraryBooksARoute
   InviteTokenRoute: typeof InviteTokenRoute
   InvitePendingRoute: typeof InvitePendingRoute
   WWorkspaceSlugRoute: typeof WWorkspaceSlugRouteWithChildren
@@ -352,6 +365,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/library-books-a': {
+      id: '/dev/library-books-a'
+      path: '/dev/library-books-a'
+      fullPath: '/dev/library-books-a'
+      preLoaderRoute: typeof DevLibraryBooksARouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -561,6 +581,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  DevLibraryBooksARoute: DevLibraryBooksARoute,
   InviteTokenRoute: InviteTokenRoute,
   InvitePendingRoute: InvitePendingRoute,
   WWorkspaceSlugRoute: WWorkspaceSlugRouteWithChildren,
