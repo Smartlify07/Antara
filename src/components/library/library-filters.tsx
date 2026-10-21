@@ -2,6 +2,8 @@ import { useEffect, useState } from "react"
 import { SearchIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Chip, ChipOption } from "@/components/projects/chip"
+import { cn } from "@/lib/utils"
 import type { LibraryApprovalState } from "@/lib/library-schemas"
 import { parseApprovalState } from "@/lib/library-schemas"
 import type { LibraryFacets } from "@/server/services/library-service"
@@ -10,17 +12,12 @@ import { ASSET_STATE_META } from "./library-meta"
 
 /**
  * The Library's filter row (FR-039/041): metadata search, asset type, project,
- * deliverable and approval state. Value-free presentation — every change is
- * reported back as a URL patch, because the filters live in the address bar
- * (a colleague can deep-link a filtered library).
- *
- * Reuses the native `select` treatment the triage bar introduced: the
- * shadcn/radix Select carries a keyboard trap worth not growing on a row of
- * four dropdowns.
+ * deliverable and approval state — the same pill pickers the project details
+ * attribute row uses (`Chip`), instead of a dropdown row. Value-free
+ * presentation — every change is reported back as a URL patch, because the
+ * filters live in the address bar (a colleague can deep-link a filtered
+ * library). Each pill's first row is its "off" choice.
  */
-const selectClass =
-  "h-9 rounded-md border border-input bg-background px-2.5 text-sm shadow-xs outline-none disabled:opacity-50"
-
 export interface LibraryFilterPatch {
   type?: string
   project?: string
@@ -61,8 +58,8 @@ export function LibraryFilters({
   }, [filters.q])
 
   // A deep link may name a deliverable the panel hasn't loaded (or whose
-  // project list changed since); keeping its place in the dropdown is honest
-  // about "this filter is on" without guessing at its title.
+  // project list changed since); keeping its place in the pill's list is
+  // honest about "this filter is on" without guessing at its title.
   const deliverableOptions = [...deliverables]
   if (
     filters.deliverable &&
@@ -75,6 +72,15 @@ export function LibraryFilters({
       title: "Selected deliverable",
     })
   }
+  const selectedDeliverable = deliverableOptions.find(
+    (deliverable) => deliverable.id === filters.deliverable
+  )
+  // The URL's word keeps its place even if no current asset carries it.
+  const typeOptions = [
+    ...new Set(
+      [filters.type, ...facets.assetTypes].filter((type) => type !== undefined)
+    ),
+  ]
   const hasActiveFilters =
     Boolean(filters.q) ||
     Boolean(filters.type) ||
@@ -102,80 +108,105 @@ export function LibraryFilters({
         />
       </div>
 
-      <select
-        aria-label="Filter by asset type"
-        className={selectClass}
-        value={filters.type ?? ""}
-        onChange={(event) => onPatch({ type: event.target.value || undefined })}
-      >
-        <option value="">All types</option>
-        {/* The URL's word keeps its place even if no current asset carries it. */}
-        {[
-          ...new Set(
-            [filters.type, ...facets.assetTypes].filter(
-              (type) => type !== undefined
-            )
-          ),
-        ].map((type) => (
-          <option key={type} value={type}>
-            {type}
-          </option>
-        ))}
-      </select>
+      <Chip placeholder="All types" label={filters.type}>
+        <div className="flex flex-col gap-0.5">
+          <ChipOption
+            selected={!filters.type}
+            onSelect={() => onPatch({ type: undefined })}
+            title="All types"
+          />
+          {typeOptions.map((type) => (
+            <ChipOption
+              key={type}
+              selected={filters.type === type}
+              onSelect={() => onPatch({ type })}
+              title={type}
+            />
+          ))}
+        </div>
+      </Chip>
 
-      <select
-        aria-label="Filter by project"
-        className={selectClass}
-        value={filters.project ?? ""}
-        onChange={(event) =>
-          onPatch({ project: event.target.value || undefined })
+      <Chip
+        placeholder="All projects"
+        label={
+          filters.project
+            ? (projects.find((project) => project.id === filters.project)
+                ?.title ?? filters.project)
+            : undefined
         }
       >
-        <option value="">All projects</option>
-        {projects.map((project) => (
-          <option key={project.id} value={project.id}>
-            {project.title}
-          </option>
-        ))}
-      </select>
+        <div className="flex flex-col gap-0.5">
+          <ChipOption
+            selected={!filters.project}
+            onSelect={() => onPatch({ project: undefined })}
+            title="All projects"
+          />
+          {projects.map((project) => (
+            <ChipOption
+              key={project.id}
+              selected={filters.project === project.id}
+              onSelect={() => onPatch({ project: project.id })}
+              title={project.title}
+            />
+          ))}
+        </div>
+      </Chip>
 
-      <select
-        aria-label="Filter by deliverable"
-        className={selectClass}
-        value={filters.deliverable ?? ""}
-        disabled={!filters.project}
-        onChange={(event) =>
-          onPatch({ deliverable: event.target.value || undefined })
+      {filters.project ? (
+        <Chip placeholder="All deliverables" label={selectedDeliverable?.title}>
+          <div className="flex flex-col gap-0.5">
+            <ChipOption
+              selected={!filters.deliverable}
+              onSelect={() => onPatch({ deliverable: undefined })}
+              title="All deliverables"
+            />
+            {deliverableOptions.map((deliverable) => (
+              <ChipOption
+                key={deliverable.id}
+                selected={filters.deliverable === deliverable.id}
+                onSelect={() => onPatch({ deliverable: deliverable.id })}
+                title={deliverable.title}
+              />
+            ))}
+          </div>
+        </Chip>
+      ) : (
+        // No project picked yet: the pill keeps the row's rhythm, inert.
+        <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground ring-1 ring-border">
+          Deliverables (pick a project)
+        </span>
+      )}
+
+      <Chip
+        placeholder="Any approval state"
+        label={
+          filters.state ? ASSET_STATE_META[filters.state].label : undefined
         }
       >
-        <option value="">
-          {filters.project
-            ? "All deliverables"
-            : "Deliverables (pick a project)"}
-        </option>
-        {deliverableOptions.map((deliverable) => (
-          <option key={deliverable.id} value={deliverable.id}>
-            {deliverable.title}
-          </option>
-        ))}
-      </select>
+        <div className="flex flex-col gap-0.5">
+          <ChipOption
+            selected={!filters.state}
+            onSelect={() => onPatch({ state: undefined })}
+            title="Any approval state"
+          />
+          {Object.entries(ASSET_STATE_META).map(([state, meta]) => (
+            <ChipOption
+              key={state}
+              selected={filters.state === state}
+              onSelect={() =>
+                void onPatch({ state: parseApprovalState(state) })
+              }
+              title={meta.label}
+            >
+              <span
+                aria-hidden
+                className={cn("size-3.5 shrink-0 rounded-full", meta.dot)}
+              />
+            </ChipOption>
+          ))}
+        </div>
+      </Chip>
 
-      <select
-        aria-label="Filter by approval state"
-        className={selectClass}
-        value={filters.state ?? ""}
-        onChange={(event) => {
-          const value = event.target.value
-          onPatch({ state: parseApprovalState(value) })
-        }}
-      >
-        <option value="">Any approval state</option>
-        {Object.entries(ASSET_STATE_META).map(([state, meta]) => (
-          <option key={state} value={state}>
-            {meta.label}
-          </option>
-        ))}
-      </select>
       {hasActiveFilters && (
         <Button
           type="button"

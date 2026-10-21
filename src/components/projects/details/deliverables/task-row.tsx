@@ -1,24 +1,26 @@
 import { Link } from "@tanstack/react-router"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { CheckIcon, ChevronDownIcon, UserPlusIcon } from "lucide-react"
+import { ChevronDownIcon, UserPlusIcon } from "lucide-react"
 import { useState } from "react"
+import { Chip, ChipOption } from "@/components/projects/chip"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { formatDueDate } from "@/lib/time"
 import { taskKeys } from "@/lib/queries/tasks"
 import type { ProjectTasksCache } from "@/lib/queries/tasks"
+import { cn } from "@/lib/utils"
 import { moveTaskStatusFn, setTaskAssigneesFn } from "@/server/functions/tasks"
 import type { TaskStatus, TaskPriority } from "@/db/enums"
 import type { TaskAssigneeRef } from "@/server/services/task-service"
 import type { AssignableMember } from "@/server/services/project-service"
 import {
+  TASK_DOTS,
   TASK_PRIORITY_META,
   TASK_STATUS_META,
+  TASK_STATUS_ORDER,
   taskMoveTargets,
 } from "./deliverable-meta"
 
@@ -44,7 +46,7 @@ export interface TaskRowData {
 }
 
 /**
- * One task row (FR-016): status chip with the move menu (every move is legal
+ * One task row (FR-016): status pill with the state list (every move is legal
  * except the no-op, which the server's `assertTaskStatusMove` refuses),
  * priority, due date with the overdue mark, and assignee faces. Consumed by
  * the deliverable cards, the loose-tasks bucket and the "My tasks" page.
@@ -221,32 +223,53 @@ export function TaskRow({
     <div className="flex flex-col gap-1 rounded-md border bg-background/60 px-2.5 py-2">
       <div className="flex flex-wrap items-center gap-2">
         {canMove ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${status.badgeClass}`}
-                aria-label={`Status: ${status.label}. Change status.`}
-              >
-                {status.label}
-                <ChevronDownIcon className="size-3 opacity-70" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-36">
-              {targets.map((target) => (
-                <DropdownMenuItem
-                  key={target}
-                  onClick={() => void move(target)}
-                >
-                  Move to {TASK_STATUS_META[target].label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${status.badgeClass}`}
+          // The house pill (status-chip.tsx's `Chip` pattern): the whole
+          // state list with its colour dots — current checked, the machine's
+          // legal moves enabled, the rest dimmed.
+          <Chip
+            placeholder={status.label}
+            icon={
+              <span
+                aria-hidden
+                className={cn("size-3 rounded-full", TASK_DOTS[task.status])}
+              />
+            }
+            label={status.label}
           >
+            <div className="flex flex-col gap-0.5">
+              {TASK_STATUS_ORDER.map((value) => {
+                const legal = targets.includes(value)
+                return (
+                  <ChipOption
+                    key={value}
+                    selected={value === task.status}
+                    disabled={!legal}
+                    onSelect={() => void move(value)}
+                    title={
+                      legal
+                        ? TASK_STATUS_META[value].label
+                        : `${TASK_STATUS_META[value].label} — not a legal move`
+                    }
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-3.5 shrink-0 rounded-full",
+                        TASK_DOTS[value]
+                      )}
+                    />
+                  </ChipOption>
+                )
+              })}
+            </div>
+          </Chip>
+        ) : (
+          // Same pill face, inert — the machine and optimistic rows forbid it.
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground ring-1 ring-border">
+            <span
+              aria-hidden
+              className={cn("size-3 rounded-full", TASK_DOTS[task.status])}
+            />
             {status.label}
           </span>
         )}
@@ -261,8 +284,8 @@ export function TaskRow({
 
         {projectSlug ? (
           <Link
-            to="/w/$workspaceSlug/projects/$projectSlug"
-            params={{ workspaceSlug, projectSlug }}
+            to="/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId"
+            params={{ workspaceSlug, projectSlug, taskId: task.id }}
             className="text-sm font-medium hover:underline"
           >
             {task.title}
@@ -300,8 +323,8 @@ export function TaskRow({
           )}
 
           {canAssign ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <Popover>
+              <PopoverTrigger asChild>
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 py-0.5 hover:opacity-80"
@@ -333,39 +356,40 @@ export function TaskRow({
                   )}
                   <ChevronDownIcon className="size-3 opacity-70" />
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
-                {members.map((member) => {
-                  const assigned = isAssigned(member)
-                  return (
-                    <DropdownMenuItem
-                      key={member.teamId}
-                      disabled={assigned}
-                      onClick={() => assign.mutate([member.teamId])}
-                    >
-                      <CheckIcon
-                        aria-hidden
-                        className={assigned ? "size-3" : "invisible size-3"}
+              </PopoverTrigger>
+              {/* Same pill columns as the status popover (ChipOption), the
+                  faces as the leading element, an unassign escape at the end. */}
+              <PopoverContent align="end" className="w-72 p-1">
+                <div className="flex flex-col gap-0.5">
+                  {members.map((member) => {
+                    const assigned = isAssigned(member)
+                    return (
+                      <ChipOption
+                        key={member.teamId}
+                        selected={assigned}
+                        disabled={assigned}
+                        onSelect={() => assign.mutate([member.teamId])}
+                        title={member.name ?? member.email ?? "Member"}
+                      >
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium">
+                          {(member.name?.trim()[0] ?? "?").toUpperCase()}
+                        </span>
+                      </ChipOption>
+                    )
+                  })}
+                  {assignees.length > 0 && (
+                    <>
+                      <div aria-hidden className="mx-2 my-1 h-px bg-border" />
+                      <ChipOption
+                        selected={false}
+                        onSelect={() => assign.mutate([])}
+                        title="Unassign"
                       />
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                        {(member.name?.trim()[0] ?? "?").toUpperCase()}
-                      </span>
-                      <span className="truncate">
-                        {member.name ?? member.email ?? "Member"}
-                      </span>
-                    </DropdownMenuItem>
-                  )
-                })}
-                {assignees.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => assign.mutate([])}>
-                      Unassign
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    </>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           ) : (task.assignees?.length ?? 0) > 0 ? (
             <span className="flex -space-x-1.5" aria-label="Assignees">
               {task.assignees?.map((assignee) => (

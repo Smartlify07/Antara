@@ -8,6 +8,8 @@ import {
   setTaskAssigneesSchema,
   setTaskDueDateSchema,
   setTaskStatusSchema,
+  taskCommentSchema,
+  taskIdSchema,
 } from "@/lib/task-schemas"
 import * as taskService from "@/server/services/task-service"
 import * as workspaceService from "@/server/services/workspace-service"
@@ -38,7 +40,11 @@ export const listProjectTasksFn = createServerFn({ method: "GET" })
   .validator(z.object({ workspaceId: z.string(), projectId: z.string() }))
   .handler(async ({ data }) => {
     const userId = await resolveWorkspaceId(data.workspaceId)
-    return taskService.listProjectTasks(data.workspaceId, userId, data.projectId)
+    return taskService.listProjectTasks(
+      data.workspaceId,
+      userId,
+      data.projectId
+    )
   })
 
 export const createTaskFn = createServerFn({ method: "POST" })
@@ -105,5 +111,29 @@ export const myTasksBadgeFn = createServerFn({ method: "GET" })
       data.workspaceSlug
     )
     if (!access) return { count: 0 }
-    return { count: await taskService.countMyTasks(access.workspace.id, userId) }
+    return {
+      count: await taskService.countMyTasks(access.workspace.id, userId),
+    }
+  })
+
+/**
+ * The task's own comment thread (subjectType "task"), oldest first. The task
+ * page and the deliverable cabinet read through this.
+ */
+export const listTaskThreadFn = createServerFn({ method: "GET" })
+  .validator(taskIdSchema)
+  .handler(async ({ data }) => {
+    const userId = await resolveWorkspaceId(data.workspaceId)
+    return taskService.listTaskThread(data.workspaceId, userId, {
+      projectId: data.projectId,
+      taskId: data.taskId,
+    })
+  })
+
+export const addTaskCommentFn = createServerFn({ method: "POST" })
+  .validator(taskCommentSchema)
+  .handler(async ({ data }) => {
+    const userId = await resolveWorkspaceId(data.workspaceId)
+    await taskService.addTaskComment(data.workspaceId, userId, data)
+    return { ok: true }
   })

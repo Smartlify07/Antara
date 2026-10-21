@@ -14,6 +14,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as DevDeliverablesRouteImport } from './routes/dev.deliverables'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as InvitePendingRouteImport } from './routes/invite.pending'
 import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
@@ -32,6 +33,8 @@ import { Route as WWorkspaceSlugProjectsProjectSlugRouteImport } from './routes/
 import { Route as WWorkspaceSlugProjectsNewRouteImport } from './routes/w.$workspaceSlug.projects.new'
 import { Route as WWorkspaceSlugRequestsIndexRouteImport } from './routes/w.$workspaceSlug.requests.index'
 import { Route as WWorkspaceSlugRequestsRequestIdRouteImport } from './routes/w.$workspaceSlug.requests.$requestId'
+import { Route as WWorkspaceSlugProjectsProjectSlugIndexRouteImport } from './routes/w.$workspaceSlug.projects.$projectSlug.index'
+import { Route as WWorkspaceSlugProjectsProjectSlugTasksTaskIdRouteImport } from './routes/w.$workspaceSlug.projects.$projectSlug.tasks.$taskId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -56,6 +59,11 @@ const SignupRoute = SignupRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevDeliverablesRoute = DevDeliverablesRouteImport.update({
+  id: '/dev/deliverables',
+  path: '/dev/deliverables',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -155,6 +163,18 @@ const WWorkspaceSlugRequestsRequestIdRoute =
     path: '/$requestId',
     getParentRoute: () => WWorkspaceSlugRequestsRoute,
   } as any)
+const WWorkspaceSlugProjectsProjectSlugIndexRoute =
+  WWorkspaceSlugProjectsProjectSlugIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => WWorkspaceSlugProjectsProjectSlugRoute,
+  } as any)
+const WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute =
+  WWorkspaceSlugProjectsProjectSlugTasksTaskIdRouteImport.update({
+    id: '/tasks/$taskId',
+    path: '/tasks/$taskId',
+    getParentRoute: () => WWorkspaceSlugProjectsProjectSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -162,6 +182,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/dev/deliverables': typeof DevDeliverablesRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -174,12 +195,14 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
   '/w/$workspaceSlug/library/$assetId': typeof WWorkspaceSlugLibraryAssetIdRoute
-  '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
+  '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRouteWithChildren
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
   '/w/$workspaceSlug/requests/$requestId': typeof WWorkspaceSlugRequestsRequestIdRoute
   '/w/$workspaceSlug/library/': typeof WWorkspaceSlugLibraryIndexRoute
   '/w/$workspaceSlug/projects/': typeof WWorkspaceSlugProjectsIndexRoute
   '/w/$workspaceSlug/requests/': typeof WWorkspaceSlugRequestsIndexRoute
+  '/w/$workspaceSlug/projects/$projectSlug/': typeof WWorkspaceSlugProjectsProjectSlugIndexRoute
+  '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId': typeof WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -187,6 +210,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/dev/deliverables': typeof DevDeliverablesRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -196,12 +220,13 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
   '/w/$workspaceSlug/library/$assetId': typeof WWorkspaceSlugLibraryAssetIdRoute
-  '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
   '/w/$workspaceSlug/requests/$requestId': typeof WWorkspaceSlugRequestsRequestIdRoute
   '/w/$workspaceSlug/library': typeof WWorkspaceSlugLibraryIndexRoute
   '/w/$workspaceSlug/projects': typeof WWorkspaceSlugProjectsIndexRoute
   '/w/$workspaceSlug/requests': typeof WWorkspaceSlugRequestsIndexRoute
+  '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugIndexRoute
+  '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId': typeof WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -210,6 +235,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/dev/deliverables': typeof DevDeliverablesRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -222,12 +248,14 @@ export interface FileRoutesById {
   '/w/$workspaceSlug/reviews': typeof WWorkspaceSlugReviewsRoute
   '/w/$workspaceSlug/team': typeof WWorkspaceSlugTeamRoute
   '/w/$workspaceSlug/library/$assetId': typeof WWorkspaceSlugLibraryAssetIdRoute
-  '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRoute
+  '/w/$workspaceSlug/projects/$projectSlug': typeof WWorkspaceSlugProjectsProjectSlugRouteWithChildren
   '/w/$workspaceSlug/projects/new': typeof WWorkspaceSlugProjectsNewRoute
   '/w/$workspaceSlug/requests/$requestId': typeof WWorkspaceSlugRequestsRequestIdRoute
   '/w/$workspaceSlug/library/': typeof WWorkspaceSlugLibraryIndexRoute
   '/w/$workspaceSlug/projects/': typeof WWorkspaceSlugProjectsIndexRoute
   '/w/$workspaceSlug/requests/': typeof WWorkspaceSlugRequestsIndexRoute
+  '/w/$workspaceSlug/projects/$projectSlug/': typeof WWorkspaceSlugProjectsProjectSlugIndexRoute
+  '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId': typeof WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -237,6 +265,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/dev/deliverables'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -255,6 +284,8 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/library/'
     | '/w/$workspaceSlug/projects/'
     | '/w/$workspaceSlug/requests/'
+    | '/w/$workspaceSlug/projects/$projectSlug/'
+    | '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -262,6 +293,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/dev/deliverables'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -271,12 +303,13 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/reviews'
     | '/w/$workspaceSlug/team'
     | '/w/$workspaceSlug/library/$assetId'
-    | '/w/$workspaceSlug/projects/$projectSlug'
     | '/w/$workspaceSlug/projects/new'
     | '/w/$workspaceSlug/requests/$requestId'
     | '/w/$workspaceSlug/library'
     | '/w/$workspaceSlug/projects'
     | '/w/$workspaceSlug/requests'
+    | '/w/$workspaceSlug/projects/$projectSlug'
+    | '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId'
   id:
     | '__root__'
     | '/'
@@ -284,6 +317,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/dev/deliverables'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -302,6 +336,8 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/library/'
     | '/w/$workspaceSlug/projects/'
     | '/w/$workspaceSlug/requests/'
+    | '/w/$workspaceSlug/projects/$projectSlug/'
+    | '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -310,6 +346,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  DevDeliverablesRoute: typeof DevDeliverablesRoute
   InviteTokenRoute: typeof InviteTokenRoute
   InvitePendingRoute: typeof InvitePendingRoute
   WWorkspaceSlugRoute: typeof WWorkspaceSlugRouteWithChildren
@@ -352,6 +389,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/deliverables': {
+      id: '/dev/deliverables'
+      path: '/dev/deliverables'
+      fullPath: '/dev/deliverables'
+      preLoaderRoute: typeof DevDeliverablesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -480,6 +524,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WWorkspaceSlugRequestsRequestIdRouteImport
       parentRoute: typeof WWorkspaceSlugRequestsRoute
     }
+    '/w/$workspaceSlug/projects/$projectSlug/': {
+      id: '/w/$workspaceSlug/projects/$projectSlug/'
+      path: '/'
+      fullPath: '/w/$workspaceSlug/projects/$projectSlug/'
+      preLoaderRoute: typeof WWorkspaceSlugProjectsProjectSlugIndexRouteImport
+      parentRoute: typeof WWorkspaceSlugProjectsProjectSlugRoute
+    }
+    '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId': {
+      id: '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId'
+      path: '/tasks/$taskId'
+      fullPath: '/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId'
+      preLoaderRoute: typeof WWorkspaceSlugProjectsProjectSlugTasksTaskIdRouteImport
+      parentRoute: typeof WWorkspaceSlugProjectsProjectSlugRoute
+    }
   }
 }
 
@@ -498,8 +556,26 @@ const WWorkspaceSlugLibraryRouteWithChildren =
     WWorkspaceSlugLibraryRouteChildren,
   )
 
+interface WWorkspaceSlugProjectsProjectSlugRouteChildren {
+  WWorkspaceSlugProjectsProjectSlugIndexRoute: typeof WWorkspaceSlugProjectsProjectSlugIndexRoute
+  WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute: typeof WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute
+}
+
+const WWorkspaceSlugProjectsProjectSlugRouteChildren: WWorkspaceSlugProjectsProjectSlugRouteChildren =
+  {
+    WWorkspaceSlugProjectsProjectSlugIndexRoute:
+      WWorkspaceSlugProjectsProjectSlugIndexRoute,
+    WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute:
+      WWorkspaceSlugProjectsProjectSlugTasksTaskIdRoute,
+  }
+
+const WWorkspaceSlugProjectsProjectSlugRouteWithChildren =
+  WWorkspaceSlugProjectsProjectSlugRoute._addFileChildren(
+    WWorkspaceSlugProjectsProjectSlugRouteChildren,
+  )
+
 interface WWorkspaceSlugProjectsRouteChildren {
-  WWorkspaceSlugProjectsProjectSlugRoute: typeof WWorkspaceSlugProjectsProjectSlugRoute
+  WWorkspaceSlugProjectsProjectSlugRoute: typeof WWorkspaceSlugProjectsProjectSlugRouteWithChildren
   WWorkspaceSlugProjectsNewRoute: typeof WWorkspaceSlugProjectsNewRoute
   WWorkspaceSlugProjectsIndexRoute: typeof WWorkspaceSlugProjectsIndexRoute
 }
@@ -507,7 +583,7 @@ interface WWorkspaceSlugProjectsRouteChildren {
 const WWorkspaceSlugProjectsRouteChildren: WWorkspaceSlugProjectsRouteChildren =
   {
     WWorkspaceSlugProjectsProjectSlugRoute:
-      WWorkspaceSlugProjectsProjectSlugRoute,
+      WWorkspaceSlugProjectsProjectSlugRouteWithChildren,
     WWorkspaceSlugProjectsNewRoute: WWorkspaceSlugProjectsNewRoute,
     WWorkspaceSlugProjectsIndexRoute: WWorkspaceSlugProjectsIndexRoute,
   }
@@ -561,6 +637,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  DevDeliverablesRoute: DevDeliverablesRoute,
   InviteTokenRoute: InviteTokenRoute,
   InvitePendingRoute: InvitePendingRoute,
   WWorkspaceSlugRoute: WWorkspaceSlugRouteWithChildren,

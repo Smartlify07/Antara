@@ -1,9 +1,13 @@
 import type { AssignableMember } from "@/server/services/project-service"
 import type { TaskPriority } from "@/db/enums"
-import type { TaskCard } from "@/server/services/task-service"
+import type {
+  TaskCard,
+  TaskThreadMessage,
+} from "@/server/services/task-service"
 import { queryOptions } from "@tanstack/react-query"
 import {
   listProjectTasksFn,
+  listTaskThreadFn,
   myTasksBadgeFn,
   myTasksFn,
 } from "@/server/functions/tasks"
@@ -18,6 +22,47 @@ export const taskKeys = {
   byProject: (projectId: string) => ["tasks", "project", projectId] as const,
   mine: (workspaceId: string) => ["tasks", "mine", workspaceId] as const,
   badge: (workspaceSlug: string) => ["tasks", "badge", workspaceSlug] as const,
+  // The task's own conversation — cached per task for the task page.
+  thread: (taskId: string) => ["tasks", "thread", taskId] as const,
+}
+
+/** The task's conversation (subjectType "task"), oldest first. */
+export function taskThreadQuery(
+  workspaceId: string,
+  projectId: string,
+  taskId: string
+) {
+  return queryOptions({
+    queryKey: taskKeys.thread(taskId),
+    queryFn: () =>
+      listTaskThreadFn({ data: { workspaceId, projectId, taskId } }),
+  })
+}
+
+/**
+ * Builds the thread entry rendered between the submit and the server's
+ * response — same `optimistic-` prefix convention as the version feedback
+ * and the task roster. Each post carries its own stamp, so overlapping
+ * sends roll back independently.
+ */
+export function buildOptimisticTaskComment(
+  body: string,
+  author: {
+    authorId: string
+    authorName: string | null
+    authorEmail: string | null
+  }
+): TaskThreadMessage {
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+  return {
+    id: `optimistic-${stamp}`,
+    body,
+    createdAt: new Date(),
+    authorId: author.authorId,
+    authorName: author.authorName,
+    authorEmail: author.authorEmail,
+  }
 }
 
 /**

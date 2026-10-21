@@ -1,8 +1,4 @@
-import type {
-  DeliverableStatus,
-  TaskPriority,
-  TaskStatus,
-} from "@/db/enums"
+import type { DeliverableStatus, TaskPriority, TaskStatus } from "@/db/enums"
 
 /**
  * How the work lane's statuses look, for chips on deliverable cards and task
@@ -20,13 +16,11 @@ export const DELIVERABLE_META: Record<
   },
   in_progress: {
     label: "In progress",
-    badgeClass:
-      "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+    badgeClass: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
   },
   blocked: {
     label: "Blocked",
-    badgeClass:
-      "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+    badgeClass: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
   },
   ready_for_review: {
     label: "Ready for review",
@@ -54,6 +48,28 @@ export const DELIVERABLE_STATUS_ORDER: DeliverableStatus[] = [
   "changes_requested",
   "completed",
 ]
+
+/**
+ * Filled dot for the borderless thread views — the chip's colour without the
+ * chip box, so status never needs a container to read.
+ */
+export const DELIVERABLE_DOTS: Record<DeliverableStatus, string> = {
+  planned: "bg-muted-foreground/40",
+  in_progress: "bg-sky-500",
+  blocked: "bg-red-500",
+  ready_for_review: "bg-violet-500",
+  changes_requested: "bg-amber-500",
+  completed: "bg-emerald-500",
+}
+
+/** Task rows in the thread model read the same way: dot + plain label. */
+export const TASK_DOTS: Record<TaskStatus, string> = {
+  backlog: "bg-muted-foreground/40",
+  todo: "bg-sky-500",
+  in_progress: "bg-blue-500",
+  done: "bg-emerald-500",
+  approved: "bg-violet-500",
+}
 
 export const TASK_STATUS_META: Record<
   TaskStatus,
@@ -102,8 +118,7 @@ export const TASK_PRIORITY_META: Record<
   },
   urgent: {
     label: "Urgent",
-    badgeClass:
-      "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+    badgeClass: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
   },
 }
 

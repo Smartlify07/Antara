@@ -49,6 +49,14 @@ export const deliverableIdSchema = z.object({
   deliverableId: z.string().min(1),
 })
 
+/** A post on the deliverable's own thread (subjectType "deliverable"). */
+export const deliverableCommentSchema = deliverableIdSchema.extend({
+  // Same bounds as the version feedback body — one comment vocabulary lane.
+  body: z.string().trim().min(1, "Write something first.").max(4000),
+})
+
+export type DeliverableCommentInput = z.infer<typeof deliverableCommentSchema>
+
 /** Reassign the deliverable; `ownerId: null` explicitly unassigns. */
 export const setDeliverableOwnerSchema = deliverableIdSchema.extend({
   ownerId: z.string().trim().max(64).nullable(),
