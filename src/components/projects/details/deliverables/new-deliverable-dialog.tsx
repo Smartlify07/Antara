@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Loader2Icon } from "lucide-react"
+import { CalendarDaysIcon, Loader2Icon } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import type { z } from "zod"
@@ -19,11 +19,17 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  createDeliverableSchema,
-} from "@/lib/deliverable-schemas"
+import { formatDueDate, fromIsoDay, toIsoDay } from "@/lib/time"
+import { cn } from "@/lib/utils"
+import { createDeliverableSchema } from "@/lib/deliverable-schemas"
 import { createDeliverableFn } from "@/server/functions/deliverables"
 import type { AssignableMember } from "@/server/services/project-service"
 
@@ -67,6 +73,10 @@ export function NewDeliverableDialog({
       deadline: undefined,
     },
   })
+
+  // The deadline rides the calendar popover: the control writes straight
+  // into the form's value, and the label reads what it holds.
+  const watchedDeadline = form.watch("deadline")
 
   async function onSubmit(values: NewDeliverableFormInput) {
     setServerError(null)
@@ -176,14 +186,61 @@ export function NewDeliverableDialog({
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="deliverable-deadline">
-                Deadline <span className="text-muted-foreground">(optional)</span>
+              <FieldLabel>
+                Deadline{" "}
+                <span className="text-muted-foreground">(optional)</span>
               </FieldLabel>
-              <Input
-                id="deliverable-deadline"
-                type="date"
-                {...form.register("deadline")}
-              />
+              {/* The house calendar (dates-chip.tsx's idiom), not an OS date
+                  input: the picked day is the stored day, no UTC shift. */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-1 text-left text-sm shadow-xs outline-none"
+                  >
+                    <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <span
+                      className={cn(
+                        !watchedDeadline && "text-muted-foreground"
+                      )}
+                    >
+                      {watchedDeadline
+                        ? formatDueDate(fromIsoDay(watchedDeadline))
+                        : "Pick a deadline"}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-1">
+                  <Calendar
+                    mode="single"
+                    selected={
+                      watchedDeadline ? fromIsoDay(watchedDeadline) : undefined
+                    }
+                    onSelect={(next) =>
+                      form.setValue(
+                        "deadline",
+                        next ? toIsoDay(next) : undefined
+                      )
+                    }
+                  />
+                  <div className="flex items-center justify-between gap-2 px-1 pt-1 text-[11px] text-muted-foreground">
+                    <span>
+                      {watchedDeadline
+                        ? "Pick another day to change"
+                        : "Pick a day"}
+                    </span>
+                    {watchedDeadline && (
+                      <button
+                        type="button"
+                        className="underline underline-offset-2 hover:text-foreground"
+                        onClick={() => form.setValue("deadline", undefined)}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
               <FieldError errors={[form.formState.errors.deadline]} />
             </Field>
           </div>

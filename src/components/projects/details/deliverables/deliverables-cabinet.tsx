@@ -18,7 +18,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "@tanstack/react-router"
 import {
-  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   FolderIcon,
@@ -42,12 +41,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Calendar } from "@/components/ui/calendar"
+import { Chip, ChipOption } from "@/components/projects/chip"
 import {
   buildOptimisticDeliverableComment,
   deliverableKeys,
   deliverableThreadQuery,
+  stampDeliverableOverdue,
+  useDeliverableCardWrite,
+} from "@/lib/queries/deliverables"
+import type {
+  DeliverableDeadlineVars,
+  DeliverableOwnerVars,
+  DeliverableStatusVars,
 } from "@/lib/queries/deliverables"
 import { deliverableVersionsQuery, versionKeys } from "@/lib/queries/versions"
 import {
@@ -63,7 +70,12 @@ import {
 } from "@/server/functions/versions"
 import { useSession } from "@/lib/auth-client"
 import { avatarTint } from "@/lib/avatar-tint"
-import { formatDueDate, formatRelativeTime } from "@/lib/time"
+import {
+  formatDueDate,
+  formatRelativeTime,
+  fromIsoDay,
+  toIsoDay,
+} from "@/lib/time"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
 import { cn } from "@/lib/utils"
 import type {
@@ -79,6 +91,7 @@ import type {
 import {
   DELIVERABLE_DOTS,
   DELIVERABLE_META,
+  DELIVERABLE_STATUS_ORDER,
   TASK_DOTS,
   TASK_PRIORITY_META,
   TASK_STATUS_META,
@@ -624,6 +637,18 @@ function LevelZeroList({
 
 /* ------------------------------- level one -------------------------------- */
 
+/** The cache's `owner` ref for a member — the same fields the server writes
+ * from its `ownerSelect()` join, so the optimistic paint reads exactly like
+ * the settled row. */
+function ownerRef(member: AssignableMember): DeliverableCard["owner"] {
+  return {
+    teamId: member.teamId,
+    name: member.name,
+    email: member.email,
+    image: member.image,
+  }
+}
+
 /**
  * The selected deliverable's detail: header meta with the card's editing
  * affordances (status machine menu from `deliverable-card.tsx`; owner and
@@ -681,8 +706,11 @@ function LevelOne({
   const queryClient = useQueryClient()
   const reduceMotion = useReducedMotion() ?? false
 
-  // Edit-affordance state, ported from deliverable-card.
-  const [busy, setBusy] = useState(false)
+  // Edit-affordance state, ported from deliverable-card. The three writes
+  // below (`useDeliverableCardWrite`) paint the project's deliverable cache
+  // first — the same paint-first contract the project details pills use — so
+  // only their dialogs and failures need state. `busy` is the union of the
+  // writes' pending flags, gating popovers and dialogs one round at a time.
   const [error, setError] = useState<string | null>(null)
   const [ownerOpen, setOwnerOpen] = useState(false)
   const [deadlineOpen, setDeadlineOpen] = useState(false)
@@ -772,21 +800,66 @@ function LevelOne({
     },
   })
 
-  async function run(action: () => Promise<unknown>) {
-    setBusy(true)
-    setError(null)
-    try {
-      await action()
-      onChanged()
-    } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "That change did not land."
-      )
-      onChanged()
-    } finally {
-      setBusy(false)
-    }
-  }
+  // Deliverable writes paint first (see `useDeliverableCardWrite` in
+  // queries/deliverables.ts): each patches this deliverable's cached card,
+  // rolls back on a refusal, and refetches through `onChanged` to settle —
+  // so status, owner and deadline changes read as instant while the round
+  // trip decides.
+  const statusWrite = useDeliverableCardWrite<DeliverableStatusVars>({
+    projectId,
+    onError: setError,
+    settle: onChanged,
+    action: (vars) =>
+      setDeliverableStatusFn({
+        data: {
+          workspaceId,
+          projectId,
+          deliverableId: vars.deliverableId,
+          status: vars.status,
+        },
+      }),
+    optimistic: (card, vars) => ({
+      ...card,
+      status: vars.status,
+      overdue: stampDeliverableOverdue(card.deadline, vars.status),
+    }),
+  })
+  const ownerWrite = useDeliverableCardWrite<DeliverableOwnerVars>({
+    projectId,
+    onError: setError,
+    settle: onChanged,
+    action: (vars) =>
+      setDeliverableOwnerFn({
+        data: {
+          workspaceId,
+          projectId,
+          deliverableId: vars.deliverableId,
+          ownerId: vars.ownerId,
+        },
+      }),
+    optimistic: (card, vars) => ({ ...card, owner: vars.owner }),
+  })
+  const deadlineWrite = useDeliverableCardWrite<DeliverableDeadlineVars>({
+    projectId,
+    onError: setError,
+    settle: onChanged,
+    action: (vars) =>
+      setDeliverableDeadlineFn({
+        data: {
+          workspaceId,
+          projectId,
+          deliverableId: vars.deliverableId,
+          deadline: vars.deadline,
+        },
+      }),
+    optimistic: (card, vars) => ({
+      ...card,
+      deadline: vars.deadline,
+      overdue: stampDeliverableOverdue(vars.deadline, card.status),
+    }),
+  })
+  const busy =
+    statusWrite.isPending || ownerWrite.isPending || deadlineWrite.isPending
 
   const clusterTotal =
     versionsData?.assets.reduce(
@@ -802,54 +875,57 @@ function LevelOne({
             {deliverable.title}
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-            {/* The production chip in the concept's dot-on-wash voice: the
-                card's status machine menu when the machine offers moves. */}
-            {targets.length > 0 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={busy || !deliverable.viewerCanMove}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-muted/40 px-2.5 py-0.5 text-xs font-medium transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-70"
-                    aria-label={`Production status: ${meta.label}. ${
-                      deliverable.viewerCanMove ? "Change status." : undefined
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "size-3 rounded-full",
-                        DELIVERABLE_DOTS[deliverable.status]
-                      )}
-                    />
-                    {meta.label}
-                    {deliverable.viewerCanMove && (
-                      <ChevronDownIcon className="size-3 opacity-70" />
+            {/* The production status as the house pill (status-chip.tsx is
+                the same `Chip` pattern): the whole state list with its colour
+                dots — the current one checked, the machine's legal moves
+                enabled, everything else dimmed. Read-only viewers get the
+                plain dot line. */}
+            {deliverable.viewerCanMove && targets.length > 0 ? (
+              <Chip
+                placeholder={meta.label}
+                icon={
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-3 rounded-full",
+                      DELIVERABLE_DOTS[deliverable.status]
                     )}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-44">
-                  {targets.map((target) => (
-                    <DropdownMenuItem
-                      key={target}
-                      onClick={() =>
-                        void run(() =>
-                          setDeliverableStatusFn({
-                            data: {
-                              workspaceId,
-                              projectId,
-                              deliverableId: deliverable.id,
-                              status: target,
-                            },
+                  />
+                }
+                label={meta.label}
+              >
+                <div className="flex flex-col gap-0.5">
+                  {DELIVERABLE_STATUS_ORDER.map((value) => {
+                    const legal = targets.includes(value)
+                    return (
+                      <ChipOption
+                        key={value}
+                        selected={value === deliverable.status}
+                        disabled={busy || !legal}
+                        onSelect={() =>
+                          statusWrite.mutate({
+                            deliverableId: deliverable.id,
+                            status: value,
                           })
-                        )
-                      }
-                    >
-                      Move to {DELIVERABLE_META[target].label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                        }
+                        title={
+                          legal
+                            ? DELIVERABLE_META[value].label
+                            : `${DELIVERABLE_META[value].label} — not a legal move from here`
+                        }
+                      >
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "size-3.5 shrink-0 rounded-full",
+                            DELIVERABLE_DOTS[value]
+                          )}
+                        />
+                      </ChipOption>
+                    )
+                  })}
+                </div>
+              </Chip>
             ) : (
               <span className="inline-flex items-center gap-1.5">
                 <span
@@ -1163,18 +1239,19 @@ function LevelOne({
           <div className="grid max-h-72 gap-1 overflow-y-auto">
             <button
               type="button"
-              onClick={() =>
-                void run(() =>
-                  setDeliverableOwnerFn({
-                    data: {
-                      workspaceId,
-                      projectId,
-                      deliverableId: deliverable.id,
-                      ownerId: null,
-                    },
+              onClick={() => {
+                void ownerWrite
+                  .mutateAsync({
+                    deliverableId: deliverable.id,
+                    ownerId: null,
+                    owner: null,
                   })
-                ).then(() => setOwnerOpen(false))
-              }
+                  .then(
+                    () => setOwnerOpen(false),
+                    // The hook already reported the refusal.
+                    () => undefined
+                  )
+              }}
               className="rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60"
             >
               Unassign owner
@@ -1184,18 +1261,19 @@ function LevelOne({
                 key={member.teamId}
                 type="button"
                 disabled={busy}
-                onClick={() =>
-                  void run(() =>
-                    setDeliverableOwnerFn({
-                      data: {
-                        workspaceId,
-                        projectId,
-                        deliverableId: deliverable.id,
-                        ownerId: member.teamId,
-                      },
+                onClick={() => {
+                  void ownerWrite
+                    .mutateAsync({
+                      deliverableId: deliverable.id,
+                      ownerId: member.teamId,
+                      owner: ownerRef(member),
                     })
-                  ).then(() => setOwnerOpen(false))
-                }
+                    .then(
+                      () => setOwnerOpen(false),
+                      // The hook already reported the refusal.
+                      () => undefined
+                    )
+                }}
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60 disabled:opacity-50"
               >
                 <TintedAvatar seed={member.teamId} name={member.name} />
@@ -1219,16 +1297,16 @@ function LevelOne({
         current={deliverable.deadline}
         busy={busy}
         onSet={(deadline) =>
-          run(() =>
-            setDeliverableDeadlineFn({
-              data: {
-                workspaceId,
-                projectId,
-                deliverableId: deliverable.id,
-                deadline,
-              },
+          deadlineWrite
+            .mutateAsync({
+              deliverableId: deliverable.id,
+              deadline,
             })
-          ).then(() => setDeadlineOpen(false))
+            .then(
+              () => setDeadlineOpen(false),
+              // The hook already reported the refusal.
+              () => undefined
+            )
         }
       />
     </section>
@@ -1613,6 +1691,11 @@ function TaskThreadItem({
           ) : (
             <span className="text-sm font-medium">{task.title}</span>
           )}
+          {/* What the node is, on the right — in All mode it sits beside
+              comment rows, and the badge is the only word that says so. */}
+          <span className="ml-auto rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Task
+          </span>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <Dot
@@ -1826,12 +1909,30 @@ function DeadlineDialog({
             Past-due deliverables that are not completed show as overdue.
           </DialogDescription>
         </DialogHeader>
-        <Input
-          type="date"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          aria-label="Deadline"
+        {/* The house calendar (dates-chip.tsx's idiom), not an OS date
+            input: pick a day, review it beneath, clear it in place. */}
+        <Calendar
+          mode="single"
+          selected={value ? fromIsoDay(value) : undefined}
+          onSelect={(next) => setValue(next ? toIsoDay(next) : "")}
+          defaultMonth={current ? fromIsoDay(current) : undefined}
         />
+        <div className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
+          <span>
+            {value
+              ? `Setting ${formatDueDate(fromIsoDay(value))}`
+              : "Pick a day"}
+          </span>
+          {value && (
+            <button
+              type="button"
+              className="underline underline-offset-2 hover:text-foreground"
+              onClick={() => setValue("")}
+            >
+              Clear
+            </button>
+          )}
+        </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             Cancel

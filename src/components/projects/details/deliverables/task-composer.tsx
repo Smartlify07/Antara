@@ -1,8 +1,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Loader2Icon } from "lucide-react"
+import { CalendarDaysIcon, Loader2Icon } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { formatDueDate, fromIsoDay, toIsoDay } from "@/lib/time"
+import { cn } from "@/lib/utils"
 import { createTaskFn } from "@/server/functions/tasks"
 import {
   buildOptimisticTask,
@@ -188,13 +196,43 @@ export function TaskComposer({
 
       {expand && (
         <div className="grid grid-cols-2 gap-2">
-          <Input
-            type="date"
-            value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)}
-            aria-label="Due date"
-            className="h-8 bg-background text-xs"
-          />
+          {/* The house calendar (dates-chip.tsx's idiom), not an OS date
+              input: one tap opens it, the picked day is the stored day. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="Due date"
+                className="flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-left text-xs shadow-xs outline-none"
+              >
+                <CalendarDaysIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className={cn(!dueDate && "text-muted-foreground")}>
+                  {dueDate ? formatDueDate(fromIsoDay(dueDate)) : "Due date"}
+                </span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-1">
+              <Calendar
+                mode="single"
+                selected={dueDate ? fromIsoDay(dueDate) : undefined}
+                onSelect={(next) => setDueDate(next ? toIsoDay(next) : "")}
+              />
+              <div className="flex items-center justify-between gap-2 px-1 pt-1 text-[11px] text-muted-foreground">
+                <span>
+                  {dueDate ? "Pick another day to change" : "Pick a day"}
+                </span>
+                {dueDate && (
+                  <button
+                    type="button"
+                    className="underline underline-offset-2 hover:text-foreground"
+                    onClick={() => setDueDate("")}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
           <select
             value={assignee}
             onChange={(event) => setAssignee(event.target.value)}

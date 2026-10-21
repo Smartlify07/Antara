@@ -56,9 +56,11 @@ export function ThreadRow({ message }: { message: ThreadMessage }) {
 }
 
 /**
- * The compose affordance, controlled: Enter sends, Shift+Enter breaks, and
- * the state (including a failed post's preserved text) lives with the
- * mutation in the caller.
+ * The compose affordance, controlled: Enter sends, Shift+Enter breaks, the
+ * field grows with its text (`field-sizing: content`, pinned by a floor
+ * height for older engines), the resize handle is gone, and the send lives
+ * inside the field's corner instead of outside it — the composer reads as
+ * one quiet surface, not a form row.
  */
 export function ThreadComposer({
   value,
@@ -79,7 +81,7 @@ export function ThreadComposer({
   const hasText = value.trim().length > 0
   return (
     <form
-      className="flex items-end gap-2 pt-1"
+      className="relative pt-1"
       onSubmit={(event) => {
         event.preventDefault()
         if (hasText) onSubmit()
@@ -87,8 +89,7 @@ export function ThreadComposer({
     >
       <Textarea
         aria-label={label}
-        rows={2}
-        className="min-h-11"
+        className="field-sizing-content max-h-48 min-h-12 resize-none pr-12"
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -99,7 +100,12 @@ export function ThreadComposer({
           }
         }}
       />
-      <Button type="submit" size="icon" disabled={!hasText || pending}>
+      <Button
+        type="submit"
+        size="icon"
+        disabled={!hasText || pending}
+        className="absolute right-1.5 bottom-1 size-8 rounded-full"
+      >
         <SendIcon />
         <span className="sr-only">Post</span>
       </Button>
