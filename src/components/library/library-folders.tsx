@@ -182,16 +182,18 @@ const STRIP_TILT = [
 ] as const
 
 /**
- * One die-cut folder silhouette. The whole cutout is the link (`?project=…`);
- * the strips and pocket note are presentation only — the link's accessible
- * name carries the facts cleanly.
+ * One die-cut folder silhouette. The whole cutout is the link; the strips
+ * and pocket note are presentation only — the link's accessible name
+ * carries the facts cleanly.
  */
 function FolderCutout({
   workspaceSlug,
   folder,
+  onSeedScope,
 }: {
   workspaceSlug: string
   folder: LibraryFolder
+  onSeedScope?: (folderId: string) => void
 }) {
   const band = projectCoverColor(folder.slug, {
     start: folder.gradientStart,
@@ -205,7 +207,12 @@ function FolderCutout({
       <Link
         to="/w/$workspaceSlug/library"
         params={{ workspaceSlug }}
-        onClick={() => setLibraryFolderScope(workspaceSlug, folder.id)}
+        onClick={() => {
+          setLibraryFolderScope(workspaceSlug, folder.id)
+          // The shelf's first paint rides these rows (see the index route's
+          // `seedScopedShelf`); the scoped fetch answers behind it.
+          onSeedScope?.(folder.id)
+        }}
         aria-label={`Open the ${folder.title} folder, ${countOf(folder.assets.length, "asset", "assets")}`}
         className="group block w-full rounded-2xl text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
       >
@@ -294,9 +301,11 @@ function FolderCutout({
 export function LibraryFolderWall({
   workspaceSlug,
   folders,
+  onSeedScope,
 }: {
   workspaceSlug: string
   folders: LibraryFolder[]
+  onSeedScope?: (folderId: string) => void
 }) {
   return (
     <section aria-label="Library folders">
@@ -306,6 +315,7 @@ export function LibraryFolderWall({
             key={folder.id}
             workspaceSlug={workspaceSlug}
             folder={folder}
+            onSeedScope={onSeedScope}
           />
         ))}
       </div>

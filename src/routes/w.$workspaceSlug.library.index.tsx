@@ -1,4 +1,8 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, ImagesIcon } from "lucide-react"
@@ -74,6 +78,8 @@ function LibraryPage() {
       : null
   const targetProject = filters.project ?? scopedProject ?? undefined
 
+  const seedClient = useQueryClient()
+
   const { data, isPending, error } = useQuery({
     ...libraryQuery(workspaceId, {
       q: filters.q,
@@ -90,7 +96,10 @@ function LibraryPage() {
     // shelf immediately (a subset of what is already on screen), so the
     // folder opens without a wait while the scoped fetch freshens behind
     // it. Nothing here holds a non-project filter's answer over: those
-    // wait for their own true rows.
+    // wait for their own true rows. The click seeds the key's cache with
+    // those same rows (see `seedScopedShelf`), which is what makes a fresh
+    // page's first folder click — a brand-new observer with nothing kept —
+    // open without a loading wait too.
     ...(targetProject ? { placeholderData: keepPreviousData } : {}),
   })
 
@@ -157,6 +166,29 @@ function LibraryPage() {
 
   const assets = data?.assets ?? []
   const facets = data?.facets ?? { assetTypes: [] }
+
+  /**
+   * The cutout's click hands the folder's rows to the scoped key's cache
+   * before its observer exists: the wall's payload is a superset of what
+   * the shelf shows, so the first read finds its answer already there.
+   * The fetch still runs — this is the wall's knowledge, not the scoped
+   * one — invalidated after the write so it answers for real behind the
+   * paint.
+   */
+  function seedScopedShelf(folderId: string) {
+    if (!data) return
+    seedClient.setQueryData(
+      libraryQuery(workspaceId, { projectId: folderId }).queryKey,
+      {
+        ...data,
+        assets: data.assets.filter((asset) => asset.projectId === folderId),
+      }
+    )
+    void seedClient.invalidateQueries({
+      queryKey: libraryQuery(workspaceId, { projectId: folderId }).queryKey,
+    })
+  }
+
   // A hand-typed link may carry a deliverable without its project — assets
   // scope through the project, so that pair names nothing honest. The page
   // refuses to widen the answer: no project, no deliverable-filtered rows.
@@ -316,6 +348,7 @@ function LibraryPage() {
         <LibraryFolderWall
           workspaceSlug={workspaceSlug}
           folders={folders}
+          onSeedScope={seedScopedShelf}
         />
       )}
 
