@@ -152,6 +152,30 @@
   }
 }
 
+/* Linear-style pending: the shell is always on screen, so a loading page
+   just holds the logo in its content area — it fades most of the way in and
+   back out until every query the page needs has landed. */
+@keyframes logo-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-logo-pulse {
+  animation: logo-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-logo-pulse {
+    animation: none;
+    opacity: 0.2;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

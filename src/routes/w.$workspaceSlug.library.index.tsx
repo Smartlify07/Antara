@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useRef } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, ImagesIcon } from "lucide-react"
+import { AppLoading } from "@/components/app-loading"
 import { AssetCard } from "@/components/library/asset-card"
 import { LibraryFilters } from "@/components/library/library-filters"
 import type { LibraryFilterPatch } from "@/components/library/library-filters"
@@ -30,8 +31,11 @@ function LibraryPage() {
   const filters = Route.useSearch()
   const navigate = Route.useNavigate()
 
-  const { data, isPending, error } = useQuery(
-    libraryQuery(workspaceId, {
+  // Filter words ride the query key, so every filter change is a new fetch.
+  // keepPreviousData holds the last list on screen while it runs — the page
+  // logo is for arriving at the page, not for each keystroke on the search.
+  const { data, isPending, error } = useQuery({
+    ...libraryQuery(workspaceId, {
       q: filters.q,
       assetType: filters.type,
       projectId: filters.project,
@@ -40,13 +44,16 @@ function LibraryPage() {
           ? filters.deliverable
           : undefined,
       approvalState: filters.state,
-    })
-  )
+    }),
+    placeholderData: keepPreviousData,
+  })
 
   // The project facet (and the deliverables inside the picked one) ride
   // their existing queries — the same data the grid and the Work tab cache
   // already hold, composed rather than duplicated.
-  const { data: projects = [] } = useQuery(projectsQuery(workspaceId))
+  const { data: projects = [], isPending: projectsPending } = useQuery(
+    projectsQuery(workspaceId)
+  )
   const { data: deliverableData } = useQuery({
     ...projectDeliverablesQuery(workspaceId, filters.project ?? ""),
     enabled: Boolean(filters.project),
@@ -106,6 +113,13 @@ function LibraryPage() {
   const showEmpty =
     !isPending && !error && (assets.length === 0 || unscopableDeliverable)
 
+  // One arrival: the header, the filters, and the grid all read the list, so
+  // the page paints once, complete — the shell's pulsing logo covers the
+  // fetch. The deliverable facet stays out of the gate: it is a pick-list
+  // that only drives search, and gating on it would flash the whole page on
+  // every project the viewer switches to.
+  if (isPending || projectsPending) return <AppLoading />
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
@@ -126,10 +140,6 @@ function LibraryPage() {
         onSearch={scheduleSearch}
         onPatch={patchFilters}
       />
-
-      {isPending && (
-        <p className="text-sm text-muted-foreground">Loading the library…</p>
-      )}
 
       {error && (
         <div

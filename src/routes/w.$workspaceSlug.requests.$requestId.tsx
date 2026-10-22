@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
+import { AppLoading } from "@/components/app-loading"
 import {
   RequestDetailBody,
   RequestMetaRow,
@@ -31,9 +32,9 @@ function RequestDetailPage() {
     error,
   } = useQuery(requestQuery(workspaceId, requestId))
 
-  if (isPending) {
-    return <p className="text-sm text-muted-foreground">Loading request…</p>
-  }
+  // The record is the whole page — nothing renders until it arrives, and the
+  // shell's pulsing logo covers the fetch.
+  if (isPending) return <AppLoading />
 
   if (error) {
     return (

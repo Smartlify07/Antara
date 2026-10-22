@@ -16,6 +16,7 @@ import {
   TASK_PRIORITY_META,
   TASK_STATUS_META,
 } from "@/components/projects/details/deliverables/deliverable-meta"
+import { AppLoading } from "@/components/app-loading"
 import {
   ThreadComposer,
   ThreadEmpty,
@@ -55,9 +56,10 @@ export function TaskDetailPage({
     error,
   } = useQuery(projectDetailQuery(workspaceId, projectSlug))
 
-  if (isPending) {
-    return <p className="text-sm text-muted-foreground">Loading project…</p>
-  }
+  // One arrival for the page: title, meta, and thread all wait for the task
+  // list (below), so the project fetch keeps the shell's pulsing logo on
+  // screen instead of a bare loading line.
+  if (isPending) return <AppLoading />
 
   if (error) {
     return (
@@ -125,7 +127,20 @@ function TaskDetailContent({
   // not exist yet, and the thread renders on its own clock.
   const canWork = tasksResult?.viewer.canWork ?? false
 
-  if (!isPending && !error && !task) throw notFound()
+  // The deliverable label is the page's only conditional fetch: a task that
+  // hangs off no deliverable never starts it, so "pending" there has to be
+  // scoped to tasks that actually have one — a disabled query pends forever.
+  const deliverablesPending =
+    Boolean(task?.deliverableId) && deliverables.isPending
+
+  // One arrival for the body: it is all built from the task list, so nothing
+  // paints until it lands — the screen keeps the shell's pulsing logo rather
+  // than showing the project link over a "loading task" line.
+  if (isPending || deliverablesPending) return <AppLoading />
+
+  // The gate above pins `isPending` to false past this point, so the 404
+  // contract is the settled list whose answer is missing — no isPending test.
+  if (!error && !task) throw notFound()
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col lg:max-w-4xl">
@@ -140,13 +155,11 @@ function TaskDetailContent({
         {project.title}
       </Link>
 
-      {isPending ? (
-        <p className="mt-3 text-sm text-muted-foreground">Loading task…</p>
-      ) : error ? (
+      {error && (
         <p role="alert" className="mt-3 text-sm text-destructive">
           Could not load the task.
         </p>
-      ) : null}
+      )}
 
       {task && (
         <>

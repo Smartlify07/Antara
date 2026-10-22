@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { AlertCircleIcon } from "lucide-react"
+import { AppLoading } from "@/components/app-loading"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { TabsSwitcher } from "@/components/projects/details/tabs-switcher"
 import { ProjectDescription } from "@/components/projects/details/project-description"
@@ -200,11 +201,7 @@ export function ProjectDetailPage({
                 projectId={project.id}
               />
 
-              {updates.isPending && (
-                <p className="text-sm text-muted-foreground">
-                  Loading updates…
-                </p>
-              )}
+              {updates.isPending && <AppLoading />}
 
               {updates.error && (
                 <p role="alert" className="text-sm text-destructive">

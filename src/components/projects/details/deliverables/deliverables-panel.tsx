@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { PlusIcon } from "lucide-react"
+import { AppLoading } from "@/components/app-loading"
 import { Button } from "@/components/ui/button"
 import {
   deliverableKeys,
@@ -67,6 +68,13 @@ export function DeliverablesPanel({
   const canWork = tasksQuery.data?.viewer.canWork ?? false
   const canManage = deliverablesQuery.data?.viewer.canManage ?? false
 
+  // One arrival for the tab: deliverables and tasks read side by side, so
+  // the Work tab paints once, complete — the shell's pulsing logo covers
+  // the fetch instead of two half-loaded sections.
+  if (deliverablesQuery.isPending || tasksQuery.isPending) {
+    return <AppLoading />
+  }
+
   const deliverables = deliverablesQuery.data?.deliverables ?? []
   const projectTasks = tasksQuery.data?.tasks ?? []
   // Deliverable-bound tasks render inside the cabinet's threads; only the
@@ -95,33 +103,29 @@ export function DeliverablesPanel({
           )}
         </div>
 
-        {deliverablesQuery.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading deliverables…</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <DeliverablesCabinet
-              workspaceId={workspaceId}
-              projectId={projectId}
-              workspaceSlug={workspaceSlug}
-              deliverables={deliverables}
-              tasks={projectTasks}
-              tasksViewer={{ canWork }}
-              deliverablesViewer={{ canManage }}
-              members={members}
-              onChanged={refresh}
-            />
-            {deliverables.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                {/* Honest empty state next to the sleeping pocket: the New
+        <div className="flex flex-col gap-2">
+          <DeliverablesCabinet
+            workspaceId={workspaceId}
+            projectId={projectId}
+            workspaceSlug={workspaceSlug}
+            deliverables={deliverables}
+            tasks={projectTasks}
+            tasksViewer={{ canWork }}
+            deliverablesViewer={{ canManage }}
+            members={members}
+            onChanged={refresh}
+          />
+          {deliverables.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {/* Honest empty state next to the sleeping pocket: the New
                     deliverable button above exists if and only if this line
                     says the viewer can shape the work. */}
-                {canManage
-                  ? "No deliverables yet. Break this project into its concrete pieces of work."
-                  : "No deliverables yet — the project lead or a workspace admin will shape the work here."}
-              </p>
-            )}
-          </div>
-        )}
+              {canManage
+                ? "No deliverables yet. Break this project into its concrete pieces of work."
+                : "No deliverables yet — the project lead or a workspace admin will shape the work here."}
+            </p>
+          )}
+        </div>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -133,37 +137,33 @@ export function DeliverablesPanel({
             </span>
           )}
         </h2>
-        {tasksQuery.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading tasks…</p>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {looseTasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                workspaceSlug={workspaceSlug}
-                workspaceId={workspaceId}
-                task={task}
-                projectSlug={projectSlug}
-                members={members}
-                canWork={canWork}
-                onChanged={refresh}
-              />
-            ))}
-            {canWork && (
-              <TaskComposer
-                workspaceId={workspaceId}
-                projectId={projectId}
-                members={members}
-                onCreated={refresh}
-              />
-            )}
-            {!canWork && looseTasks.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Project members can add tasks here.
-              </p>
-            )}
-          </div>
-        )}
+        <div className="flex flex-col gap-1.5">
+          {looseTasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              workspaceSlug={workspaceSlug}
+              workspaceId={workspaceId}
+              task={task}
+              projectSlug={projectSlug}
+              members={members}
+              canWork={canWork}
+              onChanged={refresh}
+            />
+          ))}
+          {canWork && (
+            <TaskComposer
+              workspaceId={workspaceId}
+              projectId={projectId}
+              members={members}
+              onCreated={refresh}
+            />
+          )}
+          {!canWork && looseTasks.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Project members can add tasks here.
+            </p>
+          )}
+        </div>
       </section>
     </div>
   )
