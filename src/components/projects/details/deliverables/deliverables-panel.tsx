@@ -1,33 +1,41 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2Icon, PlusIcon } from "lucide-react"
+import { PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
-  projectDeliverablesQuery,
   deliverableKeys,
+  projectDeliverablesQuery,
 } from "@/lib/queries/deliverables"
 import { projectTasksQuery, taskKeys } from "@/lib/queries/tasks"
 import { projectKeys } from "@/lib/queries/projects"
 import type { AssignableMember } from "@/server/services/project-service"
-import { DeliverableCard } from "./deliverable-card"
+import { DeliverablesCabinet } from "./deliverables-cabinet"
 import { NewDeliverableDialog } from "./new-deliverable-dialog"
 import { TaskComposer } from "./task-composer"
 import { TaskRow } from "./task-row"
 
 /**
- * The project's Work tab: deliverable cards (FR-013..017) plus the loose-
- * tasks bucket for unplaced work. The lists load in parallel; a write
- * repaints both plus the detail header's task count in one invalidation
- * turn.
+ * The project's Work tab. The deliverables side is the folder cutout: the
+ * pocket opens the cabinet dialog, where each deliverable is a two-pane
+ * thread — its tasks, its own conversation, and its version timeline pulled
+ * up one level (`deliverables-cabinet.tsx`, geometry from the Variant C
+ * concept). Loose tasks — work untied to any deliverable — keep their
+ * page-level rows below, since there is no folder for them to sit in.
+ *
+ * Both lists load in parallel; a write repaints every list plus the detail
+ * header's task count in one invalidation turn.
  */
 export function DeliverablesPanel({
   workspaceSlug,
   workspaceId,
   projectId,
+  projectSlug,
   members,
 }: {
   workspaceSlug: string
   workspaceId: string
   projectId: string
+  /** The URL segment for the task deep-links on the loose-task rows. */
+  projectSlug: string
   /** Project members — the assignable pool for owners and task assignees. */
   members: AssignableMember[]
 }) {
@@ -55,15 +63,14 @@ export function DeliverablesPanel({
   // A write fact from the server, not a guess: the tasks list's viewer says
   // who can create tasks (project member or admin), the deliverables list's
   // viewer says who can manage deliverables (project lead or admin). The
-  // same access resolution stamps the per-row flags on the cards.
+  // same access resolution stamps the per-row flags the cabinet re-checks.
   const canWork = tasksQuery.data?.viewer.canWork ?? false
   const canManage = deliverablesQuery.data?.viewer.canManage ?? false
 
   const deliverables = deliverablesQuery.data?.deliverables ?? []
   const projectTasks = tasksQuery.data?.tasks ?? []
-  const deliverableTasks = projectTasks.filter(
-    (task) => task.deliverableId !== null
-  )
+  // Deliverable-bound tasks render inside the cabinet's threads; only the
+  // unplaced ones belong to a page-level row.
   const looseTasks = projectTasks.filter((task) => task.deliverableId === null)
 
   return (
@@ -89,36 +96,31 @@ export function DeliverablesPanel({
         </div>
 
         {deliverablesQuery.isPending ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2Icon className="size-4 animate-spin" />
-            Loading deliverables…
-          </p>
-        ) : deliverables.length > 0 ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {deliverables.map((deliverable) => (
-              <DeliverableCard
-                key={deliverable.id}
-                workspaceSlug={workspaceSlug}
-                workspaceId={workspaceId}
-                projectId={projectId}
-                deliverable={deliverable}
-                tasks={deliverableTasks.filter(
-                  (task) => task.deliverableId === deliverable.id
-                )}
-                members={members}
-                onChanged={refresh}
-                canWork={canWork}
-              />
-            ))}
-          </div>
+          <p className="text-sm text-muted-foreground">Loading deliverables…</p>
         ) : (
-          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            {/* Honest empty state: the button above exists if and only if
-                this line says the viewer can shape the work. */}
-            {canManage
-              ? "No deliverables yet. Break this project into its concrete pieces of work."
-              : "No deliverables yet — the project lead or a workspace admin will shape the work here."}
-          </p>
+          <div className="flex flex-col gap-2">
+            <DeliverablesCabinet
+              workspaceId={workspaceId}
+              projectId={projectId}
+              workspaceSlug={workspaceSlug}
+              deliverables={deliverables}
+              tasks={projectTasks}
+              tasksViewer={{ canWork }}
+              deliverablesViewer={{ canManage }}
+              members={members}
+              onChanged={refresh}
+            />
+            {deliverables.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                {/* Honest empty state next to the sleeping pocket: the New
+                    deliverable button above exists if and only if this line
+                    says the viewer can shape the work. */}
+                {canManage
+                  ? "No deliverables yet. Break this project into its concrete pieces of work."
+                  : "No deliverables yet — the project lead or a workspace admin will shape the work here."}
+              </p>
+            )}
+          </div>
         )}
       </section>
 
@@ -132,10 +134,7 @@ export function DeliverablesPanel({
           )}
         </h2>
         {tasksQuery.isPending ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2Icon className="size-4 animate-spin" />
-            Loading tasks…
-          </p>
+          <p className="text-sm text-muted-foreground">Loading tasks…</p>
         ) : (
           <div className="flex flex-col gap-1.5">
             {looseTasks.map((task) => (
@@ -144,6 +143,7 @@ export function DeliverablesPanel({
                 workspaceSlug={workspaceSlug}
                 workspaceId={workspaceId}
                 task={task}
+                projectSlug={projectSlug}
                 members={members}
                 canWork={canWork}
                 onChanged={refresh}

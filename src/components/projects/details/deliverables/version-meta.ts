@@ -22,8 +22,7 @@ export const REVIEW_STATUS_META: Record<
   },
   rejected: {
     label: "Rejected",
-    badgeClass:
-      "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+    badgeClass: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
   },
   changes_requested: {
     label: "Changes requested",
@@ -56,4 +55,13 @@ export const DECISION_META: Record<
     description:
       "Sends it back for changes. Anything you write below lands on the version's feedback thread.",
   },
+}
+
+/** Filled dot for the borderless thread views — no chip box needed. */
+export const REVIEW_DOTS: Record<VersionReviewStatus, string> = {
+  submitted: "bg-blue-500",
+  approved: "bg-emerald-500",
+  rejected: "bg-red-500",
+  changes_requested: "bg-amber-500",
+  superseded: "bg-muted-foreground/40",
 }

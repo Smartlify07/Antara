@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { avatarTint } from "@/lib/avatar-tint"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   notificationKeys,
@@ -21,7 +22,10 @@ import {
   markAllNotificationsReadFn,
   markNotificationReadFn,
 } from "@/server/functions/notifications"
-import type { NotificationItem } from "@/server/services/notification-service"
+import type {
+  NotificationCopyPart,
+  NotificationItem,
+} from "@/server/services/notification-service"
 
 /**
  * The notification bell (FR-048..050): an always-mounted unread counter with
@@ -49,6 +53,10 @@ export function NotificationsBell({
 }) {
   const [open, setOpen] = useState(false)
   const { data: unread = 0 } = useQuery(unreadCountQuery(workspaceSlug))
+  // Observed from page load, not on open: the inbox renders an already-warm
+  // cache, so clicking the bell costs no fetch. The list rides the same
+  // freshness options as the badge.
+  const list = useQuery(notificationsQuery(workspaceSlug))
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -62,7 +70,9 @@ export function NotificationsBell({
         >
           <BellIcon className="size-4" />
           {unread > 0 && (
-            <UnreadOrb className="absolute top-1 right-1 ring-2 ring-background" />
+            // The badge orb is the destructive red — unread demands attention,
+            // and it does not read as just another dark dot on the shell.
+            <UnreadOrb className="absolute top-1 right-1 bg-destructive ring-2 ring-background" />
           )}
         </button>
       </PopoverTrigger>
@@ -75,6 +85,9 @@ export function NotificationsBell({
         <NotificationsInbox
           workspaceSlug={workspaceSlug}
           unreadCount={unread}
+          items={list.data}
+          isPending={list.isPending}
+          error={list.error}
           onClose={() => setOpen(false)}
         />
       </PopoverContent>
@@ -82,22 +95,50 @@ export function NotificationsBell({
   )
 }
 
+/**
+ * The row copy, with the actor's name given weight so names read at a glance.
+ * An unread row's whole line is already medium, so the name steps up to
+ * semibold there; a read row's name is medium over plain text.
+ */
+function MessageText({
+  parts,
+  focus,
+}: {
+  parts: NotificationCopyPart[]
+  focus: boolean
+}) {
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.actor ? (
+          <span key={index} className={focus ? "font-semibold" : "font-medium"}>
+            {part.text}
+          </span>
+        ) : (
+          <span key={index}>{part.text}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function NotificationsInbox({
   workspaceSlug,
   unreadCount,
+  items,
+  isPending,
+  error,
   onClose,
 }: {
   workspaceSlug: string
   unreadCount: number
+  items?: NotificationItem[]
+  isPending: boolean
+  error: Error | null
   onClose: () => void
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const {
-    data: items,
-    isPending,
-    error,
-  } = useQuery(notificationsQuery(workspaceSlug))
 
   const unreadKey = notificationKeys.unread(workspaceSlug)
   const listKey = notificationKeys.list(workspaceSlug)
@@ -235,7 +276,7 @@ function NotificationsInbox({
         <p role="alert" className="px-3 pb-4 text-sm text-destructive">
           Could not load notifications.
         </p>
-      ) : items.length === 0 ? (
+      ) : (items ?? []).length === 0 ? (
         <div className="flex flex-col items-center gap-1 px-6 pt-4 pb-8 text-center">
           <BellIcon
             aria-hidden
@@ -248,7 +289,7 @@ function NotificationsInbox({
         </div>
       ) : (
         <ul className="max-h-[24rem] overflow-y-auto overscroll-contain pb-2">
-          {items.map((item) => (
+          {(items ?? []).map((item) => (
             <li key={item.id} className="group/row relative">
               <button
                 type="button"
@@ -264,7 +305,19 @@ function NotificationsInbox({
                   {item.actor.image && (
                     <AvatarImage src={item.actor.image} alt="" />
                   )}
-                  <AvatarFallback className="text-[11px]">
+                  <AvatarFallback
+                    className={cn(
+                      "text-[11px] font-medium",
+                      // The tint the person carries everywhere (seeded by their
+                      // id), matching profile pictures across the product.
+                      avatarTint(
+                        item.actor.id ??
+                          item.actor.name ??
+                          item.actor.email ??
+                          "former-member"
+                      )
+                    )}
+                  >
                     {(
                       item.actor.name?.trim()[0] ??
                       item.actor.email?.trim()[0] ??
@@ -279,7 +332,10 @@ function NotificationsInbox({
                       !item.readAt && "font-medium"
                     )}
                   >
-                    {item.message}
+                    <MessageText
+                      parts={item.messageParts}
+                      focus={!item.readAt}
+                    />
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {formatRelativeTime(item.createdAt)}

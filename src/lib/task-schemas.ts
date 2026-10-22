@@ -41,6 +41,14 @@ export const taskIdSchema = projectIdSchema.extend({
   taskId: z.string().min(1),
 })
 
+/** A post on the task's own thread (subjectType "task"). */
+export const taskCommentSchema = taskIdSchema.extend({
+  // Same bounds as every other lane's comment body — one vocabulary.
+  body: z.string().trim().min(1, "Write something first.").max(4000),
+})
+
+export type TaskCommentInput = z.infer<typeof taskCommentSchema>
+
 export const setTaskAssigneesSchema = taskIdSchema.extend({
   assigneeTeamIds: z.array(z.string().trim().min(1)).max(10),
 })

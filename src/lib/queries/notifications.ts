@@ -36,7 +36,11 @@ export function unreadCountQuery(workspaceSlug: string) {
   })
 }
 
-/** The inbox rows behind the popover, newest first. */
+/**
+ * The inbox rows behind the popover, newest first. The bell observes this from
+ * page load (not on open) so opening the popover renders a warm cache —
+ * the fetch cost is paid once at mount, same freshness options as the badge.
+ */
 export function notificationsQuery(workspaceSlug: string) {
   return queryOptions({
     queryKey: notificationKeys.list(workspaceSlug),
