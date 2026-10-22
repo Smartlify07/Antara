@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, ImagesIcon } from "lucide-react"
@@ -10,6 +10,10 @@ import {
 import {
   groupAssetsIntoFolders,
 } from "@/components/library/folder-grouping"
+import {
+  clearLibraryFolderScope,
+  useLibraryFolderScope,
+} from "@/components/library/folder-scope"
 import { LibraryFilters } from "@/components/library/library-filters"
 import type { LibraryFilterPatch } from "@/components/library/library-filters"
 import { ProjectCoverArt } from "@/components/workspace/project-cover-art"
@@ -27,14 +31,23 @@ export const Route = createFileRoute("/w/$workspaceSlug/library/")({
  * folder cutouts that stand for projects: an unfiltered library is the
  * folder wall, and every named filter — a project, a search, a state —
  * reads the matching files as standing book covers whose record sheets open
- * in place. Every filter word lives in the URL (the layout validates it),
- * so a filtered view survives a refresh and can be linked from a deliverable
- * card or anywhere else; a cutout's link is that same contract (`?project=…`).
+ * in place.
+ *
+ * Two roads lead to the same shelf, by design. The URL filters stay the
+ * deep-link contract: every filter word lives in the address bar (the
+ * layout validates it), so a filtered view survives a refresh and can be
+ * linked from a deliverable card. The cutouts take the other road: their
+ * click carries the scope in memory (see `folder-scope`), so the folder's
+ * shelf opens from the data the wall already holds — the previous key's
+ * rows paint the next view the same tick, and the scoped fetch only
+ * freshens the answer behind it. The address bar's words always win when
+ * they are present.
  *
  * react-query rather than a route loader, like every other list in the app:
- * the fetch rides the filters key, so the wire trip carries exactly what the
- * visible state needs. The list payload carries each asset's whole version
- * timeline (see `library-service`), so an opened book costs no second fetch.
+ * the fetch rides the filters key, so the wire trip carries exactly what
+ * the visible state needs. The list payload carries each asset's whole
+ * version timeline (see `library-service`), so an opened book costs no
+ * second fetch.
  */
 function LibraryPage() {
   const { workspaceId, workspace } = Route.useRouteContext()
@@ -42,30 +55,58 @@ function LibraryPage() {
   const filters = Route.useSearch()
   const navigate = Route.useNavigate()
 
-  const { data, isPending, error } = useQuery(
-    libraryQuery(workspaceId, {
+  /**
+   * The card shortcut's target: the project a cutout's click asked for. It
+   * governs only when the URL says nothing at all — a filter word anywhere
+   * (including a deep-linked project) takes the shelf back to the honest
+   * contract.
+   */
+  const scope = useLibraryFolderScope()
+  const scopedProject =
+    scope && scope.workspaceSlug === workspaceSlug
+      ? (!filters.q &&
+        !filters.type &&
+        !filters.project &&
+        !filters.deliverable &&
+        !filters.state
+          ? scope.projectId
+          : null)
+      : null
+  const targetProject = filters.project ?? scopedProject ?? undefined
+
+  const { data, isPending, error } = useQuery({
+    ...libraryQuery(workspaceId, {
       q: filters.q,
       assetType: filters.type,
-      projectId: filters.project,
+      projectId: targetProject,
       deliverableId:
         filters.project && filters.deliverable
           ? filters.deliverable
           : undefined,
       approvalState: filters.state,
-    })
-  )
+    }),
+    // A project target moves the key; the previous key's rows — the ones
+    // the wall was showing, or the folder it came from — paint the next
+    // shelf immediately (a subset of what is already on screen), so the
+    // folder opens without a wait while the scoped fetch freshens behind
+    // it. Nothing here holds a non-project filter's answer over: those
+    // wait for their own true rows.
+    ...(targetProject ? { placeholderData: keepPreviousData } : {}),
+  })
 
   // The project facet (and the deliverables inside the picked one) ride
   // their existing queries — the same data the wall and the Work tab cache
-  // already hold, composed rather than duplicated.
+  // already hold, composed rather than duplicated. The memory-scoped shelf
+  // offers its folder's deliverables too: picking one hands the scope over
+  // to the URL and continues as a filter.
   const {
     data: projectsData,
     isPending: projectsPending,
   } = useQuery(projectsQuery(workspaceId))
   const projects = projectsData ?? []
   const { data: deliverableData } = useQuery({
-    ...projectDeliverablesQuery(workspaceId, filters.project ?? ""),
-    enabled: Boolean(filters.project),
+    ...projectDeliverablesQuery(workspaceId, targetProject ?? ""),
+    enabled: Boolean(targetProject),
   })
   const deliverables = (deliverableData?.deliverables ?? []).map(
     (deliverable) => ({ id: deliverable.id, title: deliverable.title })
@@ -73,9 +114,13 @@ function LibraryPage() {
 
   // Typing writes the URL only after a pause, so a "keynotes" search is one
   // navigation, not eight. replace: true keeps the filter row out of the
-  // back stack — one browser-back step returns to the pre-filter page.
+  // back stack — one browser-back step returns to the pre-filter page. A
+  // settled word is a filter decision, so the card scope retires from it.
   const searchTimer = useRef<number | null>(null)
   function scheduleSearch(term: string) {
+    if (term.trim()) {
+      clearLibraryFolderScope()
+    }
     if (searchTimer.current !== null) {
       window.clearTimeout(searchTimer.current)
     }
@@ -88,6 +133,9 @@ function LibraryPage() {
   }
 
   function patchFilters(patch: LibraryFilterPatch) {
+    // Any filter decision takes over from the card's scope — the shelf it
+    // names is the URL's business from here on.
+    clearLibraryFolderScope()
     void navigate({
       search: (prev) => {
         const next: LibrarySearchParams = { ...prev, ...patch }
@@ -119,32 +167,41 @@ function LibraryPage() {
     Boolean(filters.deliverable) ||
     Boolean(filters.state)
   const unscopableDeliverable = Boolean(filters.deliverable) && !filters.project
-  const wallMode = !hasFilter
+  const wallMode = !hasFilter && !scopedProject
 
   // The wall's folders: the assets folded into the projects they live in —
   // a folder is a project, titled by its name, whether or not files have
   // arrived yet. A project scope (and nothing else) is that folder's own
   // shelf, so its header answers "where am I" with the folder's identity.
+  // The shelf reads the folder's own books rather than the payload's rows:
+  // while the scope's fetch freshens behind the kept-previous placeholder,
+  // the rows on hand may be the wall's (a superset), and the folder pick
+  // is what makes them honest for this shelf.
   const folders = useMemo(
     () => groupAssetsIntoFolders(assets, projects),
     [assets, projects]
   )
   const scopedFolder = useMemo(
     () =>
-      filters.project
-        ? (folders.find((folder) => folder.id === filters.project) ?? null)
+      targetProject
+        ? (folders.find((folder) => folder.id === targetProject) ?? null)
         : null,
-    [folders, filters.project]
+    [folders, targetProject]
   )
   const projectOnly =
-    Boolean(filters.project) &&
+    Boolean(targetProject) &&
     !filters.q &&
     !filters.type &&
     !filters.deliverable &&
     !filters.state
+  const shelfAssets = scopedFolder ? scopedFolder.assets : assets
 
-  // One book open at a time; Escape closes it, whichever cell holds focus.
+  // One book open at a time; Escape closes it, whichever cell holds focus —
+  // and switching folders (card click, filter change) closes it for good.
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  useEffect(() => {
+    setExpandedId(null)
+  }, [targetProject])
   useEffect(() => {
     if (!expandedId) return
     const handleKey = (event: KeyboardEvent) => {
@@ -160,17 +217,19 @@ function LibraryPage() {
     !error &&
     (wallMode
       ? folders.length === 0
-      : assets.length === 0 || unscopableDeliverable)
+      : shelfAssets.length === 0 || unscopableDeliverable)
   // A scoped folder with no files is an empty folder, not a failed filter.
-  const projectScopedEmpty = projectOnly && assets.length === 0
+  const projectScopedEmpty = projectOnly && shelfAssets.length === 0
+  const onScopedShelf = Boolean(scopedProject) || Boolean(filters.project)
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
-        {hasFilter && (
+        {(hasFilter || scopedProject) && (
           <Link
             to="/w/$workspaceSlug/library"
             params={{ workspaceSlug }}
+            onClick={clearLibraryFolderScope}
             className="w-fit rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {"← All folders"}
@@ -207,7 +266,7 @@ function LibraryPage() {
       </div>
 
       <LibraryFilters
-        filters={filters}
+        filters={{ ...filters, project: targetProject }}
         facets={facets}
         projects={projects}
         deliverables={deliverables}
@@ -260,14 +319,14 @@ function LibraryPage() {
         />
       )}
 
-      {!wallMode && assets.length > 0 && !unscopableDeliverable && (
+      {!wallMode && shelfAssets.length > 0 && !unscopableDeliverable && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {assets.map((asset) => (
+          {shelfAssets.map((asset) => (
             <AssetBook
               key={asset.id}
               workspaceSlug={workspaceSlug}
               asset={asset}
-              showProject={!filters.project}
+              showProject={!onScopedShelf}
               expanded={expandedId === asset.id}
               onToggle={() =>
                 setExpandedId((current) =>

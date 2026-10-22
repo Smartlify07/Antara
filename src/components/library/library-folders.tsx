@@ -9,6 +9,7 @@ import {
   projectCoverColor,
 } from "@/components/workspace/project-cover-art"
 import type { LibraryFolder } from "./folder-grouping"
+import { setLibraryFolderScope } from "./folder-scope"
 import { ASSET_STATE_META } from "./library-meta"
 import type {
   LibraryAssetSummary,
@@ -25,9 +26,12 @@ import type { VersionReviewStatus } from "@/db/enums"
  * project: a back board washed with the project's own accent and grain, a
  * rounded-top tab carrying the title, a near-white front pocket, and asset
  * titles peeking out of the pocket as paper strips in each asset's book
- * colour. A cutout is a link — `?project=…`, the lane's own scoped URL — so
- * opening a folder is a navigation, deep-linkable and back-stack-stable
- * rather than a screen swap the URL never learns about.
+ * colour. A cutout is a link whose click carries the folder's scope in
+ * memory (see `folder-scope`) — opening a folder is a plain navigation to
+ * the library route that paints the shelf the same tick, because the wall's
+ * rows already hold it. The scope is never written to the address bar: the
+ * URL filters stay the deep-link contract, and a hand-typed `?project=…`
+ * lands on the same shelf.
  *
  * Inside a folder every asset stands up as a portrait cover; expanding a
  * cover lifts and tilts it away, revealing the record sheet in the same
@@ -201,7 +205,7 @@ function FolderCutout({
       <Link
         to="/w/$workspaceSlug/library"
         params={{ workspaceSlug }}
-        search={{ project: folder.id }}
+        onClick={() => setLibraryFolderScope(workspaceSlug, folder.id)}
         aria-label={`Open the ${folder.title} folder, ${countOf(folder.assets.length, "asset", "assets")}`}
         className="group block w-full rounded-2xl text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
       >
