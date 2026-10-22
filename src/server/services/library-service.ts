@@ -11,6 +11,7 @@ import {
   or,
   sql,
 } from "drizzle-orm"
+import { alias } from "drizzle-orm/pg-core"
 import { db } from "@/db"
 import type {
   ApprovalDecision,
@@ -67,6 +68,10 @@ export interface LibraryVersionSummary {
   label: string
   reviewStatus: VersionReviewStatus | null
   source: AssetVersionSource
+  /** The FR-040 link the record sheet's link row and history rows show. */
+  url: string
+  /** For external links: which provider the URL points at. */
+  externalProvider: string | null
   createdAt: Date
   submitter: LibraryPerson
 }
@@ -78,6 +83,8 @@ export interface LibraryAssetSummary {
   assetType: string | null
   tags: string[] | null
   createdAt: Date
+  /** Who added this file to the library — "created by" on the record sheet. */
+  createdBy: LibraryPerson | null
   projectId: string
   projectTitle: string
   projectSlug: string
@@ -86,6 +93,11 @@ export interface LibraryAssetSummary {
   versionCount: number
   /** Server-derived, see `assetApprovalState` — the three PRD buckets. */
   approvalState: LibraryApprovalState
+  /* The whole timeline, newest first — the same order the detail page's
+   * timeline uses. The rows are already fetched to derive latest/flags, so
+   * embedding them costs no extra query and the record card gets its full
+   * version history without a second fetch when it opens. */
+  versions: LibraryVersionSummary[]
   latestVersion: LibraryVersionSummary | null
   /** The newest version that was ever approved; often NOT the latest (FR-037). */
   latestApproved: { id: string; versionNo: number; label: string } | null
@@ -217,6 +229,44 @@ function searchWhere(pattern: string) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The person who added a file — "created by" on the record sheet. A second
+ * reader of the user table, aliased so it does not disturb the version
+ * submitters' join.
+ */
+const assetCreators = alias(user, "asset_creators")
+
+/**
+ * The shared shape for a version on a list row — the head summary and every
+ * history entry alike, so the two can never drift apart. `submitterName`
+ * comes back null for an uploader whose account has since been removed; the
+ * lane renders "a former member" for it.
+ */
+function toVersionSummary(row: {
+  id: string
+  versionNo: number
+  label: string
+  source: AssetVersionSource
+  url: string
+  externalProvider: string | null
+  reviewStatus: VersionReviewStatus | null
+  createdAt: Date
+  submitterName: string | null
+  submitterEmail: string | null
+}): LibraryVersionSummary {
+  return {
+    id: row.id,
+    versionNo: row.versionNo,
+    label: row.label,
+    source: row.source,
+    url: row.url,
+    externalProvider: row.externalProvider,
+    reviewStatus: row.reviewStatus,
+    createdAt: row.createdAt,
+    submitter: { name: row.submitterName, email: row.submitterEmail },
+  }
+}
+
+/**
  * The workspace's assets under the given filters, most recently touched
  * first. Facets are the workspace's own vocabulary (types in use), scoped to
  * the selected project when one is named so the facet list never offers an
@@ -242,6 +292,8 @@ export async function listLibraryAssets(
       assetType: assets.assetType,
       tags: assets.tags,
       createdAt: assets.createdAt,
+      creatorName: assetCreators.name,
+      creatorEmail: assetCreators.email,
       projectId: projects.id,
       projectTitle: projects.title,
       projectSlug: projects.slug,
@@ -251,6 +303,7 @@ export async function listLibraryAssets(
     .from(assets)
     .innerJoin(projects, eq(assets.projectId, projects.id))
     .leftJoin(deliverables, eq(assets.deliverableId, deliverables.id))
+    .leftJoin(assetCreators, eq(assets.createdBy, assetCreators.id))
     .where(
       and(
         scopedProjectWhere(workspaceId, filters.projectId),
@@ -280,6 +333,9 @@ export async function listLibraryAssets(
       versionNo: assetVersions.versionNo,
       label: assetVersions.label,
       source: assetVersions.source,
+      // The FR-040 link the record card shows per version and in its link row.
+      url: assetVersions.url,
+      externalProvider: assetVersions.externalProvider,
       reviewStatus: assetVersions.reviewStatus,
       createdAt: assetVersions.createdAt,
       submitterName: user.name,
@@ -310,6 +366,9 @@ export async function listLibraryAssets(
         assetType: row.assetType,
         tags: row.tags,
         createdAt: row.createdAt,
+        createdBy: row.creatorName
+          ? { name: row.creatorName, email: row.creatorEmail }
+          : null,
         projectId: row.projectId,
         projectTitle: row.projectTitle,
         projectSlug: row.projectSlug,
@@ -319,20 +378,8 @@ export async function listLibraryAssets(
         approvalState: assetApprovalState(
           versions.map((version) => version.reviewStatus)
         ),
-        latestVersion: latest
-          ? {
-              id: latest.id,
-              versionNo: latest.versionNo,
-              label: latest.label,
-              reviewStatus: latest.reviewStatus,
-              source: latest.source,
-              createdAt: latest.createdAt,
-              submitter: {
-                name: latest.submitterName,
-                email: latest.submitterEmail,
-              },
-            }
-          : null,
+        versions: versions.map(toVersionSummary),
+        latestVersion: latest ? toVersionSummary(latest) : null,
         latestApproved: approved
           ? {
               id: approved.id,
