@@ -30,6 +30,13 @@ const BRIGHT_COLORS = [
   "oklch(0.76 0.18 15)", // red
 ]
 
+export function projectCoverColor(
+  seed: string,
+  gradient?: { start: string | null; end: string | null } | null
+): string {
+  return gradient?.start ?? BRIGHT_COLORS[hash(seed) % BRIGHT_COLORS.length]
+}
+
 export function ProjectCoverArt({
   seed,
   gradient,
@@ -40,8 +47,7 @@ export function ProjectCoverArt({
   gradient?: { start: string | null; end: string | null } | null
   className?: string
 }) {
-  const fallback = BRIGHT_COLORS[hash(seed) % BRIGHT_COLORS.length]!
-  const background = gradient?.start ?? fallback
+  const background = projectCoverColor(seed, gradient)
   // Unique per card: duplicate SVG filter ids would collide across the grid.
   const grainId = useId().replace(/:/g, "")
 

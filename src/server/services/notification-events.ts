@@ -71,34 +71,96 @@ export function resolveRecipients(
   ]
 }
 
+/**
+ * One segment of the inbox line. `message` is the join of every segment's
+ * text — two views of one sentence that cannot drift apart: surfaces that
+ * only want text read `message`, surfaces that style the actor's name (the
+ * person the row is about) read `parts`.
+ */
+export interface NotificationCopyPart {
+  text: string
+  /** Set for the actor's name — the styled inbox gives these weight. */
+  actor?: boolean
+}
+
+const text = (value: string): NotificationCopyPart => ({ text: value })
+
+/** The actor's name as its own segment, so the inbox can bold it. */
+const name = (value: string): NotificationCopyPart => ({
+  text: value,
+  actor: true,
+})
+
 const COPY: Record<
   NotificationType,
-  (actor: string, subject: string) => string
+  (actor: string, subject: string) => NotificationCopyPart[]
 > = {
-  project_assigned: (actor, subject) => `${actor} added you to ${subject}`,
-  deliverable_assigned: (actor, subject) =>
-    `${actor} put you in charge of ${subject}`,
-  task_assigned: (actor, subject) => `${actor} assigned ${subject} to you`,
-  version_review_requested: (actor, subject) =>
-    `${actor} sent ${subject} for review`,
-  version_feedback: (actor, subject) => `${actor} left feedback on ${subject}`,
-  version_review_approved: (actor, subject) => `${actor} approved ${subject}`,
-  version_review_rejected: (actor, subject) => `${actor} rejected ${subject}`,
-  version_review_changes_requested: (actor, subject) =>
-    `${actor} requested changes to ${subject}`,
+  project_assigned: (actor, subject) => [
+    name(actor),
+    text(" added you to "),
+    text(subject),
+  ],
+  deliverable_assigned: (actor, subject) => [
+    name(actor),
+    text(" put you in charge of "),
+    text(subject),
+  ],
+  task_assigned: (actor, subject) => [
+    name(actor),
+    text(" assigned "),
+    text(subject),
+    text(" to you"),
+  ],
+  version_review_requested: (actor, subject) => [
+    name(actor),
+    text(" sent "),
+    text(subject),
+    text(" for review"),
+  ],
+  version_feedback: (actor, subject) => [
+    name(actor),
+    text(" left feedback on "),
+    text(subject),
+  ],
+  version_review_approved: (actor, subject) => [
+    name(actor),
+    text(" approved "),
+    text(subject),
+  ],
+  version_review_rejected: (actor, subject) => [
+    name(actor),
+    text(" rejected "),
+    text(subject),
+  ],
+  version_review_changes_requested: (actor, subject) => [
+    name(actor),
+    text(" requested changes to "),
+    text(subject),
+  ],
 }
 
 /** When the actor row is gone (accounts delete; actor_id is set-null). */
-const NO_ACTOR_COPY: Record<NotificationType, (subject: string) => string> = {
-  project_assigned: (subject) => `You were added to ${subject}`,
-  deliverable_assigned: (subject) => `You now own ${subject}`,
-  task_assigned: (subject) => `${subject} was assigned to you`,
-  version_review_requested: (subject) => `${subject} is waiting for review`,
-  version_feedback: (subject) => `New feedback arrived on ${subject}`,
-  version_review_approved: (subject) => `${subject} was approved`,
-  version_review_rejected: (subject) => `${subject} was rejected`,
-  version_review_changes_requested: (subject) =>
-    `Changes were requested on ${subject}`,
+const NO_ACTOR_COPY: Record<
+  NotificationType,
+  (subject: string) => NotificationCopyPart[]
+> = {
+  project_assigned: (subject) => [text(`You were added to ${subject}`)],
+  deliverable_assigned: (subject) => [text(`You now own ${subject}`)],
+  task_assigned: (subject) => [text(`${subject} was assigned to you`)],
+  version_review_requested: (subject) => [
+    text(`${subject} is waiting for review`),
+  ],
+  version_feedback: (subject) => [text(`New feedback arrived on ${subject}`)],
+  version_review_approved: (subject) => [text(`${subject} was approved`)],
+  version_review_rejected: (subject) => [text(`${subject} was rejected`)],
+  version_review_changes_requested: (subject) => [
+    text(`Changes were requested on ${subject}`),
+  ],
+}
+
+/** The plain text of a rendered copy — exactly what `message` is. */
+function joinParts(parts: NotificationCopyPart[]): string {
+  return parts.map((part) => part.text).join("")
 }
 
 /** What the inbox says for a subject that no longer resolves. */
@@ -110,7 +172,10 @@ const SUBJECT_FALLBACK: Record<NotificationSubjectType, string> = {
 }
 
 export interface NotificationCopy {
+  /** The plain line — exactly the join of `parts`, for surfaces that want text. */
   message: string
+  /** The line split into segments, so a surface can style the name without re-parsing. */
+  parts: NotificationCopyPart[]
   /** False when the stored type predates this module — render neutral, don't guess. */
   known: boolean
 }
@@ -127,7 +192,8 @@ export function describeNotification(
   subjectLabel: string | null
 ): NotificationCopy {
   if (!isNotificationType(rawType)) {
-    return { message: "Something happened in this workspace", known: false }
+    const parts = [text("Something happened in this workspace")]
+    return { message: joinParts(parts), parts, known: false }
   }
   // A whitespace-only stored name is a gone name, not a blank byline — trim
   // before trusting either string the row carries.
@@ -139,9 +205,9 @@ export function describeNotification(
       : isNotificationSubjectType(rawSubjectType)
         ? SUBJECT_FALLBACK[rawSubjectType]
         : "a record"
-  const template =
+  const parts =
     actor.length > 0
       ? COPY[rawType](actor, subject)
       : NO_ACTOR_COPY[rawType](subject)
-  return { message: template, known: true }
+  return { message: joinParts(parts), parts, known: true }
 }

@@ -8,10 +8,15 @@ import { projectMembers, projects } from "@/db/schema/projects"
 import { tasks } from "@/db/schema/tasks"
 import { roles, team, workspaces } from "@/db/schema/workspaces"
 import type {
+  NotificationCopyPart,
   NotificationSubjectType,
   NotificationType,
 } from "./notification-events"
 import { describeNotification, resolveRecipients } from "./notification-events"
+
+// The payload boundary: a client that reads rows reads the copy parts through
+// here too — the events module stays the source of truth.
+export type { NotificationCopyPart } from "./notification-events"
 
 /**
  * The notification emitter and the inbox reads it feeds (FR-047..050).
@@ -334,6 +339,8 @@ export function notifySubmitterOfDecision(
 // ---------------------------------------------------------------------------
 
 export interface NotificationActor {
+  /** The account the tint seeds with — the same colour the person gets everywhere. */
+  id: string | null
   name: string | null
   email: string | null
   image: string | null
@@ -346,6 +353,8 @@ export interface NotificationItem {
   subjectId: string
   /** Precomposed inbox copy — the pure mapping in `notification-events`. */
   message: string
+  /** The same copy as segments, so the styled inbox can bold the actor's name. */
+  messageParts: NotificationCopyPart[]
   actor: NotificationActor
   /** The subject's project, when a concrete project page exists for it. */
   projectSlug: string | null
@@ -379,6 +388,7 @@ export async function listNotifications(
       subjectId: notifications.subjectId,
       readAt: notifications.readAt,
       createdAt: notifications.createdAt,
+      actorId: notifications.actorId,
       actorName: user.name,
       actorEmail: user.email,
       actorImage: user.image,
@@ -493,18 +503,21 @@ export async function listNotifications(
 
   return rows.map((row) => {
     const subject = subjectById.get(row.subjectId) ?? null
+    const copy = describeNotification(
+      row.type,
+      row.subjectType,
+      row.actorName,
+      subject?.label ?? null
+    )
     return {
       id: row.id,
       type: row.type,
       subjectType: row.subjectType,
       subjectId: row.subjectId,
-      message: describeNotification(
-        row.type,
-        row.subjectType,
-        row.actorName,
-        subject?.label ?? null
-      ).message,
+      message: copy.message,
+      messageParts: copy.parts,
       actor: {
+        id: row.actorId,
         name: row.actorName,
         email: row.actorEmail,
         image: row.actorImage,
