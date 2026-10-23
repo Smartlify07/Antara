@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router"
+import { useState } from "react"
 import type { ReactNode } from "react"
+import { AnimateIcon } from "@animate-ui/react/icons"
 import {
   Collapsible,
   CollapsibleContent,
@@ -54,6 +56,39 @@ function NavBadge({ label }: { label: string }) {
   )
 }
 
+/**
+ * The icon wrapper knows the animation; the row knows the hover. Nesting an
+ * animated icon inside AnimateIcon hands it the provider's animation controls,
+ * so a pointer (or focus) anywhere on the nav row animates the icon — not just
+ * hover on the 16px glyph itself.
+ */
+function NavIcon({
+  active,
+  children,
+}: {
+  active: boolean
+  children: ReactNode
+}) {
+  return (
+    <AnimateIcon animate={active} className="shrink-0">
+      {children}
+    </AnimateIcon>
+  )
+}
+
+function useRowActive() {
+  const [active, setActive] = useState(false)
+  return {
+    active,
+    activeProps: {
+      onMouseEnter: () => setActive(true),
+      onMouseLeave: () => setActive(false),
+      onFocus: () => setActive(true),
+      onBlur: () => setActive(false),
+    },
+  }
+}
+
 export function NavMain({
   label,
   items,
@@ -65,72 +100,77 @@ export function NavMain({
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
-        {items.map((item) => {
-          if (!item.items) {
-            const button = (
-              <SidebarMenuButton
-                tooltip={item.title}
-                isActive={item.active}
-                disabled={!item.url}
-                className={cn(!item.url && "opacity-70")}
-              >
-                {item.icon}
-                <span>{item.title}</span>
-                {item.badge && <NavBadge label={item.badge} />}
-              </SidebarMenuButton>
-            )
-            return (
-              <SidebarMenuItem key={item.title}>
-                {item.url ? (
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={item.active}
-                  >
-                    <Link to={item.url}>
-                      {item.icon}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                ) : (
-                  button
-                )}
-              </SidebarMenuItem>
-            )
-          }
-          return (
-            <Collapsible
-              key={item.title}
-              asChild
-              defaultOpen={item.active}
-              className="group/collapsible"
-            >
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={item.title}>
-                    {item.icon}
-                    <span>{item.title}</span>
-                    {item.badge && <NavBadge label={item.badge} />}
-                    <ChevronRightIcon className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenuSub>
-                    {item.items.map((subItem) => (
-                      <SidebarMenuSubItem key={subItem.title}>
-                        <SidebarMenuSubButton aria-disabled="true">
-                          <span>{subItem.title}</span>
-                          {subItem.badge && <SoonBadge />}
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    ))}
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
-          )
-        })}
+        {items.map((item) => (
+          <NavRow key={item.title} item={item} />
+        ))}
       </SidebarMenu>
     </SidebarGroup>
   )
+}
+
+function NavRow({ item }: { item: NavEntry }) {
+  const { active, activeProps } = useRowActive()
+  const icon = <NavIcon active={active}>{item.icon}</NavIcon>
+
+  if (item.items) {
+    return (
+      <Collapsible
+        asChild
+        defaultOpen={item.active}
+        className="group/collapsible"
+      >
+        <SidebarMenuItem>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton tooltip={item.title} {...activeProps}>
+              {icon}
+              <span>{item.title}</span>
+              {item.badge && <NavBadge label={item.badge} />}
+              <ChevronRightIcon className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <SidebarMenuSub>
+              {item.items.map((subItem) => (
+                <SidebarMenuSubItem key={subItem.title}>
+                  <SidebarMenuSubButton aria-disabled="true">
+                    <span>{subItem.title}</span>
+                    {subItem.badge && <SoonBadge />}
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              ))}
+            </SidebarMenuSub>
+          </CollapsibleContent>
+        </SidebarMenuItem>
+      </Collapsible>
+    )
+  }
+
+  const button = (
+    <SidebarMenuButton
+      tooltip={item.title}
+      isActive={item.active}
+      disabled={!item.url}
+      className={cn(!item.url && "opacity-70")}
+      {...activeProps}
+    >
+      {icon}
+      <span>{item.title}</span>
+      {item.badge && <NavBadge label={item.badge} />}
+    </SidebarMenuButton>
+  )
+
+  if (item.url) {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip={item.title} isActive={item.active}>
+          <Link to={item.url} {...activeProps}>
+            {icon}
+            <span>{item.title}</span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    )
+  }
+
+  return <SidebarMenuItem>{button}</SidebarMenuItem>
 }
