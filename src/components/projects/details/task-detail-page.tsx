@@ -16,6 +16,7 @@ import {
   TASK_PRIORITY_META,
   TASK_STATUS_META,
 } from "@/components/projects/details/deliverables/deliverable-meta"
+import { AppLoading } from "@/components/app-loading"
 import {
   ThreadComposer,
   ThreadEmpty,
@@ -26,7 +27,6 @@ import {
 import { addTaskCommentFn } from "@/server/functions/tasks"
 import type { ProjectDetail } from "@/server/services/project-service"
 import type { TaskThreadMessage } from "@/server/services/task-service"
-import { AppLoading } from "@/components/app-loading"
 
 /**
  * The task's own page: the task's full meta, the deliverable it hangs under,
