@@ -56,7 +56,10 @@ export function MyTasksPage({
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <SquareCheckBigIcon aria-hidden className="size-5 text-muted-foreground" />
+          <SquareCheckBigIcon
+            aria-hidden
+            className="size-5 text-muted-foreground"
+          />
           My tasks
         </h1>
         <p className="text-sm text-muted-foreground">

@@ -1,13 +1,8 @@
 import { Link } from "@tanstack/react-router"
 import { Loader2Icon } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
-import {
-  REVIEW_STATUS_META,
-} from "@/components/projects/details/deliverables/version-meta"
-import {
-  reviewQueueBadgeQuery,
-  reviewQueueQuery,
-} from "@/lib/queries/versions"
+import { REVIEW_STATUS_META } from "@/components/projects/details/deliverables/version-meta"
+import { reviewQueueBadgeQuery, reviewQueueQuery } from "@/lib/queries/versions"
 import { Button } from "@/components/ui/button"
 import { formatRelativeTime } from "@/lib/time"
 
@@ -25,15 +20,19 @@ export function ReviewsPage({
   workspaceId: string
 }) {
   const { data: badge } = useQuery(reviewQueueBadgeQuery(workspaceSlug))
-  const { data: rows = [], isPending, error } = useQuery(reviewQueueQuery(workspaceId))
+  const {
+    data: rows = [],
+    isPending,
+    error,
+  } = useQuery(reviewQueueQuery(workspaceId))
 
   const meta = REVIEW_STATUS_META.submitted
 
   if (badge && !badge.canReview) {
     return (
       <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-        Submitted versions are reviewed by project leads and workspace
-        admins. You will see this queue when you lead work.
+        Submitted versions are reviewed by project leads and workspace admins.
+        You will see this queue when you lead work.
       </p>
     )
   }
@@ -82,7 +81,9 @@ export function ReviewsPage({
                     {row.projectTitle}
                     {row.deliverableTitle ? ` · ${row.deliverableTitle}` : ""}
                     {" · submitted by "}
-                    {row.submitterName ?? row.submitterEmail ?? "a former member"}
+                    {row.submitterName ??
+                      row.submitterEmail ??
+                      "a former member"}
                     {row.submittedAt
                       ? ` · ${formatRelativeTime(row.submittedAt)}`
                       : ""}

@@ -78,10 +78,7 @@ export function canWorkOnTasks(facts: WorkPermissionFacts): boolean {
  * lie the workflow machines refuse, so the chip must not offer it and the
  * service must not accept it.
  */
-export function assertTaskStatusMove(
-  from: TaskStatus,
-  to: TaskStatus
-): void {
+export function assertTaskStatusMove(from: TaskStatus, to: TaskStatus): void {
   if (from === to) {
     throw new Error(
       `That task is already '${to}'. Pick a different status to move it.`

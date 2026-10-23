@@ -1,4 +1,13 @@
-import { and, desc, eq, inArray, isNotNull, isNull, max, sql } from "drizzle-orm"
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  max,
+  sql,
+} from "drizzle-orm"
 import { db } from "@/db"
 import type { UpdateKind } from "@/db/enums"
 import {
@@ -310,4 +319,3 @@ export async function queueAssetDeletion(
     await tx.delete(assets).where(eq(assets.id, assetId))
   })
 }
-

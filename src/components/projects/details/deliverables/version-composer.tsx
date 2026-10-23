@@ -3,9 +3,7 @@ import { Loader2Icon, LinkIcon, UploadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  submitVersionFn,
-} from "@/server/functions/versions"
+import { submitVersionFn } from "@/server/functions/versions"
 import {
   validateAssetFile,
   uploadAsset,
@@ -45,7 +43,7 @@ export function VersionComposer({
   // preset was never provisioned, and the copy says so instead of failing.
   const uploadsConfigured = Boolean(
     import.meta.env.VITE_CLOUDINARY_CLOUD_NAME &&
-      import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+    import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
   )
 
   async function run() {
@@ -98,7 +96,9 @@ export function VersionComposer({
       onSaved()
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not submit the version."
+        caught instanceof Error
+          ? caught.message
+          : "Could not submit the version."
       )
     } finally {
       setBusy(false)
@@ -107,7 +107,11 @@ export function VersionComposer({
 
   return (
     <div className="rounded-xl border bg-card p-4">
-      <div className="mb-3 flex items-center gap-1" role="tablist" aria-label="How this file arrives">
+      <div
+        className="mb-3 flex items-center gap-1"
+        role="tablist"
+        aria-label="How this file arrives"
+      >
         <button
           type="button"
           role="tab"
@@ -202,7 +206,11 @@ export function VersionComposer({
       )}
 
       <div className="mt-3 flex items-center gap-2">
-        <Button size="sm" disabled={busy || filename.trim().length === 0} onClick={() => void run()}>
+        <Button
+          size="sm"
+          disabled={busy || filename.trim().length === 0}
+          onClick={() => void run()}
+        >
           {busy ? <Loader2Icon className="size-4 animate-spin" /> : null}
           Submit version
         </Button>

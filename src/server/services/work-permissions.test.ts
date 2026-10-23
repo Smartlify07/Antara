@@ -35,7 +35,9 @@ describe("deliverable permission predicates", () => {
     expect(canManageDeliverables(facts({ isWorkspaceAdmin: true }))).toBe(true)
     expect(canManageDeliverables(facts({ isProjectLead: true }))).toBe(true)
     expect(
-      canManageDeliverables(facts({ isProjectMember: true, viewerTeamId: owned }))
+      canManageDeliverables(
+        facts({ isProjectMember: true, viewerTeamId: owned })
+      )
     ).toBe(false)
   })
 
@@ -43,13 +45,13 @@ describe("deliverable permission predicates", () => {
     expect(
       canMoveProductionStatus(facts({ isWorkspaceAdmin: true }), null)
     ).toBe(true)
-    expect(
-      canMoveProductionStatus(facts({ isProjectLead: true }), null)
-    ).toBe(true)
+    expect(canMoveProductionStatus(facts({ isProjectLead: true }), null)).toBe(
+      true
+    )
     // Owner without any role: can move their own card.
-    expect(
-      canMoveProductionStatus(facts({ viewerTeamId: owned }), owned)
-    ).toBe(true)
+    expect(canMoveProductionStatus(facts({ viewerTeamId: owned }), owned)).toBe(
+      true
+    )
     // ...but not someone else's.
     expect(
       canMoveProductionStatus(facts({ viewerTeamId: owned }), "team-2")
@@ -82,7 +84,10 @@ describe("version permission predicates", () => {
 
   it("refuses co-members of the deliverable", () => {
     expect(
-      canSubmitVersion(facts({ isProjectMember: true, viewerTeamId: "team-2" }), owned)
+      canSubmitVersion(
+        facts({ isProjectMember: true, viewerTeamId: "team-2" }),
+        owned
+      )
     ).toBe(false)
     // Owner authority needs an owner; a plain holder of a team id with no
     // deliverable owner cannot extend it.
@@ -122,9 +127,7 @@ describe("task status transitions", () => {
 
   it("forbids the no-op move — the audit-trail lie", () => {
     for (const status of STATUSES) {
-      expect(() => assertTaskStatusMove(status, status)).toThrow(
-        /already/
-      )
+      expect(() => assertTaskStatusMove(status, status)).toThrow(/already/)
     }
   })
 

@@ -47,7 +47,13 @@ async function resolveWorkspaceId(workspaceId: string): Promise<string> {
 }
 
 export const listDeliverableVersionsFn = createServerFn({ method: "GET" })
-  .validator(z.object({ workspaceId: z.string(), projectId: z.string(), deliverableId: z.string() }))
+  .validator(
+    z.object({
+      workspaceId: z.string(),
+      projectId: z.string(),
+      deliverableId: z.string(),
+    })
+  )
   .handler(async ({ data }) => {
     const userId = await resolveWorkspaceId(data.workspaceId)
     return listDeliverableVersions(data.workspaceId, userId, {
@@ -59,7 +65,11 @@ export const listDeliverableVersionsFn = createServerFn({ method: "GET" })
 export const submitVersionFn = createServerFn({ method: "POST" })
   .validator(submitVersionSchema)
   .handler(async ({ data }) =>
-    submitVersion(data.workspaceId, await resolveWorkspaceId(data.workspaceId), data)
+    submitVersion(
+      data.workspaceId,
+      await resolveWorkspaceId(data.workspaceId),
+      data
+    )
   )
 
 export const submitForReviewFn = createServerFn({ method: "POST" })
