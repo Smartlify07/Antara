@@ -16,7 +16,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "@tanstack/react-router"
 import {
@@ -97,7 +97,7 @@ import {
   deliverableMoveTargets,
 } from "./deliverable-meta"
 import { DECISION_META, REVIEW_DOTS, REVIEW_STATUS_META } from "./version-meta"
-import { TaskComposer } from "./task-composer"
+import { NewTaskDialog } from "./new-task-dialog"
 import { VersionThread } from "./version-thread"
 import { VersionComposer } from "./version-composer"
 import {
@@ -182,7 +182,7 @@ export function DeliverablesCabinet({
   const [isOpen, setIsOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null)
-  const [mode, setMode] = useState<"all" | "comments">("all")
+  const [mode, setMode] = useState<"comments" | "tasks">("comments")
   /**
    * Direction of the last detail-pane swap: 1 = drilling in / paging to an
    * older version, −1 = climbing back out / paging to a newer one, 0 = a
@@ -670,10 +670,11 @@ function ownerRef(member: AssignableMember): DeliverableCard["owner"] {
 /**
  * The selected deliverable's detail: header meta with the card's editing
  * affordances (status machine menu from `deliverable-card.tsx`; owner and
- * deadline as the same house pills, gated as the card gated them), its
- * task thread, and its own conversation on the shared work-comments pieces.
- * The versions cluster rides on the timeline the cabinet already holds —
- * flat rows, each drilling into level two.
+ * deadline as the same house pills, gated as the card gated them), then
+ * Comments and Tasks tabs — the conversation on the shared work-comments
+ * pieces, and the task list behind its creation dialog. The versions
+ * cluster rides on the timeline the cabinet already holds — flat rows,
+ * each drilling into level two.
  */
 function LevelOne({
   workspaceId,
@@ -711,8 +712,8 @@ function LevelOne({
   canManage: boolean
   /** Same write fact the card gated the task composer with. */
   canWork: boolean
-  mode: "all" | "comments"
-  onModeChange: (mode: "all" | "comments") => void
+  mode: "comments" | "tasks"
+  onModeChange: (mode: "comments" | "tasks") => void
   versionsData: DeliverableVersionsResult | undefined
   versionsPending: boolean
   versionsError: unknown
@@ -722,7 +723,6 @@ function LevelOne({
 }) {
   const { data: session } = useSession()
   const queryClient = useQueryClient()
-  const reduceMotion = useReducedMotion() ?? false
 
   // Edit-affordance state, ported from deliverable-card. The three writes
   // below (`useDeliverableCardWrite`) paint the project's deliverable cache
@@ -742,11 +742,6 @@ function LevelOne({
 
   const meta = DELIVERABLE_META[deliverable.status]
   const targets = deliverableMoveTargets(deliverable.status)
-
-  // Comments-only mode lifts the task nodes out of the thread with a
-  // height-collapse fade; going back inserts them instantly — seeding the
-  // exit is worth it, choreographing the re-entry is not.
-  const visibleTasks = mode === "all" ? tasks : []
 
   // The deliverable's own conversation, on the same optimistic mutation the
   // version thread runs (`version-thread.tsx`), aimed at the deliverable
@@ -1051,91 +1046,130 @@ function LevelOne({
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <ThreadModeToggle value={mode} onChange={onModeChange} />
+          <DetailTabs value={mode} onChange={onModeChange} />
         </div>
       </header>
 
-      {/* The add-task affordance (FR-016): the same composer atom the
-          loose-tasks bucket uses, pointed at this deliverable. Any project
-          member can add work here and pick who carries it — themselves
-          included — without waiting for the lead. */}
-      {canWork && (
-        <div className="mt-7">
-          <TaskComposer
-            workspaceId={workspaceId}
-            projectId={projectId}
-            deliverableId={deliverable.id}
-            members={members}
-            onCreated={onChanged}
-          />
-        </div>
-      )}
-
-      <ul className={canWork ? "mt-5" : "mt-7"}>
-        <AnimatePresence initial={false}>
-          {visibleTasks.map((task) => (
-            <motion.li
-              key={task.id}
-              initial={false}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              style={{ overflow: "hidden" }}
-            >
-              <TaskThreadItem
-                task={task}
-                workspaceSlug={workspaceSlug}
-                projectSlug={projectSlug}
-              />
-            </motion.li>
-          ))}
-        </AnimatePresence>
-        {threadPending ? (
-          <li>
-            <ThreadLoading label="Loading conversation…" />
-          </li>
-        ) : threadError ? (
-          <li>
-            <ThreadError>
-              {threadError instanceof Error
-                ? threadError.message
-                : "Could not load the conversation."}
-            </ThreadError>
-          </li>
-        ) : (
-          <>
-            {messages.length === 0 && (
+      {/* The two tabs, one panel each: the conversation, and the task list
+          with its creation dialog. The inline composer that used to sit
+          between the header and the thread is gone — adding a task lives
+          where the tasks are, behind the tab's own button (FR-016), so it
+          never pushes the conversation out of view. */}
+      {mode === "comments" ? (
+        <div
+          id="cabinet-panel-comments"
+          role="tabpanel"
+          aria-labelledby="cabinet-tab-comments"
+        >
+          <ul className="mt-5">
+            {threadPending ? (
               <li>
-                <ThreadEmpty>
-                  No comments yet. Notes on this piece of work — the team reads
-                  them right here.
-                </ThreadEmpty>
+                <ThreadLoading label="Loading conversation…" />
               </li>
+            ) : threadError ? (
+              <li>
+                <ThreadError>
+                  {threadError instanceof Error
+                    ? threadError.message
+                    : "Could not load the conversation."}
+                </ThreadError>
+              </li>
+            ) : (
+              <>
+                {messages.length === 0 && (
+                  <li>
+                    <ThreadEmpty>
+                      No comments yet. Notes on this piece of work — the team
+                      reads them right here.
+                    </ThreadEmpty>
+                  </li>
+                )}
+                {messages.map((message) => (
+                  <li key={message.id}>
+                    <ThreadRow message={message} />
+                  </li>
+                ))}
+              </>
             )}
-            {messages.map((message) => (
-              <li key={message.id}>
-                <ThreadRow message={message} />
-              </li>
-            ))}
-          </>
-        )}
-      </ul>
+          </ul>
 
-      {canWork ? (
-        <div className="mt-1">
-          <ThreadComposer
-            value={body}
-            onChange={setBody}
-            onSubmit={() => post.mutate(body.trim())}
-            pending={post.isPending}
-            placeholder={`Comment on ${deliverable.title}…`}
-            label={`Add a comment to ${deliverable.title}`}
-          />
-          {serverPostError && <ThreadError>{serverPostError}</ThreadError>}
+          {canWork ? (
+            <div className="mt-1">
+              <ThreadComposer
+                value={body}
+                onChange={setBody}
+                onSubmit={() => post.mutate(body.trim())}
+                pending={post.isPending}
+                placeholder={`Comment on ${deliverable.title}…`}
+                label={`Add a comment to ${deliverable.title}`}
+              />
+              {serverPostError && <ThreadError>{serverPostError}</ThreadError>}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Only project members can add to this thread.
+            </p>
+          )}
         </div>
       ) : (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Only project members can add to this thread.
-        </p>
+        <div
+          id="cabinet-panel-tasks"
+          role="tabpanel"
+          aria-labelledby="cabinet-tab-tasks"
+          className="mt-6"
+        >
+          <section
+            aria-label={`Tasks of ${deliverable.title}`}
+            className="rounded-xl bg-muted/30 p-2"
+          >
+            <div className="flex items-center justify-between px-2 pt-1.5 pb-1">
+              <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Tasks
+              </h3>
+              <span className="flex items-center gap-3 text-xs text-muted-foreground">
+                {tasks.length > 0 &&
+                  `${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`}
+                {/* The tab's add-task affordance: the same creation dialog
+                    the other lanes open, so any member assigns owner,
+                    deadline and priority without touching the thread. */}
+                {canWork && (
+                  <NewTaskDialog
+                    workspaceId={workspaceId}
+                    projectId={projectId}
+                    deliverableId={deliverable.id}
+                    members={members}
+                    onCreated={onChanged}
+                  >
+                    <Button size="sm" className="h-7 text-xs">
+                      <PlusIcon className="size-3.5" />
+                      Add task
+                    </Button>
+                  </NewTaskDialog>
+                )}
+              </span>
+            </div>
+
+            {tasks.length === 0 ? (
+              <p className="px-2 pt-1 pb-2 text-xs text-muted-foreground">
+                {canWork
+                  ? "No tasks on this deliverable yet — add the first one."
+                  : "No tasks on this deliverable yet."}
+              </p>
+            ) : (
+              <ul className="flex flex-col">
+                {tasks.map((task) => (
+                  <li key={task.id}>
+                    <TaskListItem
+                      task={task}
+                      workspaceSlug={workspaceSlug}
+                      projectSlug={projectSlug}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       )}
 
       {/* The versions cluster: a flat drawer, deliberately not an accordion —
@@ -1653,7 +1687,12 @@ function VersionPager({
 
 /** An open task as a thread node: assignee faces at the head, status,
  *  priority and due in a quiet second row, into the task's own page. */
-function TaskThreadItem({
+/**
+ * One row of the Tasks tab: status dot and its name, the title through to
+ * the task page, the deviation meta (priority, due date with its danger
+ * tone) and the assignee faces. Render-only — the task page owns the edits.
+ */
+function TaskListItem({
   task,
   workspaceSlug,
   projectSlug,
@@ -1663,10 +1702,43 @@ function TaskThreadItem({
   projectSlug: string | undefined
 }) {
   return (
-    <div className="flex gap-3.5 pb-5">
-      <span aria-hidden className="w-px shrink-0 bg-border" />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="px-2 py-2">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <Dot
+          dot={TASK_DOTS[task.status]}
+          label={TASK_STATUS_META[task.status].label}
+        />
+        {projectSlug !== undefined ? (
+          <Link
+            to="/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId"
+            params={{ workspaceSlug, projectSlug, taskId: task.id }}
+            className="text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {task.title}
+          </Link>
+        ) : (
+          <span className="text-sm font-medium">{task.title}</span>
+        )}
+        <span className="ml-auto flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground">
+          {/* Medium priority is the room tone: only deviations get text. */}
+          {task.priority !== "medium" && (
+            <span>{TASK_PRIORITY_META[task.priority].label}</span>
+          )}
+          {task.dueDate && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1",
+                task.status !== "done" &&
+                  task.status !== "approved" &&
+                  dueSoon(task.dueDate) &&
+                  "font-medium text-destructive"
+              )}
+            >
+              <CalendarDaysIcon aria-hidden className="size-3.5 shrink-0" />
+              {task.overdue ? "Overdue · " : "due "}
+              {formatDueDate(task.dueDate)}
+            </span>
+          )}
           {task.assignees.length > 0 && (
             <span className="flex items-center gap-1">
               {task.assignees.map((assignee) => (
@@ -1679,77 +1751,35 @@ function TaskThreadItem({
               ))}
             </span>
           )}
-          {projectSlug !== undefined ? (
-            <Link
-              to="/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId"
-              params={{ workspaceSlug, projectSlug, taskId: task.id }}
-              className="text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              {task.title}
-            </Link>
-          ) : (
-            <span className="text-sm font-medium">{task.title}</span>
-          )}
-          {/* What the node is, on the right — in All mode it sits beside
-              comment rows, and the badge is the only word that says so. */}
-          <span className="ml-auto rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            Task
-          </span>
-        </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <Dot
-            dot={TASK_DOTS[task.status]}
-            label={TASK_STATUS_META[task.status].label}
-          />
-          {/* Medium priority is the room tone: only deviations get text. */}
-          {task.priority !== "medium" && (
-            <span>{TASK_PRIORITY_META[task.priority].label}</span>
-          )}
-          {task.dueDate && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1",
-                task.status !== "done" &&
-                  task.status !== "approved" &&
-                  task.dueDate &&
-                  dueSoon(task.dueDate) &&
-                  "font-medium text-destructive"
-              )}
-            >
-              <CalendarDaysIcon aria-hidden className="size-3.5 shrink-0" />
-              {task.overdue ? "Overdue · " : "due "}
-              {formatDueDate(task.dueDate)}
-            </span>
-          )}
-        </div>
-        {task.description && (
-          <p className="mt-1.5 max-w-prose text-xs leading-relaxed text-muted-foreground">
-            {task.description}
-          </p>
-        )}
+        </span>
       </div>
+      {task.description && (
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted-foreground">
+          {task.description}
+        </p>
+      )}
     </div>
   )
 }
 
-/** The All / Comments-only control, ported from the concept — framer's
- *  layoutId keeps the pill glued to whichever segment is active. */
-function ThreadModeToggle({
+/** The detail tabs — Comments (the conversation) and Tasks (the workload).
+ *  framer's layoutId keeps the pill glued to whichever tab is active. */
+function DetailTabs({
   value,
   onChange,
 }: {
-  value: "all" | "comments"
-  onChange: (value: "all" | "comments") => void
+  value: "comments" | "tasks"
+  onChange: (value: "comments" | "tasks") => void
 }) {
-  const options: { value: "all" | "comments"; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "comments", label: "Comments only" },
+  const options: { value: "comments" | "tasks"; label: string }[] = [
+    { value: "comments", label: "Comments" },
+    { value: "tasks", label: "Tasks" },
   ]
 
   return (
     <div
-      role="group"
-      aria-label="Thread filter"
+      role="tablist"
+      aria-label="Deliverable detail"
       className="inline-flex shrink-0 items-center rounded-lg bg-muted/60 p-0.5"
     >
       {options.map((option) => {
@@ -1758,7 +1788,10 @@ function ThreadModeToggle({
           <button
             key={option.value}
             type="button"
-            aria-pressed={isActive}
+            role="tab"
+            id={`cabinet-tab-${option.value}`}
+            aria-selected={isActive}
+            aria-controls={`cabinet-panel-${option.value}`}
             onClick={() => onChange(option.value)}
             className={cn(
               "relative rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",

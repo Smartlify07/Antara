@@ -196,11 +196,14 @@ export function LeadChip({
 export function OwnerChip({
   members,
   owner,
+  placeholder = "Set owner",
   onSelect,
 }: {
   members: AssignableMember[]
   /** Current owner as a plain person ref, or null when unassigned. */
   owner: AvatarPerson | null
+  /** Empty-pill copy — "Assign owner" on the task create dialog. */
+  placeholder?: string
   onSelect: (teamId: string | null) => void
 }) {
   const [query, setQuery] = useState("")
@@ -210,7 +213,7 @@ export function OwnerChip({
 
   return (
     <Chip
-      placeholder="Set owner"
+      placeholder={placeholder}
       icon={<UserIcon className="size-3.5 shrink-0" />}
       label={
         owner ? (
