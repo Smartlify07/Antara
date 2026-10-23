@@ -7,10 +7,7 @@ import {
   isRequestTerminal,
   supersededStatusFor,
 } from "./workflow-states"
-import type {
-  DeliverableStatus,
-  VersionReviewStatus,
-} from "@/db/enums"
+import type { DeliverableStatus, VersionReviewStatus } from "@/db/enums"
 
 /**
  * Tests for the PRD's state machines. These guards are the last line of
