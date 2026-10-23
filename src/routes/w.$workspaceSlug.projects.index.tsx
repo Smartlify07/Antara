@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, PlusIcon } from "lucide-react"
+import { AppLoading } from "@/components/app-loading"
 import { Button } from "@/components/ui/button"
 import { EmptyOverview } from "@/components/workspace/empty-overview"
 import { ProjectsGrid } from "@/components/workspace/projects-grid"
@@ -31,6 +32,11 @@ function ProjectsPage() {
   } = useQuery(projectsQuery(workspaceId))
 
   const canManage = isWorkspaceOwner || workspaceRole === "admin"
+
+  // One arrival for the page: the header's count and the grid describe the
+  // same list, so neither paints until it has landed — the shell holds the
+  // pulsing logo across from the sidebar instead of a loading line.
+  if (isPending) return <AppLoading />
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,11 +71,7 @@ function ProjectsPage() {
         </div>
       )}
 
-      {isPending ? (
-        <div className="flex min-h-40 items-center justify-center">
-          <p className="text-sm text-muted-foreground">Loading projects…</p>
-        </div>
-      ) : projects.length === 0 ? (
+      {projects.length === 0 ? (
         <EmptyOverview
           workspaceTitle={workspace.title}
           workspaceSlug={workspace.slug}

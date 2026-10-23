@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, notFound } from "@tanstack/react-router"
+import { AppLoading } from "@/components/app-loading"
 import { ProjectDetailPage } from "@/components/projects/details/project-detail-page"
 import {
   assignableMembersQuery,
@@ -20,22 +21,26 @@ function ProjectDetailRoute() {
 
   const {
     data: project,
-    isPending,
+    isPending: projectPending,
     error,
   } = useQuery(projectDetailQuery(workspaceId, projectSlug))
-  const { data: members = [] } = useQuery(assignableMembersQuery(workspaceId))
-  const { data: tagOptions = [] } = useQuery(projectTagsQuery(workspaceId))
+  const { data: members = [], isPending: membersPending } = useQuery(
+    assignableMembersQuery(workspaceId)
+  )
+  const { data: tagOptions = [], isPending: tagsPending } = useQuery(
+    projectTagsQuery(workspaceId)
+  )
 
   // Same rule as the grid: attribute writes are admin/owner only, matching
   // `setProjectStatus`. Posting updates is open to any workspace member.
   const canEdit = isWorkspaceOwner || workspaceRole === "admin"
 
-  if (isPending) {
-    return (
-      <div className="flex min-h-40 items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading project…</p>
-      </div>
-    )
+  // One arrival for the page: the pills read the member and tag lists in the
+  // same render as the project, so letting the project land alone would
+  // briefly present empty selects as real data. All three settle first, and
+  // the shell's pulsing logo covers the fetch.
+  if (projectPending || membersPending || tagsPending) {
+    return <AppLoading />
   }
 
   if (error) {

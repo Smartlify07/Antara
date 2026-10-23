@@ -7,23 +7,26 @@
  * two-pane cabinet the concept drew — deliverables on the left, the selected
  * deliverable's detail on the right, and version detail one drill deeper
  * with a ‹ › pager. Editing affordances and gates are ported verbatim from
- * `deliverable-card.tsx` (status machine menu, owner, deadline) and
- * `versions-section.tsx` (submit for review, delete draft, decide, composer).
+ * `deliverable-card.tsx` (status machine menu, owner and deadline as pills)
+ * and `versions-section.tsx` (submit for review, delete draft, decide,
+ * composer).
  *
  * House bans honoured: no borders, no spinners — hierarchy comes from
  * washes, spacing, the shared meta dots, and text tone.
  */
 import { useEffect, useMemo, useRef, useState } from "react"
+import type { ReactNode } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "@tanstack/react-router"
 import {
+  CalendarDaysIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   FolderIcon,
   LinkIcon,
-  MoreHorizontalIcon,
   PlusIcon,
+  TagIcon,
   Trash2Icon,
 } from "lucide-react"
 import {
@@ -42,8 +45,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
 import { Chip, ChipOption } from "@/components/projects/chip"
+import { DateChip } from "@/components/projects/dates-chip"
+import { OwnerChip } from "@/components/projects/member-chip"
 import {
   buildOptimisticDeliverableComment,
   deliverableKeys,
@@ -70,12 +74,7 @@ import {
 } from "@/server/functions/versions"
 import { useSession } from "@/lib/auth-client"
 import { avatarTint } from "@/lib/avatar-tint"
-import {
-  formatDueDate,
-  formatRelativeTime,
-  fromIsoDay,
-  toIsoDay,
-} from "@/lib/time"
+import { formatDueDate, formatRelativeTime, fromIsoDay } from "@/lib/time"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
 import { cn } from "@/lib/utils"
 import type {
@@ -98,6 +97,7 @@ import {
   deliverableMoveTargets,
 } from "./deliverable-meta"
 import { DECISION_META, REVIEW_DOTS, REVIEW_STATUS_META } from "./version-meta"
+import { TaskComposer } from "./task-composer"
 import { VersionThread } from "./version-thread"
 import { VersionComposer } from "./version-composer"
 import {
@@ -116,7 +116,25 @@ type DecisionKind = "approved" | "rejected" | "changes_requested"
  * draft reading locally — the only dot not from a meta map, and only
  * because the maps genuinely lack the state.
  */
-const DRAFT_REVIEW_META = { label: "Draft", dot: "bg-muted-foreground/40" }
+const DRAFT_REVIEW_META = {
+  label: "Draft",
+  dot: "bg-muted-foreground/40",
+  badgeClass: "bg-muted text-muted-foreground",
+}
+
+/**
+ * A due date reads as danger once the day is behind or immediately ahead:
+ * past due, today, or inside the next three days. The caller gates on the
+ * work still being live (the service's overdue predicate already excludes
+ * done tasks and completed deliverables) so finished work never alarms.
+ */
+const DUE_SOON_MS = 3 * 24 * 60 * 60 * 1000
+
+function dueSoon(isoDay: string): boolean {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return fromIsoDay(isoDay).getTime() - today.getTime() <= DUE_SOON_MS
+}
 
 /**
  * One row in the flat version list: the service nests versions under
@@ -527,7 +545,7 @@ function MasterPane({
                 <span
                   aria-hidden
                   className={cn(
-                    "size-3 shrink-0 rounded-full",
+                    "size-2.5 shrink-0 rounded-full",
                     DELIVERABLE_DOTS[deliverable.status]
                   )}
                 />
@@ -605,7 +623,7 @@ function LevelZeroList({
                   <span
                     aria-hidden
                     className={cn(
-                      "mt-1 size-3 shrink-0 rounded-full",
+                      "mt-1 size-2.5 shrink-0 rounded-full",
                       DELIVERABLE_DOTS[deliverable.status]
                     )}
                   />
@@ -652,7 +670,7 @@ function ownerRef(member: AssignableMember): DeliverableCard["owner"] {
 /**
  * The selected deliverable's detail: header meta with the card's editing
  * affordances (status machine menu from `deliverable-card.tsx`; owner and
- * deadline flows behind the manage menu, gated as the card gated them), its
+ * deadline as the same house pills, gated as the card gated them), its
  * task thread, and its own conversation on the shared work-comments pieces.
  * The versions cluster rides on the timeline the cabinet already holds —
  * flat rows, each drilling into level two.
@@ -709,11 +727,10 @@ function LevelOne({
   // Edit-affordance state, ported from deliverable-card. The three writes
   // below (`useDeliverableCardWrite`) paint the project's deliverable cache
   // first — the same paint-first contract the project details pills use — so
-  // only their dialogs and failures need state. `busy` is the union of the
-  // writes' pending flags, gating popovers and dialogs one round at a time.
+  // owner and deadline edits need no dialog state of their own: the pills
+  // commit straight through those writes. `busy` is the union of the writes'
+  // pending flags, gating the status machine one round at a time.
   const [error, setError] = useState<string | null>(null)
-  const [ownerOpen, setOwnerOpen] = useState(false)
-  const [deadlineOpen, setDeadlineOpen] = useState(false)
 
   // The "New version" composer rides on versions-section's open/save flow:
   // opened from the cluster header, closed by its own save-or-cancel result.
@@ -887,7 +904,7 @@ function LevelOne({
                   <span
                     aria-hidden
                     className={cn(
-                      "size-3 rounded-full",
+                      "size-2.5 rounded-full",
                       DELIVERABLE_DOTS[deliverable.status]
                     )}
                   />
@@ -917,7 +934,7 @@ function LevelOne({
                         <span
                           aria-hidden
                           className={cn(
-                            "size-3.5 shrink-0 rounded-full",
+                            "size-2.5 shrink-0 rounded-full",
                             DELIVERABLE_DOTS[value]
                           )}
                         />
@@ -931,14 +948,32 @@ function LevelOne({
                 <span
                   aria-hidden
                   className={cn(
-                    "size-3 rounded-full",
+                    "size-2.5 rounded-full",
                     DELIVERABLE_DOTS[deliverable.status]
                   )}
                 />
                 {meta.label}
               </span>
             )}
-            {deliverable.owner ? (
+            {/* Owner and deadline as the same house pills: one click on the
+                chip reaches the person list or the calendar — no manage menu.
+                A viewer without the manage fact keeps the plain meta line. */}
+            {canManage ? (
+              <OwnerChip
+                members={members}
+                owner={deliverable.owner}
+                onSelect={(teamId) => {
+                  const member = members.find(
+                    (candidate) => candidate.teamId === teamId
+                  )
+                  ownerWrite.mutate({
+                    deliverableId: deliverable.id,
+                    ownerId: teamId,
+                    owner: member ? ownerRef(member) : null,
+                  })
+                }}
+              />
+            ) : deliverable.owner ? (
               <span className="inline-flex items-center gap-1.5">
                 <TintedAvatar
                   seed={deliverable.owner.teamId}
@@ -950,19 +985,49 @@ function LevelOne({
             ) : (
               <span>Unassigned</span>
             )}
-            {deliverable.deadline && (
-              <span
-                className={
+            {canManage ? (
+              <DateChip
+                deadline={deliverable.deadline}
+                placeholder="Add deadline"
+                formatLabel={(deadline) =>
                   deliverable.overdue
+                    ? `Overdue · ${formatDueDate(fromIsoDay(deadline))}`
+                    : `due ${formatDueDate(fromIsoDay(deadline))}`
+                }
+                onChange={(deadline) =>
+                  deadlineWrite.mutate({
+                    deliverableId: deliverable.id,
+                    deadline,
+                  })
+                }
+                className={
+                  deliverable.status !== "completed" &&
+                  deliverable.deadline &&
+                  dueSoon(deliverable.deadline)
                     ? "font-medium text-destructive"
                     : undefined
                 }
+              />
+            ) : deliverable.deadline ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5",
+                  deliverable.status !== "completed" &&
+                    dueSoon(deliverable.deadline) &&
+                    "font-medium text-destructive"
+                )}
               >
+                <CalendarDaysIcon aria-hidden className="size-3.5 shrink-0" />
                 {deliverable.overdue ? "Overdue · " : "due "}
                 {formatDueDate(deliverable.deadline)}
               </span>
+            ) : null}
+            {deliverable.type && (
+              <MetaBadge className="bg-secondary font-medium text-secondary-foreground">
+                <TagIcon aria-hidden className="size-3" />
+                {deliverable.type}
+              </MetaBadge>
             )}
-            {deliverable.type && <span>{deliverable.type}</span>}
             {deliverable.request && (
               <Link
                 to="/w/$workspaceSlug/requests/$requestId"
@@ -987,34 +1052,26 @@ function LevelOne({
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <ThreadModeToggle value={mode} onChange={onModeChange} />
-          {/* The manage affordances, exactly the card's two menu lines —
-              they open the same owner/deadline dialogs the card opened. */}
-          {canManage && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Deliverable options"
-                  disabled={busy}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
-                >
-                  <MoreHorizontalIcon className="size-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setOwnerOpen(true)}>
-                  Change owner…
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDeadlineOpen(true)}>
-                  Set deadline…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
       </header>
 
-      <ul className="mt-7">
+      {/* The add-task affordance (FR-016): the same composer atom the
+          loose-tasks bucket uses, pointed at this deliverable. Any project
+          member can add work here and pick who carries it — themselves
+          included — without waiting for the lead. */}
+      {canWork && (
+        <div className="mt-7">
+          <TaskComposer
+            workspaceId={workspaceId}
+            projectId={projectId}
+            deliverableId={deliverable.id}
+            members={members}
+            onCreated={onChanged}
+          />
+        </div>
+      )}
+
+      <ul className={canWork ? "mt-5" : "mt-7"}>
         <AnimatePresence initial={false}>
           {visibleTasks.map((task) => (
             <motion.li
@@ -1085,11 +1142,11 @@ function LevelOne({
           every row opens its own detail level, nothing expands in place. */}
       <section aria-label={`Versions of ${deliverable.title}`} className="mt-8">
         <div className="rounded-xl bg-muted/30 p-2">
-          <div className="flex items-baseline justify-between px-2 pt-1.5 pb-1">
+          <div className="flex items-center justify-between px-2 pt-1.5 pb-1">
             <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Versions
             </h3>
-            <span className="flex items-baseline gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-3 text-xs text-muted-foreground">
               {clusterTotal > 0 &&
                 `${clusterTotal} ${clusterTotal === 1 ? "version" : "versions"}`}
               {/* The card's Library link (FR-041), ported: opens this
@@ -1108,7 +1165,6 @@ function LevelOne({
               {versionsData?.viewer.canSubmit && (
                 <Button
                   size="sm"
-                  variant="outline"
                   className="h-7 text-xs"
                   onClick={() => setComposerOpen(true)}
                 >
@@ -1158,6 +1214,8 @@ function LevelOne({
                     ? {
                         label: REVIEW_STATUS_META[version.reviewStatus].label,
                         dot: REVIEW_DOTS[version.reviewStatus],
+                        badgeClass:
+                          REVIEW_STATUS_META[version.reviewStatus].badgeClass,
                       }
                     : DRAFT_REVIEW_META
                   return (
@@ -1188,19 +1246,28 @@ function LevelOne({
                           {version.label}
                         </span>
                         {version.isLatest && (
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            latest
-                          </span>
+                          <MetaBadge className="bg-secondary text-secondary-foreground">
+                            Latest
+                          </MetaBadge>
                         )}
                         {version.isLatestApproved && (
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            latest approved
-                          </span>
+                          <MetaBadge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                            Latest approved
+                          </MetaBadge>
                         )}
                         <span className="min-w-0 flex-1 truncate text-sm">
                           {asset.filename}
                         </span>
-                        <Dot dot={reviewMeta.dot} label={reviewMeta.label} />
+                        <MetaBadge className={reviewMeta.badgeClass}>
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "size-2 shrink-0 rounded-full",
+                              reviewMeta.dot
+                            )}
+                          />
+                          {reviewMeta.label}
+                        </MetaBadge>
                         <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">
                           {version.submitter.name ??
                             version.submitter.email ??
@@ -1208,9 +1275,10 @@ function LevelOne({
                           · {formatRelativeTime(version.createdAt)}
                         </span>
                         {version.feedbackCount > 0 && (
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {version.feedbackCount} notes
-                          </span>
+                          <MetaBadge>
+                            {version.feedbackCount}{" "}
+                            {version.feedbackCount === 1 ? "note" : "notes"}
+                          </MetaBadge>
                         )}
                         <ChevronRightIcon
                           aria-hidden
@@ -1225,90 +1293,6 @@ function LevelOne({
           )}
         </div>
       </section>
-
-      {/* Owner picker — the card's dialog, logic identical. */}
-      <Dialog open={ownerOpen} onOpenChange={(next) => setOwnerOpen(next)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Change owner</DialogTitle>
-            <DialogDescription>
-              Owners are workspace members; the person carrying this deadline
-              can move its production status.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid max-h-72 gap-1 overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => {
-                void ownerWrite
-                  .mutateAsync({
-                    deliverableId: deliverable.id,
-                    ownerId: null,
-                    owner: null,
-                  })
-                  .then(
-                    () => setOwnerOpen(false),
-                    // The hook already reported the refusal.
-                    () => undefined
-                  )
-              }}
-              className="rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60"
-            >
-              Unassign owner
-            </button>
-            {members.map((member) => (
-              <button
-                key={member.teamId}
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void ownerWrite
-                    .mutateAsync({
-                      deliverableId: deliverable.id,
-                      ownerId: member.teamId,
-                      owner: ownerRef(member),
-                    })
-                    .then(
-                      () => setOwnerOpen(false),
-                      // The hook already reported the refusal.
-                      () => undefined
-                    )
-                }}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60 disabled:opacity-50"
-              >
-                <TintedAvatar seed={member.teamId} name={member.name} />
-                {member.name ?? member.email ?? "Member"}
-              </button>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOwnerOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Deadline picker — keyed so opening it always reads fresh state. */}
-      <DeadlineDialog
-        key={deliverable.deadline ?? "none"}
-        open={deadlineOpen}
-        onClose={() => setDeadlineOpen(false)}
-        current={deliverable.deadline}
-        busy={busy}
-        onSet={(deadline) =>
-          deadlineWrite
-            .mutateAsync({
-              deliverableId: deliverable.id,
-              deadline,
-            })
-            .then(
-              () => setDeadlineOpen(false),
-              // The hook already reported the refusal.
-              () => undefined
-            )
-        }
-      />
     </section>
   )
 }
@@ -1364,6 +1348,7 @@ function LevelTwo({
     ? {
         label: REVIEW_STATUS_META[version.reviewStatus].label,
         dot: REVIEW_DOTS[version.reviewStatus],
+        badgeClass: REVIEW_STATUS_META[version.reviewStatus].badgeClass,
       }
     : DRAFT_REVIEW_META
 
@@ -1404,11 +1389,25 @@ function LevelTwo({
             {row.assetFilename}
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-            <Dot dot={reviewMeta.dot} label={reviewMeta.label} />
+            <MetaBadge className={reviewMeta.badgeClass}>
+              <span
+                aria-hidden
+                className={cn("size-2 shrink-0 rounded-full", reviewMeta.dot)}
+              />
+              {reviewMeta.label}
+            </MetaBadge>
             {/* The supersession notes the service stamps: where this
                 version stands in its asset's history (FR-037). */}
-            {version.isLatest && <span>latest</span>}
-            {version.isLatestApproved && <span>latest approved</span>}
+            {version.isLatest && (
+              <MetaBadge className="bg-secondary text-secondary-foreground">
+                Latest
+              </MetaBadge>
+            )}
+            {version.isLatestApproved && (
+              <MetaBadge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                Latest approved
+              </MetaBadge>
+            )}
             <span>
               {version.source === "external_link"
                 ? `External link${
@@ -1441,7 +1440,7 @@ function LevelTwo({
               <span
                 aria-hidden
                 className={cn(
-                  "mt-1 size-3 shrink-0 rounded-full",
+                  "mt-1 size-2.5 shrink-0 rounded-full",
                   REVIEW_DOTS[version.decision.decision]
                 )}
               />
@@ -1708,10 +1707,16 @@ function TaskThreadItem({
           )}
           {task.dueDate && (
             <span
-              className={
-                task.overdue ? "font-medium text-destructive" : undefined
-              }
+              className={cn(
+                "inline-flex items-center gap-1",
+                task.status !== "done" &&
+                  task.status !== "approved" &&
+                  task.dueDate &&
+                  dueSoon(task.dueDate) &&
+                  "font-medium text-destructive"
+              )}
             >
+              <CalendarDaysIcon aria-hidden className="size-3.5 shrink-0" />
               {task.overdue ? "Overdue · " : "due "}
               {formatDueDate(task.dueDate)}
             </span>
@@ -1779,12 +1784,35 @@ function ThreadModeToggle({
   )
 }
 
-/** 12px filled dot + plain label — the colour of a chip, without the box. */
+/** 10px filled dot + plain label — the colour of a chip, without the box. */
 function Dot({ dot, label }: { dot: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span aria-hidden className={cn("size-3 shrink-0 rounded-full", dot)} />
+      <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", dot)} />
       {label}
+    </span>
+  )
+}
+
+/** The cabinet's quiet pill (the "Task" badge's sibling): one rounded wash,
+ *  small medium text. Everything the reader should scan as a fact wears
+ *  one — the deliverable's tag, a version's stream badges, note counts. */
+function MetaBadge({
+  className,
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium",
+        // The empty-tone default: quiet meta, never a colour claim.
+        className ?? "bg-muted/70 text-muted-foreground"
+      )}
+    >
+      {children}
     </span>
   )
 }
@@ -1877,71 +1905,6 @@ function DecideDialog({
           </Button>
           <Button disabled={busy} onClick={() => onConfirm(comment.trim())}>
             {meta.label}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/** The deadline picker, ported from deliverable-card.tsx, logic identical. */
-function DeadlineDialog({
-  open,
-  onClose,
-  current,
-  busy,
-  onSet,
-}: {
-  open: boolean
-  onClose: () => void
-  current: string | null
-  busy: boolean
-  onSet: (deadline: string | null) => void | Promise<void>
-}) {
-  const [value, setValue] = useState(current ?? "")
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Set deadline</DialogTitle>
-          <DialogDescription>
-            Past-due deliverables that are not completed show as overdue.
-          </DialogDescription>
-        </DialogHeader>
-        {/* The house calendar (dates-chip.tsx's idiom), not an OS date
-            input: pick a day, review it beneath, clear it in place. */}
-        <Calendar
-          mode="single"
-          selected={value ? fromIsoDay(value) : undefined}
-          onSelect={(next) => setValue(next ? toIsoDay(next) : "")}
-          defaultMonth={current ? fromIsoDay(current) : undefined}
-        />
-        <div className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
-          <span>
-            {value
-              ? `Setting ${formatDueDate(fromIsoDay(value))}`
-              : "Pick a day"}
-          </span>
-          {value && (
-            <button
-              type="button"
-              className="underline underline-offset-2 hover:text-foreground"
-              onClick={() => setValue("")}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() => void onSet(value ? value : null)}
-          >
-            Save deadline
           </Button>
         </DialogFooter>
       </DialogContent>

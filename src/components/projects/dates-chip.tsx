@@ -2,6 +2,7 @@ import { useState } from "react"
 import { CalendarDaysIcon } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Chip } from "@/components/projects/chip"
+import { formatDueDate, fromIsoDay, toIsoDay } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
 export function DatesChip({
@@ -17,11 +18,11 @@ export function DatesChip({
 
   const label =
     startDate && deadline
-      ? `${format(startDate)} – ${format(deadline)}`
+      ? `${formatDueDate(startDate)} – ${formatDueDate(deadline)}`
       : startDate
-        ? `${format(startDate)} – …`
+        ? `${formatDueDate(startDate)} – …`
         : deadline
-          ? `Due ${format(deadline)}`
+          ? `Due ${formatDueDate(deadline)}`
           : undefined
 
   function handleSelect(next: Date | undefined) {
@@ -85,9 +86,56 @@ export function DatesChip({
   )
 }
 
-function format(date: Date) {
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  })
+/**
+ * The single-day deadline pill — the DatesChip's one-click cousin. Owners,
+ * deadlines and drafts all hold the wire's date-only string, so this chip
+ * speaks ISO on both edges and the calendar never shifts a UTC day.
+ */
+export function DateChip({
+  deadline,
+  onChange,
+  placeholder = "Add deadline",
+  formatLabel = (day) => `due ${formatDueDate(fromIsoDay(day))}`,
+  className,
+}: {
+  /** Date-only wire string ("yyyy-mm-dd"), or null when unset. */
+  deadline: string | null
+  onChange: (deadline: string | null) => void
+  /** Empty-pill copy. */
+  placeholder?: string
+  /** Filled-pill text; overdue surfaces restate it ("Overdue · May 3"). */
+  formatLabel?: (day: string) => string
+  /** Extra pill styling — the overdue danger tone, for one. */
+  className?: string
+}) {
+  return (
+    <Chip
+      placeholder={placeholder}
+      icon={<CalendarDaysIcon className="size-3.5 shrink-0" />}
+      label={deadline ? formatLabel(deadline) : undefined}
+      className={className}
+    >
+      <div className="p-1">
+        <Calendar
+          mode="single"
+          selected={deadline ? fromIsoDay(deadline) : undefined}
+          onSelect={(next) => onChange(next ? toIsoDay(next) : null)}
+          defaultMonth={deadline ? fromIsoDay(deadline) : undefined}
+          className={cn("rounded-md")}
+        />
+        <div className="flex items-center justify-between gap-2 px-1 pt-1 text-[11px] text-muted-foreground">
+          <span>{deadline ? "Pick another day to change" : "Pick a day"}</span>
+          {deadline && (
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    </Chip>
+  )
 }

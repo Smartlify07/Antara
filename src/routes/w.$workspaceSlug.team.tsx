@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
+import { AppLoading } from "@/components/app-loading"
 import { InviteDialog } from "@/components/team/invite-dialog"
 import { TeamMembers } from "@/components/team/team-members"
 import {
@@ -48,6 +49,11 @@ function TeamPage() {
 
   const canManage = workspaceRole === "admin" || isWorkspaceOwner
 
+  // One arrival: the header's count is the same fact the roster states, so
+  // the page paints once, complete — the shell's pulsing logo covers the
+  // fetch instead of a line inside the card.
+  if (isPending) return <AppLoading />
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -70,9 +76,7 @@ function TeamPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isPending ? (
-            <p className="text-sm text-muted-foreground">Loading members…</p>
-          ) : error ? (
+          {error ? (
             <p role="alert" className="text-sm text-destructive">
               {error instanceof Error
                 ? error.message

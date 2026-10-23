@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
+import { AppLoading } from "@/components/app-loading"
 import { ProjectCreateForm } from "@/components/projects/project-create-form"
 import {
   assignableMembersQuery,
@@ -22,13 +23,10 @@ function NewProjectPage() {
     projectTagsQuery(workspaceId)
   )
 
-  if (membersPending || tagsPending) {
-    return (
-      <div className="flex min-h-40 items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    )
-  }
+  // The form's two selects need both lists, so the page waits for the pair —
+  // no half-populated chips in the meantime; the shell's logo covers the
+  // fetch.
+  if (membersPending || tagsPending) return <AppLoading />
 
   return (
     <div className="flex flex-col gap-6">

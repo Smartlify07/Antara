@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CalendarDaysIcon, Loader2Icon } from "lucide-react"
+import { Loader2Icon, TagIcon } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import type { z } from "zod"
@@ -13,31 +13,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@/components/ui/field"
-import { Calendar } from "@/components/ui/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { formatDueDate, fromIsoDay, toIsoDay } from "@/lib/time"
-import { cn } from "@/lib/utils"
+import { Chip, ChipOption } from "@/components/projects/chip"
+import { DateChip } from "@/components/projects/dates-chip"
+import { OwnerChip } from "@/components/projects/member-chip"
 import { createDeliverableSchema } from "@/lib/deliverable-schemas"
 import { createDeliverableFn } from "@/server/functions/deliverables"
 import type { AssignableMember } from "@/server/services/project-service"
 
 /**
- * The deliverable creation form (FR-013). The wire schema is the single
- * truth; the form only drops the two path values it receives as props —
- * owner, deadline and type are all optional at creation, since triage may
- * not yet have shaped the work.
+ * The deliverable creation form (FR-013), laid out like the project create
+ * form: a bare title, one row of detail pills (owner, deadline, type), then
+ * the description. The wire schema is the single truth; the form only drops
+ * the two path values it receives as props — owner, deadline and type are all
+ * optional at creation, since triage may not yet have shaped the work.
  */
 const newDeliverableFormSchema = createDeliverableSchema.omit({
   workspaceId: true,
@@ -74,9 +64,13 @@ export function NewDeliverableDialog({
     },
   })
 
-  // The deadline rides the calendar popover: the control writes straight
-  // into the form's value, and the label reads what it holds.
+  const watchedTitle = form.watch("title")
+  const watchedOwnerId = form.watch("ownerId")
   const watchedDeadline = form.watch("deadline")
+  const watchedType = form.watch("type")
+
+  const selectedOwner =
+    members.find((member) => member.teamId === watchedOwnerId) ?? null
 
   async function onSubmit(values: NewDeliverableFormInput) {
     setServerError(null)
@@ -124,126 +118,47 @@ export function NewDeliverableDialog({
 
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-4"
           noValidate
         >
-          <Field>
-            <FieldLabel htmlFor="deliverable-title">Title</FieldLabel>
-            <Input
-              id="deliverable-title"
-              placeholder="e.g. 60-second launch film"
-              {...form.register("title")}
+          <input
+            {...form.register("title")}
+            placeholder="Deliverable title"
+            aria-label="Deliverable title"
+            maxLength={200}
+            autoFocus
+            className="w-full bg-transparent text-2xl font-medium tracking-tight outline-none placeholder:text-muted-foreground"
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <OwnerChip
+              members={members}
+              owner={selectedOwner}
+              onSelect={(teamId) =>
+                form.setValue("ownerId", teamId ?? undefined)
+              }
             />
-            <FieldError errors={[form.formState.errors.title]} />
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor="deliverable-description">
-              Description{" "}
-              <span className="text-muted-foreground">(optional)</span>
-            </FieldLabel>
-            <Textarea
-              id="deliverable-description"
-              rows={3}
-              placeholder="What this deliverable covers"
-              {...form.register("description")}
+            <DateChip
+              deadline={watchedDeadline ?? null}
+              onChange={(deadline) =>
+                form.setValue("deadline", deadline ?? undefined)
+              }
             />
-            <FieldError errors={[form.formState.errors.description]} />
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor="deliverable-type">
-              Type <span className="text-muted-foreground">(optional)</span>
-            </FieldLabel>
-            <FieldDescription>
-              e.g. video, graphics, copy — free-form for now
-            </FieldDescription>
-            <Input
-              id="deliverable-type"
-              placeholder="video"
-              {...form.register("type")}
+            <TypeChip
+              type={watchedType}
+              onChange={(next) => form.setValue("type", next)}
             />
-          </Field>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="deliverable-owner">
-                Owner <span className="text-muted-foreground">(optional)</span>
-              </FieldLabel>
-              <select
-                id="deliverable-owner"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none"
-                {...form.register("ownerId")}
-                defaultValue=""
-              >
-                <option value="">Unassigned</option>
-                {members.map((member) => (
-                  <option key={member.teamId} value={member.teamId}>
-                    {member.name ?? member.email ?? "Member"}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field>
-              <FieldLabel>
-                Deadline{" "}
-                <span className="text-muted-foreground">(optional)</span>
-              </FieldLabel>
-              {/* The house calendar (dates-chip.tsx's idiom), not an OS date
-                  input: the picked day is the stored day, no UTC shift. */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-1 text-left text-sm shadow-xs outline-none"
-                  >
-                    <CalendarDaysIcon className="size-4 shrink-0 text-muted-foreground" />
-                    <span
-                      className={cn(
-                        !watchedDeadline && "text-muted-foreground"
-                      )}
-                    >
-                      {watchedDeadline
-                        ? formatDueDate(fromIsoDay(watchedDeadline))
-                        : "Pick a deadline"}
-                    </span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto p-1">
-                  <Calendar
-                    mode="single"
-                    selected={
-                      watchedDeadline ? fromIsoDay(watchedDeadline) : undefined
-                    }
-                    onSelect={(next) =>
-                      form.setValue(
-                        "deadline",
-                        next ? toIsoDay(next) : undefined
-                      )
-                    }
-                  />
-                  <div className="flex items-center justify-between gap-2 px-1 pt-1 text-[11px] text-muted-foreground">
-                    <span>
-                      {watchedDeadline
-                        ? "Pick another day to change"
-                        : "Pick a day"}
-                    </span>
-                    {watchedDeadline && (
-                      <button
-                        type="button"
-                        className="underline underline-offset-2 hover:text-foreground"
-                        onClick={() => form.setValue("deadline", undefined)}
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-              <FieldError errors={[form.formState.errors.deadline]} />
-            </Field>
           </div>
+
+          <div className="border-b" />
+
+          <Textarea
+            {...form.register("description")}
+            placeholder="What this deliverable covers"
+            aria-label="Deliverable description (optional)"
+            maxLength={4000}
+            className="min-h-[160px] w-full resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+          />
 
           {serverError && (
             <p role="alert" className="text-sm text-destructive">
@@ -259,7 +174,10 @@ export function NewDeliverableDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
+            <Button
+              type="submit"
+              disabled={form.formState.isSubmitting || !watchedTitle.trim()}
+            >
               {form.formState.isSubmitting ? (
                 <>
                   <Loader2Icon className="size-4 animate-spin" />
@@ -273,5 +191,80 @@ export function NewDeliverableDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** The suggestions the old field description offered, one click each. */
+const SUGGESTED_TYPES = ["video", "graphics", "copy"]
+
+/**
+ * The free-form type as a house pill: suggestions one click each, a custom
+ * entry for anything else. The draft resets by construction — the stateful
+ * content mounts inside the popover and unmounts with it on close.
+ */
+function TypeChip({
+  type,
+  onChange,
+}: {
+  type: string | undefined
+  onChange: (next: string | undefined) => void
+}) {
+  return (
+    <Chip
+      placeholder="Set type"
+      icon={<TagIcon className="size-3.5 shrink-0" />}
+      label={type}
+    >
+      <TypeChipContent type={type} onChange={onChange} />
+    </Chip>
+  )
+}
+
+function TypeChipContent({
+  type,
+  onChange,
+}: {
+  type: string | undefined
+  onChange: (next: string | undefined) => void
+}) {
+  const [draft, setDraft] = useState("")
+
+  function pick(next: string | undefined) {
+    setDraft("")
+    onChange(next)
+  }
+
+  return (
+    <div className="flex flex-col gap-1 p-1">
+      <Input
+        aria-label="Custom type"
+        placeholder="Custom type…"
+        value={draft}
+        maxLength={80}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          // A here submit must stay inside the popover — the dialog's
+          // form handler sits underneath it and would create the
+          // deliverable underneath the picker.
+          if (event.key !== "Enter") return
+          event.preventDefault()
+          if (draft.trim()) pick(draft.trim())
+        }}
+        className="bg-transparent text-sm"
+      />
+      <div className="flex flex-col gap-0.5">
+        {SUGGESTED_TYPES.map((value) => (
+          <ChipOption
+            key={value}
+            selected={type === value}
+            onSelect={() => pick(type === value ? undefined : value)}
+            title={value}
+          />
+        ))}
+      </div>
+      <p className="px-2 pb-1 text-[11px] text-muted-foreground">
+        Free-form for now — the type taxonomy is still open.
+      </p>
+    </div>
   )
 }

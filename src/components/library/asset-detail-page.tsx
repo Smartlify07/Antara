@@ -4,9 +4,9 @@ import {
   CircleCheckIcon,
   CircleXIcon,
   LinkIcon,
-  Loader2Icon,
 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
+import { AppLoading } from "@/components/app-loading"
 import { Button } from "@/components/ui/button"
 import { REVIEW_STATUS_META } from "@/components/projects/details/deliverables/version-meta"
 import type {
@@ -42,14 +42,9 @@ export function AssetDetailPage({
     error,
   } = useQuery(libraryAssetQuery(workspaceId, assetId))
 
-  if (isPending) {
-    return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2Icon className="size-4 animate-spin" />
-        Loading asset…
-      </p>
-    )
-  }
+  // The whole record — links, version timeline, decisions — is one page, so
+  // it renders on arrival; the shell's pulsing logo covers the fetch.
+  if (isPending) return <AppLoading />
 
   if (error) {
     return (
