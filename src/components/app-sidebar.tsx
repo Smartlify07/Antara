@@ -11,15 +11,13 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import type { WorkspaceListItem } from "@/server/services/workspace-service"
-import {
-  ClipboardListIcon,
-  EyeIcon,
-  FolderKanbanIcon,
-  ImagesIcon,
-  InboxIcon,
-  SquareCheckBigIcon,
-  UsersIcon,
-} from "lucide-react"
+import { CircleCheckBigIcon } from "@/components/animate-ui/icons/circle-check-big"
+import { ClipboardListIcon } from "@/components/animate-ui/icons/clipboard-list"
+import { EyeIcon } from "@/components/animate-ui/icons/eye"
+import { ImageIcon } from "@/components/animate-ui/icons/image"
+import { KanbanIcon } from "@/components/animate-ui/icons/kanban"
+import { MailOpenIcon } from "@/components/animate-ui/icons/mail-open"
+import { UsersIcon } from "@/components/animate-ui/icons/users"
 
 export interface RequestBadgeState {
   canTriage: boolean
@@ -60,7 +58,7 @@ export function AppSidebar({
           {
             title: "Projects",
             url: `/w/${activeSlug}/projects`,
-            icon: <FolderKanbanIcon />,
+            icon: <KanbanIcon />,
             // Naive "any other section" check — every new workspace section
             // must be excluded here, same as /team and /requests.
             active:
@@ -103,7 +101,7 @@ export function AppSidebar({
           {
             title: "Library",
             url: `/w/${activeSlug}/library`,
-            icon: <ImagesIcon />,
+            icon: <ImageIcon />,
             active: location.pathname.startsWith(`/w/${activeSlug}/library`),
           },
           {
@@ -126,7 +124,7 @@ export function AppSidebar({
           {
             title: "My tasks",
             url: `/w/${activeSlug}/my-tasks`,
-            icon: <SquareCheckBigIcon />,
+            icon: <CircleCheckBigIcon />,
             badge:
               myTasksBadge && myTasksBadge.count > 0
                 ? String(myTasksBadge.count)
@@ -137,7 +135,7 @@ export function AppSidebar({
       : []),
     {
       title: "Inbox",
-      icon: <InboxIcon />,
+      icon: <MailOpenIcon />,
       badge: "Soon",
     },
   ]

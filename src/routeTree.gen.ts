@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as DevDeliverablesRouteImport } from './routes/dev.deliverables'
+import { Route as DevSidebarIconsRouteImport } from './routes/dev.sidebar-icons'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as InvitePendingRouteImport } from './routes/invite.pending'
 import { Route as WWorkspaceSlugRouteImport } from './routes/w.$workspaceSlug'
@@ -64,6 +65,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
 const DevDeliverablesRoute = DevDeliverablesRouteImport.update({
   id: '/dev/deliverables',
   path: '/dev/deliverables',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevSidebarIconsRoute = DevSidebarIconsRouteImport.update({
+  id: '/dev/sidebar-icons',
+  path: '/dev/sidebar-icons',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -183,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/dev/deliverables': typeof DevDeliverablesRoute
+  '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/dev/deliverables': typeof DevDeliverablesRoute
+  '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -236,6 +244,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/dev/deliverables': typeof DevDeliverablesRoute
+  '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
   '/w/$workspaceSlug': typeof WWorkspaceSlugRouteWithChildren
@@ -266,6 +275,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/dev/deliverables'
+    | '/dev/sidebar-icons'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -294,6 +304,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/dev/deliverables'
+    | '/dev/sidebar-icons'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -318,6 +329,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/dev/deliverables'
+    | '/dev/sidebar-icons'
     | '/invite/$token'
     | '/invite/pending'
     | '/w/$workspaceSlug'
@@ -347,6 +359,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   DevDeliverablesRoute: typeof DevDeliverablesRoute
+  DevSidebarIconsRoute: typeof DevSidebarIconsRoute
   InviteTokenRoute: typeof InviteTokenRoute
   InvitePendingRoute: typeof InvitePendingRoute
   WWorkspaceSlugRoute: typeof WWorkspaceSlugRouteWithChildren
@@ -396,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/deliverables'
       fullPath: '/dev/deliverables'
       preLoaderRoute: typeof DevDeliverablesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/sidebar-icons': {
+      id: '/dev/sidebar-icons'
+      path: '/dev/sidebar-icons'
+      fullPath: '/dev/sidebar-icons'
+      preLoaderRoute: typeof DevSidebarIconsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -638,6 +658,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   DevDeliverablesRoute: DevDeliverablesRoute,
+  DevSidebarIconsRoute: DevSidebarIconsRoute,
   InviteTokenRoute: InviteTokenRoute,
   InvitePendingRoute: InvitePendingRoute,
   WWorkspaceSlugRoute: WWorkspaceSlugRouteWithChildren,

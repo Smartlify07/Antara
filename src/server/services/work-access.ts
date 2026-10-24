@@ -66,7 +66,12 @@ export async function getWorkAccess(
   const viewerEmail = teamRow?.email ?? null
 
   if (!projectId) {
-    return { role: membership.role, isOwner: membership.isOwner, facts, viewerEmail }
+    return {
+      role: membership.role,
+      isOwner: membership.isOwner,
+      facts,
+      viewerEmail,
+    }
   }
 
   const rows = await db
@@ -100,7 +105,12 @@ export async function getWorkAccess(
   facts.isProjectMember = rows.length > 0
   facts.isProjectLead = rows.some((row) => row.roleTitle === "lead")
 
-  return { role: membership.role, isOwner: membership.isOwner, facts, viewerEmail }
+  return {
+    role: membership.role,
+    isOwner: membership.isOwner,
+    facts,
+    viewerEmail,
+  }
 }
 
 /** Resolver that throws: the shape every write wants at its first line. */

@@ -28,10 +28,7 @@ import { approvals } from "@/db/schema/approvals"
 import { user } from "@/db/schema/auth"
 import { comments } from "@/db/schema/comments"
 import { deliverables } from "@/db/schema/deliverables"
-import {
-  projectMembers,
-  projects,
-} from "@/db/schema/projects"
+import { projectMembers, projects } from "@/db/schema/projects"
 import { roles } from "@/db/schema/workspaces"
 import {
   canDecideVersion,
@@ -44,7 +41,10 @@ import {
   notifySubmitterOfDecision,
   notifySubmitterOfFeedback,
 } from "./notification-service"
-import { assertVersionDecidable, assertVersionReviewTransition } from "./workflow-states"
+import {
+  assertVersionDecidable,
+  assertVersionReviewTransition,
+} from "./workflow-states"
 import { toDeletionQueueEntry } from "./storage-guard"
 import type {
   DecideVersionInput,
@@ -298,11 +298,16 @@ export async function submitVersion(
         )
       )
       .limit(1)
-    let assetId: string | null = existingRows.length > 0 ? existingRows[0].id : null
+    let assetId: string | null =
+      existingRows.length > 0 ? existingRows[0].id : null
     const existingDeliverableId: string | null | undefined =
       existingRows.length > 0 ? existingRows[0].deliverableId : undefined
 
-    if (assetId && existingDeliverableId && existingDeliverableId !== input.deliverableId) {
+    if (
+      assetId &&
+      existingDeliverableId &&
+      existingDeliverableId !== input.deliverableId
+    ) {
       // A filename is a file's identity across the project; a clash is a
       // naming mistake, not a reason to merge two histories (the unique
       // index is project-wide by design).
@@ -311,7 +316,8 @@ export async function submitVersion(
         .from(deliverables)
         .where(eq(deliverables.id, existingDeliverableId))
         .limit(1)
-      const otherTitle = ownerRows.length > 0 ? ownerRows[0].title : "another deliverable"
+      const otherTitle =
+        ownerRows.length > 0 ? ownerRows[0].title : "another deliverable"
       throw new Error(
         `"${input.filename}" already belongs to "${otherTitle}". Pick a different filename.`
       )
@@ -555,7 +561,9 @@ export async function decideVersion(
 
   const nextStatus: VersionReviewStatus = input.decision
   const changeComment =
-    input.decision === "changes_requested" && input.comment ? input.comment : null
+    input.decision === "changes_requested" && input.comment
+      ? input.comment
+      : null
 
   await db.transaction(async (tx) => {
     const moved = await tx
@@ -923,7 +931,8 @@ export async function listDeliverableVersions(
       versions: versions.map((version, index) => ({
         ...version,
         isLatest: index === 0,
-        isLatestApproved: index === firstApprovedIndex && firstApprovedIndex !== -1,
+        isLatestApproved:
+          index === firstApprovedIndex && firstApprovedIndex !== -1,
       })),
     }
   })
@@ -949,7 +958,9 @@ async function reviewerProjectIds(
     const rows = await db
       .select({ id: projects.id })
       .from(projects)
-      .where(and(eq(projects.workspaceId, workspaceId), isNull(projects.deletedAt)))
+      .where(
+        and(eq(projects.workspaceId, workspaceId), isNull(projects.deletedAt))
+      )
     return rows.map((row) => row.id)
   }
 
@@ -977,9 +988,7 @@ async function reviewerProjectIds(
 
   return Array.from(
     new Set(
-      rows
-        .filter((row) => row.roleTitle === "lead")
-        .map((row) => row.projectId)
+      rows.filter((row) => row.roleTitle === "lead").map((row) => row.projectId)
     )
   )
 }
