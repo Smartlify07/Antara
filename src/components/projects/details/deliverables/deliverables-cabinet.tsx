@@ -7,23 +7,26 @@
  * two-pane cabinet the concept drew — deliverables on the left, the selected
  * deliverable's detail on the right, and version detail one drill deeper
  * with a ‹ › pager. Editing affordances and gates are ported verbatim from
- * `deliverable-card.tsx` (status machine menu, owner, deadline) and
- * `versions-section.tsx` (submit for review, delete draft, decide, composer).
+ * `deliverable-card.tsx` (status machine menu, owner and deadline as pills)
+ * and `versions-section.tsx` (submit for review, delete draft, decide,
+ * composer).
  *
  * House bans honoured: no borders, no spinners — hierarchy comes from
  * washes, spacing, the shared meta dots, and text tone.
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import type { ReactNode } from "react"
+import { motion, useReducedMotion } from "framer-motion"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "@tanstack/react-router"
 import {
+  CalendarDaysIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   FolderIcon,
   LinkIcon,
-  MoreHorizontalIcon,
   PlusIcon,
+  TagIcon,
   Trash2Icon,
 } from "lucide-react"
 import {
@@ -42,8 +45,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
 import { Chip, ChipOption } from "@/components/projects/chip"
+import { DateChip } from "@/components/projects/dates-chip"
+import { OwnerChip } from "@/components/projects/member-chip"
 import {
   buildOptimisticDeliverableComment,
   deliverableKeys,
@@ -70,12 +74,7 @@ import {
 } from "@/server/functions/versions"
 import { useSession } from "@/lib/auth-client"
 import { avatarTint } from "@/lib/avatar-tint"
-import {
-  formatDueDate,
-  formatRelativeTime,
-  fromIsoDay,
-  toIsoDay,
-} from "@/lib/time"
+import { formatDueDate, formatRelativeTime, fromIsoDay } from "@/lib/time"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
 import { cn } from "@/lib/utils"
 import type {
@@ -98,6 +97,7 @@ import {
   deliverableMoveTargets,
 } from "./deliverable-meta"
 import { DECISION_META, REVIEW_DOTS, REVIEW_STATUS_META } from "./version-meta"
+import { NewTaskDialog } from "./new-task-dialog"
 import { VersionThread } from "./version-thread"
 import { VersionComposer } from "./version-composer"
 import {
@@ -116,7 +116,25 @@ type DecisionKind = "approved" | "rejected" | "changes_requested"
  * draft reading locally — the only dot not from a meta map, and only
  * because the maps genuinely lack the state.
  */
-const DRAFT_REVIEW_META = { label: "Draft", dot: "bg-muted-foreground/40" }
+const DRAFT_REVIEW_META = {
+  label: "Draft",
+  dot: "bg-muted-foreground/40",
+  badgeClass: "bg-muted text-muted-foreground",
+}
+
+/**
+ * A due date reads as danger once the day is behind or immediately ahead:
+ * past due, today, or inside the next three days. The caller gates on the
+ * work still being live (the service's overdue predicate already excludes
+ * done tasks and completed deliverables) so finished work never alarms.
+ */
+const DUE_SOON_MS = 3 * 24 * 60 * 60 * 1000
+
+function dueSoon(isoDay: string): boolean {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return fromIsoDay(isoDay).getTime() - today.getTime() <= DUE_SOON_MS
+}
 
 /**
  * One row in the flat version list: the service nests versions under
@@ -164,7 +182,7 @@ export function DeliverablesCabinet({
   const [isOpen, setIsOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null)
-  const [mode, setMode] = useState<"all" | "comments">("all")
+  const [mode, setMode] = useState<"comments" | "tasks">("comments")
   /**
    * Direction of the last detail-pane swap: 1 = drilling in / paging to an
    * older version, −1 = climbing back out / paging to a newer one, 0 = a
@@ -527,7 +545,7 @@ function MasterPane({
                 <span
                   aria-hidden
                   className={cn(
-                    "size-3 shrink-0 rounded-full",
+                    "size-2.5 shrink-0 rounded-full",
                     DELIVERABLE_DOTS[deliverable.status]
                   )}
                 />
@@ -605,7 +623,7 @@ function LevelZeroList({
                   <span
                     aria-hidden
                     className={cn(
-                      "mt-1 size-3 shrink-0 rounded-full",
+                      "mt-1 size-2.5 shrink-0 rounded-full",
                       DELIVERABLE_DOTS[deliverable.status]
                     )}
                   />
@@ -652,10 +670,11 @@ function ownerRef(member: AssignableMember): DeliverableCard["owner"] {
 /**
  * The selected deliverable's detail: header meta with the card's editing
  * affordances (status machine menu from `deliverable-card.tsx`; owner and
- * deadline flows behind the manage menu, gated as the card gated them), its
- * task thread, and its own conversation on the shared work-comments pieces.
- * The versions cluster rides on the timeline the cabinet already holds —
- * flat rows, each drilling into level two.
+ * deadline as the same house pills, gated as the card gated them), then
+ * Comments and Tasks tabs — the conversation on the shared work-comments
+ * pieces, and the task list behind its creation dialog. The versions
+ * cluster rides on the timeline the cabinet already holds — flat rows,
+ * each drilling into level two.
  */
 function LevelOne({
   workspaceId,
@@ -693,8 +712,8 @@ function LevelOne({
   canManage: boolean
   /** Same write fact the card gated the task composer with. */
   canWork: boolean
-  mode: "all" | "comments"
-  onModeChange: (mode: "all" | "comments") => void
+  mode: "comments" | "tasks"
+  onModeChange: (mode: "comments" | "tasks") => void
   versionsData: DeliverableVersionsResult | undefined
   versionsPending: boolean
   versionsError: unknown
@@ -704,16 +723,14 @@ function LevelOne({
 }) {
   const { data: session } = useSession()
   const queryClient = useQueryClient()
-  const reduceMotion = useReducedMotion() ?? false
 
   // Edit-affordance state, ported from deliverable-card. The three writes
   // below (`useDeliverableCardWrite`) paint the project's deliverable cache
   // first — the same paint-first contract the project details pills use — so
-  // only their dialogs and failures need state. `busy` is the union of the
-  // writes' pending flags, gating popovers and dialogs one round at a time.
+  // owner and deadline edits need no dialog state of their own: the pills
+  // commit straight through those writes. `busy` is the union of the writes'
+  // pending flags, gating the status machine one round at a time.
   const [error, setError] = useState<string | null>(null)
-  const [ownerOpen, setOwnerOpen] = useState(false)
-  const [deadlineOpen, setDeadlineOpen] = useState(false)
 
   // The "New version" composer rides on versions-section's open/save flow:
   // opened from the cluster header, closed by its own save-or-cancel result.
@@ -725,11 +742,6 @@ function LevelOne({
 
   const meta = DELIVERABLE_META[deliverable.status]
   const targets = deliverableMoveTargets(deliverable.status)
-
-  // Comments-only mode lifts the task nodes out of the thread with a
-  // height-collapse fade; going back inserts them instantly — seeding the
-  // exit is worth it, choreographing the re-entry is not.
-  const visibleTasks = mode === "all" ? tasks : []
 
   // The deliverable's own conversation, on the same optimistic mutation the
   // version thread runs (`version-thread.tsx`), aimed at the deliverable
@@ -887,7 +899,7 @@ function LevelOne({
                   <span
                     aria-hidden
                     className={cn(
-                      "size-3 rounded-full",
+                      "size-2.5 rounded-full",
                       DELIVERABLE_DOTS[deliverable.status]
                     )}
                   />
@@ -917,7 +929,7 @@ function LevelOne({
                         <span
                           aria-hidden
                           className={cn(
-                            "size-3.5 shrink-0 rounded-full",
+                            "size-2.5 shrink-0 rounded-full",
                             DELIVERABLE_DOTS[value]
                           )}
                         />
@@ -931,14 +943,32 @@ function LevelOne({
                 <span
                   aria-hidden
                   className={cn(
-                    "size-3 rounded-full",
+                    "size-2.5 rounded-full",
                     DELIVERABLE_DOTS[deliverable.status]
                   )}
                 />
                 {meta.label}
               </span>
             )}
-            {deliverable.owner ? (
+            {/* Owner and deadline as the same house pills: one click on the
+                chip reaches the person list or the calendar — no manage menu.
+                A viewer without the manage fact keeps the plain meta line. */}
+            {canManage ? (
+              <OwnerChip
+                members={members}
+                owner={deliverable.owner}
+                onSelect={(teamId) => {
+                  const member = members.find(
+                    (candidate) => candidate.teamId === teamId
+                  )
+                  ownerWrite.mutate({
+                    deliverableId: deliverable.id,
+                    ownerId: teamId,
+                    owner: member ? ownerRef(member) : null,
+                  })
+                }}
+              />
+            ) : deliverable.owner ? (
               <span className="inline-flex items-center gap-1.5">
                 <TintedAvatar
                   seed={deliverable.owner.teamId}
@@ -950,19 +980,49 @@ function LevelOne({
             ) : (
               <span>Unassigned</span>
             )}
-            {deliverable.deadline && (
-              <span
-                className={
+            {canManage ? (
+              <DateChip
+                deadline={deliverable.deadline}
+                placeholder="Add deadline"
+                formatLabel={(deadline) =>
                   deliverable.overdue
+                    ? `Overdue · ${formatDueDate(fromIsoDay(deadline))}`
+                    : `due ${formatDueDate(fromIsoDay(deadline))}`
+                }
+                onChange={(deadline) =>
+                  deadlineWrite.mutate({
+                    deliverableId: deliverable.id,
+                    deadline,
+                  })
+                }
+                className={
+                  deliverable.status !== "completed" &&
+                  deliverable.deadline &&
+                  dueSoon(deliverable.deadline)
                     ? "font-medium text-destructive"
                     : undefined
                 }
+              />
+            ) : deliverable.deadline ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5",
+                  deliverable.status !== "completed" &&
+                    dueSoon(deliverable.deadline) &&
+                    "font-medium text-destructive"
+                )}
               >
+                <CalendarDaysIcon aria-hidden className="size-3.5 shrink-0" />
                 {deliverable.overdue ? "Overdue · " : "due "}
                 {formatDueDate(deliverable.deadline)}
               </span>
+            ) : null}
+            {deliverable.type && (
+              <MetaBadge className="bg-secondary font-medium text-secondary-foreground">
+                <TagIcon aria-hidden className="size-3" />
+                {deliverable.type}
+              </MetaBadge>
             )}
-            {deliverable.type && <span>{deliverable.type}</span>}
             {deliverable.request && (
               <Link
                 to="/w/$workspaceSlug/requests/$requestId"
@@ -986,110 +1046,141 @@ function LevelOne({
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <ThreadModeToggle value={mode} onChange={onModeChange} />
-          {/* The manage affordances, exactly the card's two menu lines —
-              they open the same owner/deadline dialogs the card opened. */}
-          {canManage && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Deliverable options"
-                  disabled={busy}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
-                >
-                  <MoreHorizontalIcon className="size-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setOwnerOpen(true)}>
-                  Change owner…
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDeadlineOpen(true)}>
-                  Set deadline…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DetailTabs value={mode} onChange={onModeChange} />
         </div>
       </header>
 
-      <ul className="mt-7">
-        <AnimatePresence initial={false}>
-          {visibleTasks.map((task) => (
-            <motion.li
-              key={task.id}
-              initial={false}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              style={{ overflow: "hidden" }}
-            >
-              <TaskThreadItem
-                task={task}
-                workspaceSlug={workspaceSlug}
-                projectSlug={projectSlug}
-              />
-            </motion.li>
-          ))}
-        </AnimatePresence>
-        {threadPending ? (
-          <li>
-            <ThreadLoading label="Loading conversation…" />
-          </li>
-        ) : threadError ? (
-          <li>
-            <ThreadError>
-              {threadError instanceof Error
-                ? threadError.message
-                : "Could not load the conversation."}
-            </ThreadError>
-          </li>
-        ) : (
-          <>
-            {messages.length === 0 && (
+      {/* The two tabs, one panel each: the conversation, and the task list
+          with its creation dialog. The inline composer that used to sit
+          between the header and the thread is gone — adding a task lives
+          where the tasks are, behind the tab's own button (FR-016), so it
+          never pushes the conversation out of view. */}
+      {mode === "comments" ? (
+        <div
+          id="cabinet-panel-comments"
+          role="tabpanel"
+          aria-labelledby="cabinet-tab-comments"
+        >
+          <ul className="mt-5">
+            {threadPending ? (
               <li>
-                <ThreadEmpty>
-                  No comments yet. Notes on this piece of work — the team reads
-                  them right here.
-                </ThreadEmpty>
+                <ThreadLoading label="Loading conversation…" />
               </li>
+            ) : threadError ? (
+              <li>
+                <ThreadError>
+                  {threadError instanceof Error
+                    ? threadError.message
+                    : "Could not load the conversation."}
+                </ThreadError>
+              </li>
+            ) : (
+              <>
+                {messages.length === 0 && (
+                  <li>
+                    <ThreadEmpty>
+                      No comments yet. Notes on this piece of work — the team
+                      reads them right here.
+                    </ThreadEmpty>
+                  </li>
+                )}
+                {messages.map((message) => (
+                  <li key={message.id}>
+                    <ThreadRow message={message} />
+                  </li>
+                ))}
+              </>
             )}
-            {messages.map((message) => (
-              <li key={message.id}>
-                <ThreadRow message={message} />
-              </li>
-            ))}
-          </>
-        )}
-      </ul>
+          </ul>
 
-      {canWork ? (
-        <div className="mt-1">
-          <ThreadComposer
-            value={body}
-            onChange={setBody}
-            onSubmit={() => post.mutate(body.trim())}
-            pending={post.isPending}
-            placeholder={`Comment on ${deliverable.title}…`}
-            label={`Add a comment to ${deliverable.title}`}
-          />
-          {serverPostError && <ThreadError>{serverPostError}</ThreadError>}
+          {canWork ? (
+            <div className="mt-1">
+              <ThreadComposer
+                value={body}
+                onChange={setBody}
+                onSubmit={() => post.mutate(body.trim())}
+                pending={post.isPending}
+                placeholder={`Comment on ${deliverable.title}…`}
+                label={`Add a comment to ${deliverable.title}`}
+              />
+              {serverPostError && <ThreadError>{serverPostError}</ThreadError>}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Only project members can add to this thread.
+            </p>
+          )}
         </div>
       ) : (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Only project members can add to this thread.
-        </p>
+        <div
+          id="cabinet-panel-tasks"
+          role="tabpanel"
+          aria-labelledby="cabinet-tab-tasks"
+          className="mt-6"
+        >
+          <section
+            aria-label={`Tasks of ${deliverable.title}`}
+            className="rounded-xl bg-muted/30 p-2"
+          >
+            <div className="flex items-center justify-between px-2 pt-1.5 pb-1">
+              <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Tasks
+              </h3>
+              <span className="flex items-center gap-3 text-xs text-muted-foreground">
+                {tasks.length > 0 &&
+                  `${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`}
+                {/* The tab's add-task affordance: the same creation dialog
+                    the other lanes open, so any member assigns owner,
+                    deadline and priority without touching the thread. */}
+                {canWork && (
+                  <NewTaskDialog
+                    workspaceId={workspaceId}
+                    projectId={projectId}
+                    deliverableId={deliverable.id}
+                    members={members}
+                    onCreated={onChanged}
+                  >
+                    <Button size="sm" className="h-7 text-xs">
+                      <PlusIcon className="size-3.5" />
+                      Add task
+                    </Button>
+                  </NewTaskDialog>
+                )}
+              </span>
+            </div>
+
+            {tasks.length === 0 ? (
+              <p className="px-2 pt-1 pb-2 text-xs text-muted-foreground">
+                {canWork
+                  ? "No tasks on this deliverable yet — add the first one."
+                  : "No tasks on this deliverable yet."}
+              </p>
+            ) : (
+              <ul className="flex flex-col">
+                {tasks.map((task) => (
+                  <li key={task.id}>
+                    <TaskListItem
+                      task={task}
+                      workspaceSlug={workspaceSlug}
+                      projectSlug={projectSlug}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       )}
 
       {/* The versions cluster: a flat drawer, deliberately not an accordion —
           every row opens its own detail level, nothing expands in place. */}
       <section aria-label={`Versions of ${deliverable.title}`} className="mt-8">
         <div className="rounded-xl bg-muted/30 p-2">
-          <div className="flex items-baseline justify-between px-2 pt-1.5 pb-1">
+          <div className="flex items-center justify-between px-2 pt-1.5 pb-1">
             <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Versions
             </h3>
-            <span className="flex items-baseline gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-3 text-xs text-muted-foreground">
               {clusterTotal > 0 &&
                 `${clusterTotal} ${clusterTotal === 1 ? "version" : "versions"}`}
               {/* The card's Library link (FR-041), ported: opens this
@@ -1108,7 +1199,6 @@ function LevelOne({
               {versionsData?.viewer.canSubmit && (
                 <Button
                   size="sm"
-                  variant="outline"
                   className="h-7 text-xs"
                   onClick={() => setComposerOpen(true)}
                 >
@@ -1158,6 +1248,8 @@ function LevelOne({
                     ? {
                         label: REVIEW_STATUS_META[version.reviewStatus].label,
                         dot: REVIEW_DOTS[version.reviewStatus],
+                        badgeClass:
+                          REVIEW_STATUS_META[version.reviewStatus].badgeClass,
                       }
                     : DRAFT_REVIEW_META
                   return (
@@ -1188,19 +1280,28 @@ function LevelOne({
                           {version.label}
                         </span>
                         {version.isLatest && (
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            latest
-                          </span>
+                          <MetaBadge className="bg-secondary text-secondary-foreground">
+                            Latest
+                          </MetaBadge>
                         )}
                         {version.isLatestApproved && (
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            latest approved
-                          </span>
+                          <MetaBadge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                            Latest approved
+                          </MetaBadge>
                         )}
                         <span className="min-w-0 flex-1 truncate text-sm">
                           {asset.filename}
                         </span>
-                        <Dot dot={reviewMeta.dot} label={reviewMeta.label} />
+                        <MetaBadge className={reviewMeta.badgeClass}>
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "size-2 shrink-0 rounded-full",
+                              reviewMeta.dot
+                            )}
+                          />
+                          {reviewMeta.label}
+                        </MetaBadge>
                         <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">
                           {version.submitter.name ??
                             version.submitter.email ??
@@ -1208,9 +1309,10 @@ function LevelOne({
                           · {formatRelativeTime(version.createdAt)}
                         </span>
                         {version.feedbackCount > 0 && (
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {version.feedbackCount} notes
-                          </span>
+                          <MetaBadge>
+                            {version.feedbackCount}{" "}
+                            {version.feedbackCount === 1 ? "note" : "notes"}
+                          </MetaBadge>
                         )}
                         <ChevronRightIcon
                           aria-hidden
@@ -1225,90 +1327,6 @@ function LevelOne({
           )}
         </div>
       </section>
-
-      {/* Owner picker — the card's dialog, logic identical. */}
-      <Dialog open={ownerOpen} onOpenChange={(next) => setOwnerOpen(next)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Change owner</DialogTitle>
-            <DialogDescription>
-              Owners are workspace members; the person carrying this deadline
-              can move its production status.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid max-h-72 gap-1 overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => {
-                void ownerWrite
-                  .mutateAsync({
-                    deliverableId: deliverable.id,
-                    ownerId: null,
-                    owner: null,
-                  })
-                  .then(
-                    () => setOwnerOpen(false),
-                    // The hook already reported the refusal.
-                    () => undefined
-                  )
-              }}
-              className="rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60"
-            >
-              Unassign owner
-            </button>
-            {members.map((member) => (
-              <button
-                key={member.teamId}
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void ownerWrite
-                    .mutateAsync({
-                      deliverableId: deliverable.id,
-                      ownerId: member.teamId,
-                      owner: ownerRef(member),
-                    })
-                    .then(
-                      () => setOwnerOpen(false),
-                      // The hook already reported the refusal.
-                      () => undefined
-                    )
-                }}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60 disabled:opacity-50"
-              >
-                <TintedAvatar seed={member.teamId} name={member.name} />
-                {member.name ?? member.email ?? "Member"}
-              </button>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOwnerOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Deadline picker — keyed so opening it always reads fresh state. */}
-      <DeadlineDialog
-        key={deliverable.deadline ?? "none"}
-        open={deadlineOpen}
-        onClose={() => setDeadlineOpen(false)}
-        current={deliverable.deadline}
-        busy={busy}
-        onSet={(deadline) =>
-          deadlineWrite
-            .mutateAsync({
-              deliverableId: deliverable.id,
-              deadline,
-            })
-            .then(
-              () => setDeadlineOpen(false),
-              // The hook already reported the refusal.
-              () => undefined
-            )
-        }
-      />
     </section>
   )
 }
@@ -1364,6 +1382,7 @@ function LevelTwo({
     ? {
         label: REVIEW_STATUS_META[version.reviewStatus].label,
         dot: REVIEW_DOTS[version.reviewStatus],
+        badgeClass: REVIEW_STATUS_META[version.reviewStatus].badgeClass,
       }
     : DRAFT_REVIEW_META
 
@@ -1404,11 +1423,25 @@ function LevelTwo({
             {row.assetFilename}
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-            <Dot dot={reviewMeta.dot} label={reviewMeta.label} />
+            <MetaBadge className={reviewMeta.badgeClass}>
+              <span
+                aria-hidden
+                className={cn("size-2 shrink-0 rounded-full", reviewMeta.dot)}
+              />
+              {reviewMeta.label}
+            </MetaBadge>
             {/* The supersession notes the service stamps: where this
                 version stands in its asset's history (FR-037). */}
-            {version.isLatest && <span>latest</span>}
-            {version.isLatestApproved && <span>latest approved</span>}
+            {version.isLatest && (
+              <MetaBadge className="bg-secondary text-secondary-foreground">
+                Latest
+              </MetaBadge>
+            )}
+            {version.isLatestApproved && (
+              <MetaBadge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                Latest approved
+              </MetaBadge>
+            )}
             <span>
               {version.source === "external_link"
                 ? `External link${
@@ -1441,7 +1474,7 @@ function LevelTwo({
               <span
                 aria-hidden
                 className={cn(
-                  "mt-1 size-3 shrink-0 rounded-full",
+                  "mt-1 size-2.5 shrink-0 rounded-full",
                   REVIEW_DOTS[version.decision.decision]
                 )}
               />
@@ -1654,7 +1687,12 @@ function VersionPager({
 
 /** An open task as a thread node: assignee faces at the head, status,
  *  priority and due in a quiet second row, into the task's own page. */
-function TaskThreadItem({
+/**
+ * One row of the Tasks tab: status dot and its name, the title through to
+ * the task page, the deviation meta (priority, due date with its danger
+ * tone) and the assignee faces. Render-only — the task page owns the edits.
+ */
+function TaskListItem({
   task,
   workspaceSlug,
   projectSlug,
@@ -1664,10 +1702,43 @@ function TaskThreadItem({
   projectSlug: string | undefined
 }) {
   return (
-    <div className="flex gap-3.5 pb-5">
-      <span aria-hidden className="w-px shrink-0 bg-border" />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="px-2 py-2">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <Dot
+          dot={TASK_DOTS[task.status]}
+          label={TASK_STATUS_META[task.status].label}
+        />
+        {projectSlug !== undefined ? (
+          <Link
+            to="/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId"
+            params={{ workspaceSlug, projectSlug, taskId: task.id }}
+            className="text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {task.title}
+          </Link>
+        ) : (
+          <span className="text-sm font-medium">{task.title}</span>
+        )}
+        <span className="ml-auto flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground">
+          {/* Medium priority is the room tone: only deviations get text. */}
+          {task.priority !== "medium" && (
+            <span>{TASK_PRIORITY_META[task.priority].label}</span>
+          )}
+          {task.dueDate && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1",
+                task.status !== "done" &&
+                  task.status !== "approved" &&
+                  dueSoon(task.dueDate) &&
+                  "font-medium text-destructive"
+              )}
+            >
+              <CalendarDaysIcon aria-hidden className="size-3.5 shrink-0" />
+              {task.overdue ? "Overdue · " : "due "}
+              {formatDueDate(task.dueDate)}
+            </span>
+          )}
           {task.assignees.length > 0 && (
             <span className="flex items-center gap-1">
               {task.assignees.map((assignee) => (
@@ -1680,71 +1751,35 @@ function TaskThreadItem({
               ))}
             </span>
           )}
-          {projectSlug !== undefined ? (
-            <Link
-              to="/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId"
-              params={{ workspaceSlug, projectSlug, taskId: task.id }}
-              className="text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              {task.title}
-            </Link>
-          ) : (
-            <span className="text-sm font-medium">{task.title}</span>
-          )}
-          {/* What the node is, on the right — in All mode it sits beside
-              comment rows, and the badge is the only word that says so. */}
-          <span className="ml-auto rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            Task
-          </span>
-        </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <Dot
-            dot={TASK_DOTS[task.status]}
-            label={TASK_STATUS_META[task.status].label}
-          />
-          {/* Medium priority is the room tone: only deviations get text. */}
-          {task.priority !== "medium" && (
-            <span>{TASK_PRIORITY_META[task.priority].label}</span>
-          )}
-          {task.dueDate && (
-            <span
-              className={
-                task.overdue ? "font-medium text-destructive" : undefined
-              }
-            >
-              {task.overdue ? "Overdue · " : "due "}
-              {formatDueDate(task.dueDate)}
-            </span>
-          )}
-        </div>
-        {task.description && (
-          <p className="mt-1.5 max-w-prose text-xs leading-relaxed text-muted-foreground">
-            {task.description}
-          </p>
-        )}
+        </span>
       </div>
+      {task.description && (
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted-foreground">
+          {task.description}
+        </p>
+      )}
     </div>
   )
 }
 
-/** The All / Comments-only control, ported from the concept — framer's
- *  layoutId keeps the pill glued to whichever segment is active. */
-function ThreadModeToggle({
+/** The detail tabs — Comments (the conversation) and Tasks (the workload).
+ *  framer's layoutId keeps the pill glued to whichever tab is active. */
+function DetailTabs({
   value,
   onChange,
 }: {
-  value: "all" | "comments"
-  onChange: (value: "all" | "comments") => void
+  value: "comments" | "tasks"
+  onChange: (value: "comments" | "tasks") => void
 }) {
-  const options: { value: "all" | "comments"; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "comments", label: "Comments only" },
+  const options: { value: "comments" | "tasks"; label: string }[] = [
+    { value: "comments", label: "Comments" },
+    { value: "tasks", label: "Tasks" },
   ]
 
   return (
     <div
-      role="group"
-      aria-label="Thread filter"
+      role="tablist"
+      aria-label="Deliverable detail"
       className="inline-flex shrink-0 items-center rounded-lg bg-muted/60 p-0.5"
     >
       {options.map((option) => {
@@ -1753,7 +1788,10 @@ function ThreadModeToggle({
           <button
             key={option.value}
             type="button"
-            aria-pressed={isActive}
+            role="tab"
+            id={`cabinet-tab-${option.value}`}
+            aria-selected={isActive}
+            aria-controls={`cabinet-panel-${option.value}`}
             onClick={() => onChange(option.value)}
             className={cn(
               "relative rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
@@ -1779,12 +1817,35 @@ function ThreadModeToggle({
   )
 }
 
-/** 12px filled dot + plain label — the colour of a chip, without the box. */
+/** 10px filled dot + plain label — the colour of a chip, without the box. */
 function Dot({ dot, label }: { dot: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span aria-hidden className={cn("size-3 shrink-0 rounded-full", dot)} />
+      <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", dot)} />
       {label}
+    </span>
+  )
+}
+
+/** The cabinet's quiet pill (the "Task" badge's sibling): one rounded wash,
+ *  small medium text. Everything the reader should scan as a fact wears
+ *  one — the deliverable's tag, a version's stream badges, note counts. */
+function MetaBadge({
+  className,
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium",
+        // The empty-tone default: quiet meta, never a colour claim.
+        className ?? "bg-muted/70 text-muted-foreground"
+      )}
+    >
+      {children}
     </span>
   )
 }
@@ -1877,71 +1938,6 @@ function DecideDialog({
           </Button>
           <Button disabled={busy} onClick={() => onConfirm(comment.trim())}>
             {meta.label}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/** The deadline picker, ported from deliverable-card.tsx, logic identical. */
-function DeadlineDialog({
-  open,
-  onClose,
-  current,
-  busy,
-  onSet,
-}: {
-  open: boolean
-  onClose: () => void
-  current: string | null
-  busy: boolean
-  onSet: (deadline: string | null) => void | Promise<void>
-}) {
-  const [value, setValue] = useState(current ?? "")
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Set deadline</DialogTitle>
-          <DialogDescription>
-            Past-due deliverables that are not completed show as overdue.
-          </DialogDescription>
-        </DialogHeader>
-        {/* The house calendar (dates-chip.tsx's idiom), not an OS date
-            input: pick a day, review it beneath, clear it in place. */}
-        <Calendar
-          mode="single"
-          selected={value ? fromIsoDay(value) : undefined}
-          onSelect={(next) => setValue(next ? toIsoDay(next) : "")}
-          defaultMonth={current ? fromIsoDay(current) : undefined}
-        />
-        <div className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
-          <span>
-            {value
-              ? `Setting ${formatDueDate(fromIsoDay(value))}`
-              : "Pick a day"}
-          </span>
-          {value && (
-            <button
-              type="button"
-              className="underline underline-offset-2 hover:text-foreground"
-              onClick={() => setValue("")}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() => void onSet(value ? value : null)}
-          >
-            Save deadline
           </Button>
         </DialogFooter>
       </DialogContent>

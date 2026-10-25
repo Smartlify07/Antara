@@ -4,7 +4,6 @@ import {
   listAssignableMembersFn,
   listProjectTagsFn,
   listProjectsFn,
-  listProjectUpdatesFn,
 } from "@/server/functions/projects"
 import { slugifyTitle } from "@/lib/project-schemas"
 import type { CreateProjectInput } from "@/lib/project-schemas"
@@ -12,8 +11,6 @@ import type {
   ProjectListItem,
   ProjectTagOption,
 } from "@/server/services/project-service"
-import type { ProjectUpdateItem } from "@/server/services/project-update-service"
-import type { UpdateKind } from "@/db/enums"
 
 /**
  * Query keys for projects.
@@ -33,8 +30,6 @@ export const projectKeys = {
   // a second round trip had already happened.
   detail: (workspaceId: string, slug: string) =>
     ["projects", "detail", workspaceId, slug] as const,
-  updates: (workspaceId: string, projectId: string) =>
-    ["projects", "updates", workspaceId, projectId] as const,
 }
 
 export function projectsQuery(workspaceId: string) {
@@ -64,13 +59,6 @@ export function projectDetailQuery(workspaceId: string, slug: string) {
     queryKey: projectKeys.detail(workspaceId, slug),
     queryFn: () =>
       getProjectDetailFn({ data: { workspaceId, projectSlug: slug } }),
-  })
-}
-
-export function projectUpdatesQuery(workspaceId: string, projectId: string) {
-  return queryOptions({
-    queryKey: projectKeys.updates(workspaceId, projectId),
-    queryFn: () => listProjectUpdatesFn({ data: { workspaceId, projectId } }),
   })
 }
 
@@ -137,47 +125,5 @@ export function buildOptimisticProject(
       })),
     ],
     optimistic: true,
-  }
-}
-
-/**
- * Builds the row rendered between the click and the server's response.
- *
- * The `optimistic-` id prefix is what marks it: the card checks the prefix to
- * decide whether the row can be reviewed yet, and nothing else branches on a
- * placeholder, because it renders identically to a settled post.
- *
- * `localUrl` is the browser object URL for each attachment. Those previews
- * must be revoked by the caller when the placeholder is replaced or rolled
- * back — the grid never made optimistic rows carry blob URLs, so nothing else
- * in the app does this cleanup today.
- */
-export type OptimisticUpdate = ProjectUpdateItem
-export function buildOptimisticUpdate(input: {
-  body: string
-  kind: UpdateKind
-  author: ProjectUpdateItem["author"]
-  attachments: { file: File; url: string }[]
-}): OptimisticUpdate {
-  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-
-  return {
-    id: `optimistic-${stamp}`,
-    body: input.body,
-    kind: input.kind,
-    createdAt: new Date(),
-    author: input.author,
-    versions: input.attachments.map((attachment, index) => ({
-      id: `optimistic-version-${stamp}-${index}`,
-      // Each pending file is its own asset for now: the real numbering only
-      // exists server-side, where filenames are matched against prior assets.
-      assetId: `optimistic-asset-${stamp}-${index}`,
-      filename: attachment.file.name,
-      label: "—",
-      versionNo: 0,
-      url: attachment.url,
-      mimeType: attachment.file.type || "application/octet-stream",
-      sizeBytes: attachment.file.size,
-    })),
   }
 }

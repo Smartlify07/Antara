@@ -6,6 +6,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, ImagesIcon } from "lucide-react"
+import { AppLoading } from "@/components/app-loading"
 import {
   AssetBook,
   LibraryFolderWall,
@@ -254,6 +255,13 @@ function LibraryPage() {
   const projectScopedEmpty = projectOnly && shelfAssets.length === 0
   const onScopedShelf = Boolean(scopedProject) || Boolean(filters.project)
 
+  // One arrival: the header, the filters, and the wall/shelf all read the
+  // list, so the page paints once, complete — the shell's pulsing logo
+  // covers the fetch. Off the wall, the project facet and its deliverable
+  // pick-list stay out of the gate: they only drive search, and gating on
+  // them would flash the whole page on every scope the viewer switches to.
+  if (loading) return <AppLoading />
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
@@ -305,10 +313,6 @@ function LibraryPage() {
         onSearch={scheduleSearch}
         onPatch={patchFilters}
       />
-
-      {loading && (
-        <p className="text-sm text-muted-foreground">Loading the library…</p>
-      )}
 
       {error && (
         <div

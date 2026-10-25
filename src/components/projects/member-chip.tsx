@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react"
-import { CheckIcon, UserPlusIcon, UserStarIcon, UsersIcon } from "lucide-react"
+import {
+  CheckIcon,
+  UserIcon,
+  UserPlusIcon,
+  UserStarIcon,
+  UsersIcon,
+} from "lucide-react"
 import {
   Command,
   CommandEmpty,
@@ -13,7 +19,19 @@ import { Chip } from "@/components/projects/chip"
 import { avatarTint } from "@/lib/avatar-tint"
 import type { AssignableMember } from "@/server/services/project-service"
 
-export function initials(member: AssignableMember) {
+/**
+ * The person fields an avatar needs. A workspace member carries these, and so
+ * does the deliverable cache's owner ref — the owner chip labels a person who
+ * may not sit on the member list, so it reads from the ref, not the list.
+ */
+export type AvatarPerson = {
+  teamId: string
+  name: string | null
+  email: string | null
+  image: string | null
+}
+
+export function initials(member: AvatarPerson) {
   const fromName = member.name
     ?.split(" ")
     .map((part) => part[0])
@@ -23,7 +41,7 @@ export function initials(member: AssignableMember) {
   return fromName ?? (member.email?.[0] ?? "?").toUpperCase()
 }
 
-export function displayName(member: AssignableMember) {
+export function displayName(member: AvatarPerson) {
   return member.name ?? member.email ?? "Unknown"
 }
 
@@ -81,7 +99,7 @@ const EMPTY_COPY = "No workspace members yet."
 const MAX_STACK = 3
 
 /** Overlapping avatars, with a +N bubble once more than MAX_STACK are picked. */
-export function AvatarStack({ members }: { members: AssignableMember[] }) {
+export function AvatarStack({ members }: { members: AvatarPerson[] }) {
   const shown = members.slice(0, MAX_STACK)
   const overflow = members.length - shown.length
 
@@ -163,6 +181,87 @@ export function LeadChip({
               />
             ))}
           </CommandGroup>
+        </CommandList>
+      </Command>
+    </Chip>
+  )
+}
+
+/**
+ * The single-select owner pill (the lead pill's sibling, without the star):
+ * one person from the searchable member list, clicking the picked person
+ * again to unassign. The label reads the passed owner ref — the current owner
+ * may not be a project member — while the options stay the member list.
+ */
+export function OwnerChip({
+  members,
+  owner,
+  placeholder = "Set owner",
+  onSelect,
+}: {
+  members: AssignableMember[]
+  /** Current owner as a plain person ref, or null when unassigned. */
+  owner: AvatarPerson | null
+  /** Empty-pill copy — "Assign owner" on the task create dialog. */
+  placeholder?: string
+  onSelect: (teamId: string | null) => void
+}) {
+  const [query, setQuery] = useState("")
+  const visible = useFiltered(members, query)
+  const offList =
+    owner && !members.some((member) => member.teamId === owner.teamId)
+
+  return (
+    <Chip
+      placeholder={placeholder}
+      icon={<UserIcon className="size-3.5 shrink-0" />}
+      label={
+        owner ? (
+          <span className="flex items-center gap-1.5">
+            <AvatarStack members={[owner]} />
+            <span className="truncate">{displayName(owner)}</span>
+          </span>
+        ) : undefined
+      }
+    >
+      <Command shouldFilter={false} className="bg-transparent">
+        <CommandInput
+          placeholder="Search people…"
+          value={query}
+          onValueChange={setQuery}
+        />
+        <CommandList>
+          <CommandEmpty>
+            {members.length === 0 ? EMPTY_COPY : "Nobody matches."}
+          </CommandEmpty>
+          <CommandGroup>
+            {visible.map((member) => (
+              <PersonRow
+                key={member.teamId}
+                member={member}
+                selected={owner?.teamId === member.teamId}
+                onSelect={() =>
+                  onSelect(
+                    owner?.teamId === member.teamId ? null : member.teamId
+                  )
+                }
+              />
+            ))}
+          </CommandGroup>
+          {/* An owner who left the project (or was never on it) is labelled
+              but has no row to click off — keep an explicit way out. */}
+          {offList && (
+            <>
+              <div className="mx-2 my-1 h-px bg-border" />
+              <CommandItem
+                value="__unassign__"
+                onSelect={() => onSelect(null)}
+                className="gap-2"
+              >
+                <span>Unassign owner</span>
+              </CommandItem>
+            </>
+          )}
         </CommandList>
       </Command>
     </Chip>

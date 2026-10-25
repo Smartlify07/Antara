@@ -95,6 +95,7 @@ export function buildOptimisticTask(
   // undefined by the composer on purpose; the server defaults it.
   input: {
     title: string
+    description?: string | null
     dueDate?: string | null
     deliverableId?: string | null
     assigneeTeamIds?: string[] | null
@@ -113,7 +114,7 @@ export function buildOptimisticTask(
     projectId,
     deliverableId: input.deliverableId ?? null,
     title: input.title,
-    description: null,
+    description: input.description ?? null,
     // The service's insert defaults (task-service `createTask`).
     status: "backlog",
     priority: input.priority ?? "medium",

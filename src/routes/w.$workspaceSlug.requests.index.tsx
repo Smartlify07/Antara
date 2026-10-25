@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { AlertCircleIcon, InboxIcon, PlusIcon } from "lucide-react"
 import { useState } from "react"
+import { AppLoading } from "@/components/app-loading"
 import { Button } from "@/components/ui/button"
 import { RequestCard } from "@/components/requests/request-card"
 import { RequestDetailDialog } from "@/components/requests/request-detail-dialog"
@@ -60,6 +61,11 @@ function RequestsPage() {
     ),
   } as Record<"all" | RequestTriageStatus, number>
 
+  // One arrival: the count chips and the grid read the same list, so nothing
+  // of the page paints until it lands — the shell's pulsing logo covers the
+  // fetch instead of a line in the middle of the page.
+  if (isPending) return <AppLoading />
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
@@ -101,10 +107,6 @@ function RequestsPage() {
         </div>
       )}
 
-      {isPending && (
-        <p className="text-sm text-muted-foreground">Loading requests…</p>
-      )}
-
       {error && (
         <div
           role="alert"
@@ -115,7 +117,7 @@ function RequestsPage() {
         </div>
       )}
 
-      {!isPending && !error && visible.length === 0 && (
+      {!error && visible.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16 text-center">
           <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
             <InboxIcon className="size-6 text-muted-foreground" />
