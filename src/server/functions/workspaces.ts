@@ -4,6 +4,7 @@ import { redirect } from "@tanstack/react-router"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import { workspaceSchema } from "@/lib/workspace-schemas"
+import { pendingInvitesFn } from "@/server/functions/invites"
 import * as service from "@/server/services/workspace-service"
 
 /**
@@ -100,6 +101,44 @@ export function landingRedirect(slug: string | null) {
 export const resolveLandingFn = createServerFn({ method: "GET" }).handler(
   async () => service.resolveLandingWorkspace(await requireUserId())
 )
+
+/**
+ * The landing ladder, thrown as a redirect from its first sure answer. Both
+ * /dashboard's loader and bare /w's `beforeLoad` run this exact sequence, so
+ * it lives here once and they both call it — typed `never` because every
+ * branch ends in a `throw`, so the promise never resolves to a value.
+ *
+ * The order is the point, and keeping it in one place is how the two routes
+ * stay in lockstep:
+ *
+ * 1. The workspace they opened most recently. A signed-out caller never gets
+ *    past the session check inside `resolveLandingFn`, which redirects to
+ *    /login — the ladder inherits that gate for free.
+ * 2. Otherwise a pending invitation. No workspace of their own is the end of
+ *    the road only if nothing is waiting — an unaccepted invitation is the
+ *    more pressing thing, and sending somebody to create a workspace while
+ *    one sits pending is how this used to strand invitees. `pendingInvitesFn`
+ *    also handles the unverified case by sending them to `/verify-email`,
+ *    which is the right destination for them regardless, and can't loop:
+ *    that route only forwards once the address is confirmed.
+ * 3. Otherwise the create-workspace form.
+ *
+ * Two server calls at most, the same cost a /dashboard visit has always paid.
+ */
+export async function landingLadder(): Promise<never> {
+  const slug = await resolveLandingFn()
+  if (slug) {
+    throw redirect({
+      to: "/w/$workspaceSlug/projects",
+      params: { workspaceSlug: slug },
+    })
+  }
+
+  const pending = await pendingInvitesFn()
+  throw redirect(
+    pending.length > 0 ? { to: "/invite/pending" } : { to: "/workspaces/new" }
+  )
+}
 
 /**
  * Records a visit. Fire-and-forget from the client, so it returns nothing the

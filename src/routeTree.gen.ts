@@ -14,6 +14,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as WRouteImport } from './routes/w'
 import { Route as DevDeliverablesRouteImport } from './routes/dev.deliverables'
 import { Route as DevSidebarIconsRouteImport } from './routes/dev.sidebar-icons'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
@@ -62,6 +63,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
   path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WRoute = WRouteImport.update({
+  id: '/w',
+  path: '/w',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevDeliverablesRoute = DevDeliverablesRouteImport.update({
   id: '/dev/deliverables',
   path: '/dev/deliverables',
@@ -83,9 +89,9 @@ const InvitePendingRoute = InvitePendingRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const WWorkspaceSlugRoute = WWorkspaceSlugRouteImport.update({
-  id: '/w/$workspaceSlug',
-  path: '/w/$workspaceSlug',
-  getParentRoute: () => rootRouteImport,
+  id: '/$workspaceSlug',
+  path: '/$workspaceSlug',
+  getParentRoute: () => WRoute,
 } as any)
 const WorkspacesNewRoute = WorkspacesNewRouteImport.update({
   id: '/workspaces/new',
@@ -188,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/w': typeof WRouteWithChildren
   '/dev/deliverables': typeof DevDeliverablesRoute
   '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -217,6 +224,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/w': typeof WRouteWithChildren
   '/dev/deliverables': typeof DevDeliverablesRoute
   '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -243,6 +251,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/w': typeof WRouteWithChildren
   '/dev/deliverables': typeof DevDeliverablesRoute
   '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/w'
     | '/dev/deliverables'
     | '/dev/sidebar-icons'
     | '/invite/$token'
@@ -303,6 +313,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/w'
     | '/dev/deliverables'
     | '/dev/sidebar-icons'
     | '/invite/$token'
@@ -328,6 +339,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/verify-email'
+    | '/w'
     | '/dev/deliverables'
     | '/dev/sidebar-icons'
     | '/invite/$token'
@@ -358,11 +370,11 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  WRoute: typeof WRouteWithChildren
   DevDeliverablesRoute: typeof DevDeliverablesRoute
   DevSidebarIconsRoute: typeof DevSidebarIconsRoute
   InviteTokenRoute: typeof InviteTokenRoute
   InvitePendingRoute: typeof InvitePendingRoute
-  WWorkspaceSlugRoute: typeof WWorkspaceSlugRouteWithChildren
   WorkspacesNewRoute: typeof WorkspacesNewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -404,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/w': {
+      id: '/w'
+      path: '/w'
+      fullPath: '/w'
+      preLoaderRoute: typeof WRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dev/deliverables': {
       id: '/dev/deliverables'
       path: '/dev/deliverables'
@@ -434,10 +453,10 @@ declare module '@tanstack/react-router' {
     }
     '/w/$workspaceSlug': {
       id: '/w/$workspaceSlug'
-      path: '/w/$workspaceSlug'
+      path: '/$workspaceSlug'
       fullPath: '/w/$workspaceSlug'
       preLoaderRoute: typeof WWorkspaceSlugRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof WRoute
     }
     '/workspaces/new': {
       id: '/workspaces/new'
@@ -651,17 +670,27 @@ const WWorkspaceSlugRouteWithChildren = WWorkspaceSlugRoute._addFileChildren(
   WWorkspaceSlugRouteChildren,
 )
 
+interface WRouteChildren {
+  WWorkspaceSlugRoute: typeof WWorkspaceSlugRouteWithChildren
+}
+
+const WRouteChildren: WRouteChildren = {
+  WWorkspaceSlugRoute: WWorkspaceSlugRouteWithChildren,
+}
+
+const WRouteWithChildren = WRoute._addFileChildren(WRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  WRoute: WRouteWithChildren,
   DevDeliverablesRoute: DevDeliverablesRoute,
   DevSidebarIconsRoute: DevSidebarIconsRoute,
   InviteTokenRoute: InviteTokenRoute,
   InvitePendingRoute: InvitePendingRoute,
-  WWorkspaceSlugRoute: WWorkspaceSlugRouteWithChildren,
   WorkspacesNewRoute: WorkspacesNewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
