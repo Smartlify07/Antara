@@ -1,11 +1,14 @@
-import { queryOptions } from "@tanstack/react-query"
+import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query"
 import type { VersionThreadMessage } from "@/server/services/version-service"
 import {
+  decideVersionFn,
   listDeliverableVersionsFn,
   listReviewQueueFn,
   listVersionThreadFn,
   reviewQueueBadgeFn,
 } from "@/server/functions/versions"
+import type { DecideVersionInput } from "@/lib/version-schemas"
+import { libraryKeys } from "@/lib/queries/library"
 
 /**
  * Query keys for the version lane. The timeline is keyed by deliverable —
@@ -64,6 +67,40 @@ export function reviewQueueBadgeQuery(workspaceSlug: string) {
   return queryOptions({
     queryKey: versionKeys.badge(workspaceSlug),
     queryFn: () => reviewQueueBadgeFn({ data: { workspaceSlug } }),
+  })
+}
+
+/** The decision payload every decider surface sends, workspace supplied. */
+type DecideVersionPayload = Omit<DecideVersionInput, "workspaceId">
+
+/**
+ * One decision, from any decider surface — the cabinet's lane, the Reviews
+ * queue, the library's asset page. The empty-note guard is the cabinet's
+ * convention (a blank stays absent rather than becoming an empty comment).
+ *
+ * On settle the version lane and the library repaint regardless of outcome:
+ * a success leaves the queue row, recounts the badge, and restamps every
+ * state chip; a failure is usually the race ("just decided by someone
+ * else"), where the refetch shows the truth instead of a stale row.
+ */
+export function useDecideVersion(workspaceId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: DecideVersionPayload) =>
+      decideVersionFn({
+        data: {
+          ...input,
+          workspaceId,
+          comment:
+            input.comment && input.comment.length > 0
+              ? input.comment
+              : undefined,
+        },
+      }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: versionKeys.all })
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all })
+    },
   })
 }
 

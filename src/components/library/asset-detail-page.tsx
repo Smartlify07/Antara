@@ -18,14 +18,19 @@ import { libraryAssetQuery } from "@/lib/queries/library"
 import { formatRelativeTime } from "@/lib/time"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
 import { ASSET_STATE_META } from "./library-meta"
+import { VersionDecideActions } from "./version-decide-actions"
 
 /**
  * One asset's deep-linked detail (FR-040/042/043/044): its links to the work
  * (project and deliverable), and its full version timeline — uploader and
  * timestamp per version, the submitter's note, the source with the version
  * lane's honest link copy, and the append-only approval history in full.
- * Read-only by design: this page is where questions are answered, not where
- * the workflow happens.
+ *
+ * The page answers questions first, but it is no longer read-only at the
+ * moment of looking: the newest submitted version carries the decision
+ * buttons (see `VersionDecideActions`) when the viewer may decide — the
+ * record sheet is where "which cut is this and what happened to it" and
+ * "approve it" meet, instead of the decision hiding in the cabinet.
  */
 export function AssetDetailPage({
   workspaceSlug,
@@ -146,7 +151,15 @@ export function AssetDetailPage({
         ) : (
           <ol className="rounded-xl border bg-card p-4 pb-1">
             {asset.versions.map((version) => (
-              <VersionRow key={version.id} version={version} />
+              <VersionRow
+                key={version.id}
+                version={version}
+                decide={{
+                  workspaceId,
+                  projectId: asset.project.id,
+                  canDecide: asset.viewer.canDecide,
+                }}
+              />
             ))}
           </ol>
         )}
@@ -155,7 +168,13 @@ export function AssetDetailPage({
   )
 }
 
-function VersionRow({ version }: { version: LibraryVersionDetail }) {
+function VersionRow({
+  version,
+  decide,
+}: {
+  version: LibraryVersionDetail
+  decide?: { workspaceId: string; projectId: string; canDecide: boolean }
+}) {
   const statusChip = version.reviewStatus
     ? REVIEW_STATUS_META[version.reviewStatus]
     : { label: "Draft", badgeClass: "bg-muted text-muted-foreground" }
@@ -221,6 +240,15 @@ function VersionRow({ version }: { version: LibraryVersionDetail }) {
         <p className="mt-0.5 text-xs text-muted-foreground">
           Sent for review {formatRelativeTime(version.submittedAt)}
         </p>
+      )}
+
+      {decide && version.reviewStatus === "submitted" && (
+        <VersionDecideActions
+          workspaceId={decide.workspaceId}
+          projectId={decide.projectId}
+          versionId={version.id}
+          canDecide={decide.canDecide}
+        />
       )}
 
       {version.submitterNotes && (

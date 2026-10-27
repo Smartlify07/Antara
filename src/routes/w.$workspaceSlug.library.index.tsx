@@ -21,6 +21,7 @@ import {
 } from "@/components/library/folder-scope"
 import { LibraryFilters } from "@/components/library/library-filters"
 import type { LibraryFilterPatch } from "@/components/library/library-filters"
+import { LibraryResultCount } from "@/components/library/library-result-count"
 import { ProjectCoverArt } from "@/components/workspace/project-cover-art"
 import { libraryQuery } from "@/lib/queries/library"
 import { projectDeliverablesQuery } from "@/lib/queries/deliverables"
@@ -310,8 +311,14 @@ function LibraryPage() {
         facets={facets}
         projects={projects}
         deliverables={deliverables}
+        total={data?.total}
         onSearch={scheduleSearch}
         onPatch={patchFilters}
+      />
+
+      <LibraryResultCount
+        shown={data?.assets.length ?? 0}
+        total={data?.total ?? 0}
       />
 
       {error && (
