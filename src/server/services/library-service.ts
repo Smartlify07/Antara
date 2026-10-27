@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   ilike,
@@ -28,7 +29,8 @@ import {
   assetApprovalState,
   librarySearchPattern,
 } from "./library-scoping"
-import { requireWorkAccess } from "./work-access"
+import { getWorkAccess, requireWorkAccess } from "./work-access"
+import { canDecideVersion } from "./work-permissions"
 import type {
   LibraryApprovalState,
   LibraryFiltersInput,
@@ -111,6 +113,13 @@ export interface LibraryFacets {
 export interface LibraryListResult {
   assets: LibraryAssetSummary[]
   facets: LibraryFacets
+  /**
+   * How many assets the scope holds — the project when one is named, else
+   * the whole library — before any q / type / state filter. The search
+   * placeholder ("Search 1,248 assets…") and the match line's denominator
+   * both read it: the count is what makes search a place, not a filter.
+   */
+  total: number
 }
 
 /** One decision row from the append-only `approvals` history (FR-044). */
@@ -154,6 +163,10 @@ export interface LibraryAssetDetail {
   project: { id: string; title: string; slug: string }
   deliverable: { id: string; title: string } | null
   approvalState: LibraryApprovalState
+  /** Server-stamped: may this viewer record a decision on this asset's
+   *  project (the same fact `canDecideVersion` gives the cabinet)? The
+   *  page renders the decision buttons only when it says so. */
+  viewer: { canDecide: boolean }
   versions: LibraryVersionDetail[]
 }
 
@@ -283,6 +296,16 @@ export async function listLibraryAssets(
 
   const facets = await libraryFacetTypes(workspaceId, filters.projectId)
 
+  // The scope's size before any filter — one count, the same scoped join the
+  // list uses, so the denominator can never disagree with the wall. A count
+  // aggregate always answers with one row.
+  const totalRows = await db
+    .select({ value: count() })
+    .from(assets)
+    .innerJoin(projects, eq(assets.projectId, projects.id))
+    .where(scopedProjectWhere(workspaceId, filters.projectId))
+  const total = totalRows[0].value
+
   const pattern = librarySearchPattern(filters.q ?? "")
 
   const assetRows = await db
@@ -319,7 +342,7 @@ export async function listLibraryAssets(
     // so current work floats up without a version-level join.
     .orderBy(desc(assets.updatedAt), asc(assets.id))
 
-  if (assetRows.length === 0) return { assets: [], facets }
+  if (assetRows.length === 0) return { assets: [], facets, total }
 
   const assetIds = assetRows.map((row) => row.id)
 
@@ -390,6 +413,7 @@ export async function listLibraryAssets(
       }
     }),
     facets,
+    total,
   }
 }
 
@@ -458,6 +482,11 @@ export async function getLibraryAsset(
 
   if (rows.length === 0) return null
   const row = rows[0]
+
+  // The decision fact, stamped from the same permission lane the cabinet
+  // uses — the library is read-only, but the page may carry the buttons that
+  // call the version lane's decide function.
+  const access = await getWorkAccess(workspaceId, userId, row.projectId)
 
   const versionRows = await db
     .select({
@@ -555,6 +584,7 @@ export async function getLibraryAsset(
     approvalState: assetApprovalState(
       versionRows.map((version) => version.reviewStatus)
     ),
+    viewer: { canDecide: access ? canDecideVersion(access.facts) : false },
     versions,
   }
 }

@@ -30,6 +30,7 @@ export function LibraryFilters({
   facets,
   projects,
   deliverables,
+  total,
   onSearch,
   onPatch,
 }: {
@@ -45,6 +46,13 @@ export function LibraryFilters({
   projects: ProjectListItem[]
   /** The selected project's deliverables, empty until one is picked. */
   deliverables: { id: string; title: string }[]
+  /**
+   * How many assets the current scope holds — the search placeholder's
+   * number ("Search 1,248 assets…"). The count is what makes search feel
+   * like a place rather than a filter; absent (still loading) falls back to
+   * the generic placeholder.
+   */
+  total?: number
   /** Debounced upstream — the URL only moves when typing settles. */
   onSearch: (term: string) => void
   onPatch: (patch: LibraryFilterPatch) => void
@@ -103,7 +111,11 @@ export function LibraryFilters({
             setTerm(event.target.value)
             onSearch(event.target.value)
           }}
-          placeholder="Search files, types, tags…"
+          placeholder={
+            total !== undefined && total > 0
+              ? `Search ${total.toLocaleString("en-US")} assets…`
+              : "Search files, types, tags…"
+          }
           maxLength={120}
         />
       </div>

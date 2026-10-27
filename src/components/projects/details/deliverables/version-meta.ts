@@ -57,6 +57,10 @@ export const DECISION_META: Record<
   },
 }
 
+/** The keys of the decision map — the one union every decider surface uses.
+ *  Stays in lockstep with `decideVersionSchema`'s enum by construction. */
+export type DecisionKind = keyof typeof DECISION_META
+
 /** Filled dot for the borderless thread views — no chip box needed. */
 export const REVIEW_DOTS: Record<VersionReviewStatus, string> = {
   submitted: "bg-blue-500",

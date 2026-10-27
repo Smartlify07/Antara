@@ -33,8 +33,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
@@ -44,7 +42,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Chip, ChipOption } from "@/components/projects/chip"
 import { DateChip } from "@/components/projects/dates-chip"
 import { OwnerChip } from "@/components/projects/member-chip"
@@ -97,7 +94,9 @@ import {
   deliverableMoveTargets,
 } from "./deliverable-meta"
 import { DECISION_META, REVIEW_DOTS, REVIEW_STATUS_META } from "./version-meta"
+import type { DecisionKind } from "./version-meta"
 import { NewTaskDialog } from "./new-task-dialog"
+import { DecideDialog } from "./decide-dialog"
 import { VersionThread } from "./version-thread"
 import { VersionComposer } from "./version-composer"
 import {
@@ -107,8 +106,6 @@ import {
   ThreadLoading,
   ThreadRow,
 } from "./work-comments"
-
-type DecisionKind = "approved" | "rejected" | "changes_requested"
 
 /**
  * The meta files have no slot for a never-submitted version (its review
@@ -1898,49 +1895,3 @@ function NeutralAvatar({
   )
 }
 
-/** The decision dialog, ported from versions-section.tsx, logic identical. */
-function DecideDialog({
-  kind,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  kind: DecisionKind
-  busy: boolean
-  onClose: () => void
-  onConfirm: (comment: string) => void
-}) {
-  const [comment, setComment] = useState("")
-  const meta = DECISION_META[kind]
-
-  return (
-    <Dialog open onOpenChange={(next) => (next ? undefined : onClose())}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{meta.label}</DialogTitle>
-          <DialogDescription>{meta.description}</DialogDescription>
-        </DialogHeader>
-        <Textarea
-          aria-label="Decision note (optional)"
-          rows={3}
-          placeholder={
-            kind === "changes_requested"
-              ? "What should change? (optional)"
-              : "Add a note with this decision (optional)"
-          }
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
-          maxLength={2000}
-        />
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={busy} onClick={() => onConfirm(comment.trim())}>
-            {meta.label}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}

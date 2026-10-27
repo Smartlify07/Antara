@@ -166,6 +166,7 @@ function NavRow({ item }: { item: NavEntry }) {
           <Link to={item.url} {...activeProps}>
             {icon}
             <span>{item.title}</span>
+            {item.badge && <NavBadge label={item.badge} />}
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
