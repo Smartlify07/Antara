@@ -5,6 +5,7 @@ import { TanStackDevtools } from "@tanstack/react-devtools"
 
 import appCss from "../styles.css?url"
 import { NotFoundPage } from "@/components/not-found"
+import { PostHogIdentify } from "@/components/posthog-identify"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { queryClient } from "@/lib/query-client"
 
@@ -41,6 +42,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <QueryClientProvider client={queryClient}>
+          <PostHogIdentify />
           <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
         </QueryClientProvider>
         <TanStackDevtools

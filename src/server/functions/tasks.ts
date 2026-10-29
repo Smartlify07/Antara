@@ -14,6 +14,7 @@ import {
 import * as taskService from "@/server/services/task-service"
 import * as workspaceService from "@/server/services/workspace-service"
 import { requireWorkspaceAccess } from "@/server/services/access-service"
+import { captureServerEvent } from "@/server/services/analytics"
 
 /**
  * Thin HTTP boundary for tasks (FR-016, FR-052). The badge query is the slug
@@ -51,7 +52,17 @@ export const createTaskFn = createServerFn({ method: "POST" })
   .validator(createTaskSchema)
   .handler(async ({ data }) => {
     const userId = await resolveWorkspaceId(data.workspaceId)
-    return taskService.createTask(data.workspaceId, userId, data)
+    const task = await taskService.createTask(data.workspaceId, userId, data)
+    captureServerEvent({
+      distinctId: userId,
+      event: "task_created",
+      properties: {
+        workspaceId: data.workspaceId,
+        projectId: data.projectId,
+        title: data.title,
+      },
+    })
+    return task
   })
 
 export const moveTaskStatusFn = createServerFn({ method: "POST" })

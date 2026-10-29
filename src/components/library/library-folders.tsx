@@ -90,6 +90,9 @@ const BOOK_INK = "oklch(0.97 0.005 260)"
 /** The same ink at rest — for meta lines and quiet corners of a book face. */
 const BOOK_INK_SOFT = "oklch(0.90 0.01 260)"
 
+/** A dark scrim behind the tap/click hint pill, readable on any book colour. */
+const BOOK_SCRIM = "oklch(0.15 0.01 260 / 0.55)"
+
 /** Per-version review dots, mirroring the version lane's chip families. */
 const REVIEW_DOTS: Record<
   VersionReviewStatus,
@@ -369,7 +372,7 @@ export function AssetBook({
             : `Open the details for ${asset.filename}`
         }
         className={cn(
-          "block w-full rounded-xl text-left transition-transform duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+          "group block w-full rounded-xl text-left transition-transform duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
           !expanded && "hover:-translate-y-0.5"
         )}
         style={{ perspective: 1100 }}
@@ -431,6 +434,24 @@ export function AssetBook({
                 <span className="truncate">{asset.assetType ?? "File"}</span>
               </p>
             </div>
+          </div>
+
+          {/* Tap/click affordance: mobile has no hover, so the hint is always
+              shown; desktop reveals "Click to open" on hover. Both sit on the
+              cover, so the card's grid cell never changes size. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          >
+            <span
+              className="sm:hidden rounded-full px-2.5 py-1 text-[11px] font-medium"
+              style={{ color: BOOK_INK, backgroundColor: BOOK_SCRIM }}
+            >
+              Tap to open
+            </span>
+            <span className="hidden rounded-full bg-background/90 px-3 py-1 text-xs font-medium text-foreground opacity-0 shadow-sm transition-opacity duration-200 group-hover:opacity-100 sm:inline-flex">
+              Click to open
+            </span>
           </div>
         </motion.div>
       </button>

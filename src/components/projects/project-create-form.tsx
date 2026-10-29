@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { DatesChip } from "@/components/projects/dates-chip"
 import { LeadChip, MembersChip } from "@/components/projects/member-chip"
 import { StatusChip } from "@/components/projects/status-chip"
-import { TagsChip, type SelectedTag } from "@/components/projects/tags-chip"
+import { TagsChip } from "@/components/projects/tags-chip"
+import type { SelectedTag } from "@/components/projects/tags-chip"
 import { createProjectFn } from "@/server/functions/projects"
 import { navigateWithTransition } from "@/lib/navigate-with-transition"
 import {
@@ -190,7 +191,7 @@ export function ProjectCreateForm({
         placeholder="Add a description…"
         aria-label="Project description"
         maxLength={2000}
-        className="min-h-[450px] w-full resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+        className="min-h-[120px] w-full resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
       />
 
       {error && (

@@ -82,17 +82,27 @@ function LibraryPage() {
 
   const seedClient = useQueryClient()
 
-  const { data, isPending, error } = useQuery({
-    ...libraryQuery(workspaceId, {
+  const payload = useMemo(
+    () => ({
       q: filters.q,
       assetType: filters.type,
       projectId: targetProject,
       deliverableId:
-        filters.project && filters.deliverable
-          ? filters.deliverable
-          : undefined,
+        filters.project && filters.deliverable ? filters.deliverable : undefined,
       approvalState: filters.state,
     }),
+    [
+      filters.q,
+      filters.type,
+      targetProject,
+      filters.project,
+      filters.deliverable,
+      filters.state,
+    ]
+  )
+
+  const { data, isPending, error } = useQuery({
+    ...libraryQuery(workspaceId, payload),
     // A project target moves the key; the previous key's rows — the ones
     // the wall was showing, or the folder it came from — paint the next
     // shelf immediately (a subset of what is already on screen), so the

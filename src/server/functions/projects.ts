@@ -17,6 +17,7 @@ import {
 } from "@/lib/project-schemas"
 import * as projectService from "@/server/services/project-service"
 import * as projectUpdateService from "@/server/services/project-update-service"
+import { captureServerEvent } from "@/server/services/analytics"
 
 /**
  * Thin HTTP boundary for project reads. Session handling and input
@@ -106,7 +107,7 @@ export const createProjectFn = createServerFn({ method: "POST" })
     const slug = await resolveProjectSlug(data.workspaceId, data.title)
 
     try {
-      return await projectService.createProject(data.workspaceId, slug, {
+      const project = await projectService.createProject(data.workspaceId, slug, {
         title: data.title,
         description: data.description ?? null,
         status: data.status,
@@ -118,6 +119,16 @@ export const createProjectFn = createServerFn({ method: "POST" })
         newTagLabels: data.newTagLabels,
         ownerUserId: userId,
       })
+      captureServerEvent({
+        distinctId: userId,
+        event: "project_created",
+        properties: {
+          workspaceId: data.workspaceId,
+          title: data.title,
+          slug,
+        },
+      })
+      return project
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new Error("A project with that handle already exists.")

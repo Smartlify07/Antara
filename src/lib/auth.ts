@@ -104,6 +104,39 @@ export const auth = betterAuth({
         before: async (user) => ({
           data: { ...user, email: normalizeEmail(user.email) },
         }),
+        after: async (user) => {
+          // Imported lazily on purpose — see the note in `afterEmailVerification`.
+          // A static import here would pull posthog-node into the client graph.
+          try {
+            const { captureServerEvent } = await import(
+              "@/server/services/analytics"
+            )
+            captureServerEvent({
+              distinctId: user.id,
+              event: "user_signed_up",
+              properties: { email: user.email, name: user.name },
+            })
+          } catch (error) {
+            console.error("[analytics] signup event failed:", error)
+          }
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session) => {
+          try {
+            const { captureServerEvent } = await import(
+              "@/server/services/analytics"
+            )
+            captureServerEvent({
+              distinctId: session.userId,
+              event: "user_signed_in",
+            })
+          } catch (error) {
+            console.error("[analytics] sign-in event failed:", error)
+          }
+        },
       },
     },
   },

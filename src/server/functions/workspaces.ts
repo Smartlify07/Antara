@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { workspaceSchema } from "@/lib/workspace-schemas"
 import { pendingInvitesFn } from "@/server/functions/invites"
 import * as service from "@/server/services/workspace-service"
+import { captureServerEvent } from "@/server/services/analytics"
 
 /**
  * Thin HTTP boundary for workspaces. Session handling and input
@@ -40,12 +41,18 @@ export const createWorkspaceFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const userId = await requireUserId()
     try {
-      return await service.createWorkspace({
+      const workspace = await service.createWorkspace({
         name: data.name,
         slug: data.slug,
         avatarUrl: data.avatarUrl ?? null,
         ownerId: userId,
       })
+      captureServerEvent({
+        distinctId: userId,
+        event: "workspace_created",
+        properties: { name: data.name, slug: data.slug },
+      })
+      return workspace
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new Error("That handle is already taken. Try another.")
