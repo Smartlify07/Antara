@@ -10,6 +10,7 @@ import {
   projectMembers,
   projects,
   projectUpdates,
+  pushSubscriptions,
   requests,
   roles,
   session,
@@ -38,6 +39,7 @@ export const userRelations = relations(user, ({ many }) => ({
   requests: many(requests),
   deliverablesCreated: many(deliverables),
   approvals: many(approvals),
+  pushSubscriptions: many(pushSubscriptions),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -290,3 +292,13 @@ export const assetVersionsRelations = relations(assetVersions, ({ one }) => ({
     references: [user.id],
   }),
 }))
+
+export const pushSubscriptionsRelations = relations(
+  pushSubscriptions,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [pushSubscriptions.userId],
+      references: [user.id],
+    }),
+  })
+)

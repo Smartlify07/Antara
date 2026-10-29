@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
-import { signupSchema, type SignupInput } from "@/lib/auth-schemas"
+import { signupSchema } from "@/lib/auth-schemas"
+import type { SignupInput } from "@/lib/auth-schemas"
 import { rememberPendingVerification } from "@/lib/pending-verification"
 
 /**
@@ -182,6 +183,7 @@ export function SignupForm({ callbackURL }: { callbackURL?: string | null }) {
             <Field>
               <GoogleButton
                 label="Continue with Google"
+                callbackURL={callbackURL}
                 onError={(message) => setServerError(message)}
               />
               <FieldDescription className="px-6 text-center">

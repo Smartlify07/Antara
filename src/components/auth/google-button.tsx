@@ -27,9 +27,12 @@ function GoogleIcon() {
 
 export function GoogleButton({
   label,
+  callbackURL = "/dashboard",
   onError,
 }: {
   label: string
+  /** Post-auth landing page, mirroring email sign-in's callbackURL. */
+  callbackURL?: string | null
   onError: (message: string) => void
 }) {
   const [pending, setPending] = useState(false)
@@ -38,7 +41,7 @@ export function GoogleButton({
     setPending(true)
     const { error } = await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/dashboard",
+      callbackURL: callbackURL ?? "/dashboard",
     })
     if (error) {
       setPending(false)

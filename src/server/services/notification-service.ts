@@ -13,6 +13,7 @@ import type {
   NotificationType,
 } from "./notification-events"
 import { describeNotification, resolveRecipients } from "./notification-events"
+import { sendPushForEvent } from "./push-service"
 
 // The payload boundary: a client that reads rows reads the copy parts through
 // here too — the events module stays the source of truth.
@@ -61,6 +62,18 @@ async function emitEvent(event: EmitEvent): Promise<void> {
         actorId: event.actorId,
       }))
     )
+
+    // Fire-and-forget: browser push is a best-effort fan-out, and a failure
+    // here (or an unconfigured VAPID keypair) must never fail the triggering
+    // action. The sender swallows its own errors.
+    void sendPushForEvent({
+      workspaceId: event.workspaceId,
+      actorId: event.actorId,
+      type: event.type,
+      subjectType: event.subjectType,
+      subjectId: event.subjectId,
+      recipientIds: recipients,
+    })
   } catch (error) {
     // Deliberately one log line, server-side only (handoff §6): the trigger
     // action has already succeeded for the user, and the notification for a

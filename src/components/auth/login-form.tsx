@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { authClient } from "@/lib/auth-client"
-import { loginSchema, type LoginInput } from "@/lib/auth-schemas"
+import { loginSchema } from "@/lib/auth-schemas"
+import type { LoginInput } from "@/lib/auth-schemas"
 
-export function LoginForm() {
+export function LoginForm({ callbackURL }: { callbackURL?: string | null }) {
   const [serverError, setServerError] = useState<string | null>(null)
   // Set only when sign-in fails because the address is unverified. It gates
   // the inline resend: re-sending is only useful once we know the password
@@ -129,6 +130,7 @@ export function LoginForm() {
         <Field>
           <GoogleButton
             label="Continue with Google"
+            callbackURL={callbackURL}
             onError={(message) => setServerError(message)}
           />
           <FieldDescription className="px-6 text-center">

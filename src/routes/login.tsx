@@ -52,7 +52,7 @@ function LoginPage() {
 
   return (
     <AuthLayout>
-      <LoginForm />
+      <LoginForm callbackURL={target} />
     </AuthLayout>
   )
 }

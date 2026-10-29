@@ -12,6 +12,7 @@ export default defineConfig({
     "./src/db/schema/approvals.ts",
     "./src/db/schema/comments.ts",
     "./src/db/schema/notifications.ts",
+    "./src/db/schema/push-subscriptions.ts",
 
     "./src/db/schema/requests.ts",
     "./src/db/enums.ts",
