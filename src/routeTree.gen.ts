@@ -17,7 +17,6 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as WRouteImport } from './routes/w'
-import { Route as DevDeliverablesRouteImport } from './routes/dev.deliverables'
 import { Route as DevSidebarIconsRouteImport } from './routes/dev.sidebar-icons'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as InvitePendingRouteImport } from './routes/invite.pending'
@@ -78,11 +77,6 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
 const WRoute = WRouteImport.update({
   id: '/w',
   path: '/w',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DevDeliverablesRoute = DevDeliverablesRouteImport.update({
-  id: '/dev/deliverables',
-  path: '/dev/deliverables',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevSidebarIconsRoute = DevSidebarIconsRouteImport.update({
@@ -209,7 +203,6 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/w': typeof WRouteWithChildren
-  '/dev/deliverables': typeof DevDeliverablesRoute
   '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
@@ -241,7 +234,6 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/w': typeof WRouteWithChildren
-  '/dev/deliverables': typeof DevDeliverablesRoute
   '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
@@ -270,7 +262,6 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/verify-email': typeof VerifyEmailRoute
   '/w': typeof WRouteWithChildren
-  '/dev/deliverables': typeof DevDeliverablesRoute
   '/dev/sidebar-icons': typeof DevSidebarIconsRoute
   '/invite/$token': typeof InviteTokenRoute
   '/invite/pending': typeof InvitePendingRoute
@@ -304,7 +295,6 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/w'
-    | '/dev/deliverables'
     | '/dev/sidebar-icons'
     | '/invite/$token'
     | '/invite/pending'
@@ -336,7 +326,6 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/w'
-    | '/dev/deliverables'
     | '/dev/sidebar-icons'
     | '/invite/$token'
     | '/invite/pending'
@@ -364,7 +353,6 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/w'
-    | '/dev/deliverables'
     | '/dev/sidebar-icons'
     | '/invite/$token'
     | '/invite/pending'
@@ -397,7 +385,6 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   WRoute: typeof WRouteWithChildren
-  DevDeliverablesRoute: typeof DevDeliverablesRoute
   DevSidebarIconsRoute: typeof DevSidebarIconsRoute
   InviteTokenRoute: typeof InviteTokenRoute
   InvitePendingRoute: typeof InvitePendingRoute
@@ -461,13 +448,6 @@ declare module '@tanstack/react-router' {
       path: '/w'
       fullPath: '/w'
       preLoaderRoute: typeof WRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dev/deliverables': {
-      id: '/dev/deliverables'
-      path: '/dev/deliverables'
-      fullPath: '/dev/deliverables'
-      preLoaderRoute: typeof DevDeliverablesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/sidebar-icons': {
@@ -729,7 +709,6 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   WRoute: WRouteWithChildren,
-  DevDeliverablesRoute: DevDeliverablesRoute,
   DevSidebarIconsRoute: DevSidebarIconsRoute,
   InviteTokenRoute: InviteTokenRoute,
   InvitePendingRoute: InvitePendingRoute,
