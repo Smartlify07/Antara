@@ -223,17 +223,23 @@ function NotificationsInbox({
   function openNotification(item: NotificationItem) {
     if (!item.readAt) markRead.mutate(item.id)
     onClose()
-    if (item.subjectType === "task") {
-      // A task has no page of its own; "My tasks" with the task in view is
-      // the concrete subject surface (it only ever receives assignment
-      // notifications, so the task is the viewer's own work).
+
+    // An assigned task's action point is its own page (title, meta, and the
+    // conversation where the assignee acts) — straight there, not a list.
+    if (item.subjectType === "task" && item.projectSlug) {
       void navigate({
-        to: "/w/$workspaceSlug/my-tasks",
-        params: { workspaceSlug },
-        search: { task: item.subjectId },
+        to: "/w/$workspaceSlug/projects/$projectSlug/tasks/$taskId",
+        params: {
+          workspaceSlug,
+          projectSlug: item.projectSlug,
+          taskId: item.subjectId,
+        },
       })
       return
     }
+
+    // Added to a project — or any subject whose project still exists — the
+    // project page is the concrete destination.
     if (item.projectSlug) {
       void navigate({
         to: "/w/$workspaceSlug/projects/$projectSlug",

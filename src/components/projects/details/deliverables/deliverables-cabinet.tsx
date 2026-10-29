@@ -1504,7 +1504,7 @@ function LevelTwo({
                   href={version.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="underline hover:text-foreground"
+                  className="text-foreground underline"
                 >
                   open file
                 </a>
