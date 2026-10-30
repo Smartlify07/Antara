@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { serializeSubscription } from "@/lib/push-client"
 import { urlBase64ToUint8Array } from "@/lib/push-encoding"
 import {
   removePushSubscriptionFn,
@@ -10,16 +11,22 @@ import {
  * registration, permission, and subscription — behind a small state machine
  * the settings screen renders as a single switch.
  *
- * The service worker is registered once per mount and its subscription is read
- * back to decide the initial state, so the toggle reflects reality (not just
- * what the user clicked last). Persisting the subscription is a server
- * round-trip (`savePushSubscriptionFn`), but the state flips optimistically and
- * the write is fire-and-forget — a failed write leaves the browser subscribed
- * but the server unaware, which only means that one browser stops getting
- * pushes until the toggle is cycled again.
+ * Two rules keep the toggle honest:
+ *
+ * - The switch only reads "on" once the server has the subscription. A local
+ *   subscription the server never stored is a browser that will silently
+ *   receive nothing, so a failed write turns the switch back off and explains
+ *   itself instead of pretending.
+ * - Mount re-saves an existing subscription, which repairs a browser whose row
+ *   was lost (a write that failed, or a row pruned after a 410).
  */
 
 const PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
+
+const SAVE_FAILED =
+  "Couldn't save this browser for notifications. Please try again."
+const REMOVE_FAILED =
+  "Couldn't turn notifications off in this browser. Please try again."
 
 export type PushStatus =
   "unsupported" | "loading" | "denied" | "subscribed" | "unsubscribed"
@@ -30,6 +37,8 @@ export interface UsePush {
   supported: boolean
   denied: boolean
   subscribed: boolean
+  /** Last user-facing failure; null when the toggle is in a clean state. */
+  error: string | null
   enable: () => Promise<void>
   disable: () => Promise<void>
 }
@@ -50,6 +59,7 @@ export function usePush(): UsePush {
   const [status, setStatus] = useState<PushStatus>(() =>
     isSupported() ? "loading" : "unsupported"
   )
+  const [error, setError] = useState<string | null>(null)
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null)
 
   const register =
@@ -62,6 +72,12 @@ export function usePush(): UsePush {
       }
     }, [])
 
+  const persist = useCallback(async (subscription: PushSubscription) => {
+    const serialized = serializeSubscription(subscription)
+    if (!serialized) throw new Error(SAVE_FAILED)
+    await savePushSubscriptionFn({ data: serialized })
+  }, [])
+
   useEffect(() => {
     if (!isSupported()) return
     let cancelled = false
@@ -73,17 +89,33 @@ export function usePush(): UsePush {
       registrationRef.current = registration
       const subscription = await registration.pushManager.getSubscription()
       if (cancelled) return
-      if (subscription) setStatus("subscribed")
-      else if (Notification.permission === "denied") setStatus("denied")
+      if (subscription) {
+        setStatus("subscribed")
+        try {
+          await persist(subscription)
+        } catch {
+          setError(SAVE_FAILED)
+        }
+      } else if (Notification.permission === "denied") setStatus("denied")
       else setStatus("unsubscribed")
     })
     return () => {
       cancelled = true
     }
-  }, [register])
+  }, [persist, register])
 
   const enable = useCallback(async () => {
     if (!isSupported()) return
+    setError(null)
+
+    // Ask before anything else: Firefox drops the prompt once the click's
+    // transient activation has been spent on an await.
+    const permission = await Notification.requestPermission()
+    if (permission !== "granted") {
+      setStatus("denied")
+      return
+    }
+
     const registration = registrationRef.current ?? (await register())
     if (!registration) {
       setStatus("unsupported")
@@ -91,44 +123,47 @@ export function usePush(): UsePush {
     }
     registrationRef.current = registration
 
-    const permission = await Notification.requestPermission()
-    if (permission !== "granted") {
-      setStatus("denied")
-      return
+    try {
+      const existing = await registration.pushManager.getSubscription()
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(PUBLIC_KEY),
+        }))
+      await persist(subscription)
+      setStatus("subscribed")
+    } catch {
+      // Never leave the browser subscribed to a feed the server can't address.
+      setStatus("unsubscribed")
+      setError(SAVE_FAILED)
+      try {
+        ;(await registration.pushManager.getSubscription())?.unsubscribe()
+      } catch {
+        // Best effort — the switch is already off and the reason is shown.
+      }
     }
-
-    const applicationServerKey = urlBase64ToUint8Array(PUBLIC_KEY)
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey,
-    })
-
-    const json = subscription.toJSON()
-    if (json.endpoint && json.keys?.p256dh && json.keys.auth) {
-      void savePushSubscriptionFn({
-        data: {
-          endpoint: json.endpoint,
-          keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-        },
-      })
-    }
-    setStatus("subscribed")
-  }, [register])
+  }, [persist, register])
 
   const disable = useCallback(async () => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return
+    setError(null)
     const registration = registrationRef.current ?? (await register())
     if (!registration) return
     registrationRef.current = registration
 
-    const subscription = await registration.pushManager.getSubscription()
-    if (subscription) {
-      await subscription.unsubscribe()
-      void removePushSubscriptionFn({
-        data: { endpoint: subscription.endpoint },
-      })
+    try {
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        await subscription.unsubscribe()
+        await removePushSubscriptionFn({
+          data: { endpoint: subscription.endpoint },
+        })
+      }
+      setStatus("unsubscribed")
+    } catch {
+      setError(REMOVE_FAILED)
     }
-    setStatus("unsubscribed")
   }, [register])
 
   return {
@@ -136,6 +171,7 @@ export function usePush(): UsePush {
     supported: isSupported(),
     denied: status === "denied",
     subscribed: status === "subscribed",
+    error,
     enable,
     disable,
   }

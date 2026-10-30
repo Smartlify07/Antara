@@ -52,6 +52,16 @@ export function NotificationsSettings() {
           />
         </div>
 
+        {push.error && (
+          <p
+            role="alert"
+            className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <ShieldAlertIcon className="mt-0.5 size-4 shrink-0" />
+            {push.error}
+          </p>
+        )}
+
         {push.denied && (
           <p
             role="status"

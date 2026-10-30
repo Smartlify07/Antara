@@ -13,7 +13,7 @@ import type {
   NotificationType,
 } from "./notification-events"
 import { describeNotification, resolveRecipients } from "./notification-events"
-import { sendPushForEvent } from "./push-service"
+import { queuePush } from "./push-service"
 
 // The payload boundary: a client that reads rows reads the copy parts through
 // here too — the events module stays the source of truth.
@@ -63,10 +63,11 @@ async function emitEvent(event: EmitEvent): Promise<void> {
       }))
     )
 
-    // Fire-and-forget: browser push is a best-effort fan-out, and a failure
-    // here (or an unconfigured VAPID keypair) must never fail the triggering
-    // action. The sender swallows its own errors.
-    void sendPushForEvent({
+    // Best-effort fan-out, but kept alive past the response: the emitter is
+    // called fire-and-forget, and a bare `void` here is frozen by the
+    // serverless runtime before web-push finishes. `queuePush` registers the
+    // work with the request context so it completes; failures stay swallowed.
+    queuePush({
       workspaceId: event.workspaceId,
       actorId: event.actorId,
       type: event.type,

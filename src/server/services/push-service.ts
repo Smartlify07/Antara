@@ -1,6 +1,6 @@
+import { waitUntil } from "@vercel/functions"
 import { and, eq, inArray } from "drizzle-orm"
-import webPush from "web-push"
-const { sendNotification, setVapidDetails } = webPush
+import { sendNotification, setVapidDetails } from "web-push"
 import { db } from "@/db"
 import { assets, assetVersions } from "@/db/schema/assets"
 import { deliverables } from "@/db/schema/deliverables"
@@ -41,9 +41,20 @@ function isConfigured(): boolean {
 }
 
 let vapidConfigured = false
+let warnedUnconfigured = false
 
 function ensureVapid(): boolean {
-  if (!isConfigured()) return false
+  if (!isConfigured()) {
+    // A config gap is worth exactly one line per process: silently doing
+    // nothing is how this lane stayed broken without a trace.
+    if (!warnedUnconfigured) {
+      console.warn(
+        "[push] VAPID keys are not configured — browser push is disabled"
+      )
+      warnedUnconfigured = true
+    }
+    return false
+  }
   if (!vapidConfigured) {
     setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY!, VAPID_PRIVATE_KEY!)
     vapidConfigured = true
@@ -231,13 +242,12 @@ export interface PushEvent {
  */
 export async function sendPushForEvent(event: PushEvent): Promise<void> {
   if (event.recipientIds.length === 0) return
-  if (!ensureVapid()) {
-    // Silent no-op: without keys there is nothing to sign a payload with, and
-    // this is a config gap, not a per-event error worth logging every time.
-    return
-  }
 
   try {
+    // Inside the try on purpose: `setVapidDetails` throws on a malformed
+    // keypair, and that must degrade to one log line, not a rejected promise.
+    if (!ensureVapid()) return
+
     const resolved = await resolveEvent(event)
     if (!resolved.workspaceSlug) return
 
@@ -260,11 +270,39 @@ export async function sendPushForEvent(event: PushEvent): Promise<void> {
       .from(pushSubscriptions)
       .where(inArray(pushSubscriptions.userId, event.recipientIds))
 
-    await Promise.allSettled(
+    if (subscriptions.length === 0) return
+
+    const results = await Promise.allSettled(
       subscriptions.map((subscription) => sendOne(subscription, payload))
+    )
+    const delivered = results.filter(
+      (result) => result.status === "fulfilled" && result.value
+    ).length
+
+    // One line per event that had a browser to reach, so a future "nothing
+    // arrives" report has an answer in the logs instead of a mystery.
+    console.info(
+      `[push] ${event.type}: delivered ${delivered}/${subscriptions.length}`
     )
   } catch (error) {
     console.error("[push] event could not be delivered:", error)
+  }
+}
+
+/**
+ * Hands an event's fan-out to the runtime and returns immediately. On Vercel
+ * the request is over by the time this resolves — a bare `void` promise is
+ * frozen mid-flight, which is exactly how the first version silently dropped
+ * every push. `waitUntil` keeps the invocation alive until delivery finishes;
+ * elsewhere (local dev, tests) there is no request context and a plain
+ * fire-and-forget is correct.
+ */
+export function queuePush(event: PushEvent): void {
+  const task = sendPushForEvent(event)
+  try {
+    waitUntil(task)
+  } catch {
+    void task
   }
 }
 
@@ -275,7 +313,7 @@ async function sendOne(
     auth: string
   },
   payload: PushPayload
-): Promise<void> {
+): Promise<boolean> {
   try {
     await sendNotification(
       {
@@ -284,6 +322,7 @@ async function sendOne(
       },
       JSON.stringify(payload)
     )
+    return true
   } catch (error) {
     const statusCode = (error as { statusCode?: number }).statusCode
     if (statusCode === 404 || statusCode === 410) {
@@ -293,11 +332,12 @@ async function sendOne(
       await db
         .delete(pushSubscriptions)
         .where(eq(pushSubscriptions.endpoint, subscription.endpoint))
-      return
+      return false
     }
     console.error(
       `[push] send failed (${statusCode ?? "unknown"}) to ${subscription.endpoint}:`,
       error instanceof Error ? error.message : error
     )
+    return false
   }
 }
