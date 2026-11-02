@@ -56,9 +56,11 @@ function isSupported(): boolean {
 }
 
 export function usePush(): UsePush {
-  const [status, setStatus] = useState<PushStatus>(() =>
-    isSupported() ? "loading" : "unsupported"
-  )
+  // Always start in `loading`, never `isSupported() ? … : "unsupported"`: the
+  // server has no `navigator`, so the two sides would disagree on the first
+  // paint and React reports a hydration mismatch. The mount effect below is
+  // the only place the real capability is decided.
+  const [status, setStatus] = useState<PushStatus>("loading")
   const [error, setError] = useState<string | null>(null)
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null)
 
@@ -79,7 +81,10 @@ export function usePush(): UsePush {
   }, [])
 
   useEffect(() => {
-    if (!isSupported()) return
+    if (!isSupported()) {
+      setStatus("unsupported")
+      return
+    }
     let cancelled = false
     void register().then(async (registration) => {
       if (!registration) {
@@ -168,7 +173,10 @@ export function usePush(): UsePush {
 
   return {
     status,
-    supported: isSupported(),
+    // Derived from `status` rather than recomputed: a direct `isSupported()`
+    // call would be `false` on the server and `true` on the client during the
+    // same render pass, which is what broke hydration.
+    supported: status !== "unsupported",
     denied: status === "denied",
     subscribed: status === "subscribed",
     error,
