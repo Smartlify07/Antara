@@ -41,13 +41,6 @@ function priorityLabel(priority: TaskPriority): string {
 }
 
 /** Local-calendar date string the wire schema expects (yyyy-mm-dd). */
-export function toDateString(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
 export function CategoryChip({
   options,
   value,

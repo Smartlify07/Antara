@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router"
-import { useState } from "react"
 import type { ReactNode } from "react"
 import { AnimateIcon } from "@animate-ui/react/icons"
 import {
@@ -19,6 +18,7 @@ import {
 } from "@/components/ui/sidebar"
 import { ChevronRightIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useRowActive } from "@/hooks/use-row-active"
 
 export interface NavSubEntry {
   title: string
@@ -76,18 +76,6 @@ function NavIcon({
   )
 }
 
-function useRowActive() {
-  const [active, setActive] = useState(false)
-  return {
-    active,
-    activeProps: {
-      onMouseEnter: () => setActive(true),
-      onMouseLeave: () => setActive(false),
-      onFocus: () => setActive(true),
-      onBlur: () => setActive(false),
-    },
-  }
-}
 
 export function NavMain({
   label,

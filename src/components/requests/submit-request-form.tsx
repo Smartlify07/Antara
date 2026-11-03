@@ -18,8 +18,8 @@ import {
   DeadlineChip,
   PriorityChip,
   ReferenceLinksChip,
-  toDateString,
 } from "@/components/requests/request-form-chips"
+import { toIsoDay } from "@/lib/time"
 import { requestCategoriesQuery } from "@/lib/queries/requests"
 import { submitRequestFn } from "@/server/functions/requests"
 import { navigateWithTransition } from "@/lib/navigate-with-transition"
@@ -92,7 +92,7 @@ export function SubmitRequestForm({
           brief: brief.trim(),
           category: category?.trim() || undefined,
           priority: priority ?? undefined,
-          desiredDeadline: deadline ? toDateString(deadline) : undefined,
+          desiredDeadline: deadline ? toIsoDay(deadline) : undefined,
           referenceLinks: links.length ? links : undefined,
         },
       })
