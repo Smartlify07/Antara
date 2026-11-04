@@ -73,12 +73,26 @@ export function ReviewRow({
             Request changes
           </Button>
           <Button asChild size="sm" variant="ghost">
-            <Link
-              to="/w/$workspaceSlug/projects/$projectSlug"
-              params={{ workspaceSlug, projectSlug: row.projectSlug }}
-            >
-              Open project
-            </Link>
+            {row.deliverableId ? (
+              <Link
+                to="/w/$workspaceSlug/projects/$projectSlug"
+                params={{ workspaceSlug, projectSlug: row.projectSlug }}
+                search={{
+                  tab: "work",
+                  deliverable: row.deliverableId,
+                  version: row.versionId,
+                }}
+              >
+                Open version
+              </Link>
+            ) : (
+              <Link
+                to="/w/$workspaceSlug/projects/$projectSlug"
+                params={{ workspaceSlug, projectSlug: row.projectSlug }}
+              >
+                Open project
+              </Link>
+            )}
           </Button>
         </div>
       </div>

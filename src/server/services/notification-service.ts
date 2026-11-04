@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm"
+import { and, count, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm"
 import { db } from "@/db"
 import { user } from "@/db/schema/auth"
 import { assets, assetVersions } from "@/db/schema/assets"
@@ -7,6 +7,10 @@ import { notifications } from "@/db/schema/notifications"
 import { projectMembers, projects } from "@/db/schema/projects"
 import { tasks } from "@/db/schema/tasks"
 import { roles, team, workspaces } from "@/db/schema/workspaces"
+import {
+  encodeNotificationCursor,
+  parseNotificationCursor,
+} from "@/lib/notification-cursor"
 import type {
   NotificationCopyPart,
   NotificationSubjectType,
@@ -33,8 +37,8 @@ export type { NotificationCopyPart } from "./notification-events"
  * workspace it was rendered in.
  */
 
-/** The freshest rows the inbox shows; enough for a bell, no pagination yet. */
-const INBOX_LIMIT = 25
+/** One page of the inbox — enough rows to fill a screen, then a cursor. */
+export const INBOX_PAGE_SIZE = 20
 
 interface EmitEvent {
   workspaceId: string
@@ -372,28 +376,48 @@ export interface NotificationItem {
   actor: NotificationActor
   /** The subject's project, when a concrete project page exists for it. */
   projectSlug: string | null
+  /**
+   * The deliverable a version or deliverable subject belongs to. Deep links
+   * use it to open the Work tab's cabinet at the right level.
+   */
+  deliverableId: string | null
   /** Task title / filename / project title the copy points at. */
   subjectLabel: string | null
   readAt: Date | null
   createdAt: Date
 }
 
+/** One page of rows plus the opaque cursor that reads the next page. */
+export interface NotificationPage {
+  items: NotificationItem[]
+  /** Null when this page is the end of the list. */
+  nextCursor: string | null
+}
+
 interface SubjectRow {
   label: string
   projectSlug: string | null
+  deliverableId: string | null
 }
 
 /**
- * The freshest inbox rows for one user inside one workspace. Subjects are
- * resolved polymorphically after the row fetch — one bounded lookup per
- * subject type, so the list stays four cheap `IN` queries however mixed the
- * events are. Gone subjects (a trashed project, a deleted task) degrade to
- * the neutral copy, not an error.
+ * One page of the viewer's inbox inside one workspace, newest first.
+ * Subjects are resolved polymorphically after the row fetch — one bounded
+ * lookup per subject type, so the page stays four cheap `IN` queries however
+ * mixed the events are. Gone subjects (a trashed project, a deleted task)
+ * degrade to the neutral copy, not an error.
+ *
+ * Paging is keyset on `(createdAt, id)` — the same pair the ORDER BY uses, so
+ * a notification arriving between two page reads cannot duplicate or skip a
+ * row the way an OFFSET would.
  */
 export async function listNotifications(
   workspaceId: string,
-  userId: string
-): Promise<NotificationItem[]> {
+  userId: string,
+  cursor?: string | null
+): Promise<NotificationPage> {
+  const after = parseNotificationCursor(cursor)
+
   const rows = await db
     .select({
       id: notifications.id,
@@ -412,16 +436,31 @@ export async function listNotifications(
     .where(
       and(
         eq(notifications.workspaceId, workspaceId),
-        eq(notifications.userId, userId)
+        eq(notifications.userId, userId),
+        after
+          ? or(
+              lt(notifications.createdAt, after.createdAt),
+              and(
+                eq(notifications.createdAt, after.createdAt),
+                lt(notifications.id, after.id)
+              )
+            )
+          : undefined
       )
     )
     .orderBy(desc(notifications.createdAt), desc(notifications.id))
-    .limit(INBOX_LIMIT)
+    // One extra row answers "is there another page?" without a COUNT.
+    .limit(INBOX_PAGE_SIZE + 1)
 
-  if (rows.length === 0) return []
+  const hasMore = rows.length > INBOX_PAGE_SIZE
+  const pageRows = hasMore ? rows.slice(0, INBOX_PAGE_SIZE) : rows
+
+  if (pageRows.length === 0) return { items: [], nextCursor: null }
 
   const idsOfType = (type: NotificationSubjectType) =>
-    rows.filter((row) => row.subjectType === type).map((row) => row.subjectId)
+    pageRows
+      .filter((row) => row.subjectType === type)
+      .map((row) => row.subjectId)
 
   const projectIds = idsOfType("project")
   const deliverableIds = idsOfType("deliverable")
@@ -483,6 +522,7 @@ export async function listNotifications(
               id: assetVersions.id,
               filename: assets.filename,
               label: assetVersions.label,
+              deliverableId: assets.deliverableId,
               projectSlug: projects.slug,
             })
             .from(assetVersions)
@@ -499,23 +539,37 @@ export async function listNotifications(
 
   const subjectById = new Map<string, SubjectRow>()
   for (const row of projectRows) {
-    subjectById.set(row.id, { label: row.title, projectSlug: row.slug })
+    subjectById.set(row.id, {
+      label: row.title,
+      projectSlug: row.slug,
+      deliverableId: null,
+    })
   }
   for (const row of deliverableRows) {
-    subjectById.set(row.id, { label: row.title, projectSlug: row.projectSlug })
+    subjectById.set(row.id, {
+      label: row.title,
+      projectSlug: row.projectSlug,
+      // A deliverable subject is its own deepest point in the cabinet.
+      deliverableId: row.id,
+    })
   }
   for (const row of taskRows) {
-    subjectById.set(row.id, { label: row.title, projectSlug: row.projectSlug })
+    subjectById.set(row.id, {
+      label: row.title,
+      projectSlug: row.projectSlug,
+      deliverableId: null,
+    })
   }
   for (const row of versionRows) {
     // "brief-final.mov (v3)" — the file is the identity, the label the cut.
     subjectById.set(row.id, {
       label: `${row.filename} (${row.label})`,
       projectSlug: row.projectSlug,
+      deliverableId: row.deliverableId,
     })
   }
 
-  return rows.map((row) => {
+  const items = pageRows.map((row) => {
     const subject = subjectById.get(row.subjectId) ?? null
     const copy = describeNotification(
       row.type,
@@ -537,11 +591,21 @@ export async function listNotifications(
         image: row.actorImage,
       },
       projectSlug: subject?.projectSlug ?? null,
+      deliverableId: subject?.deliverableId ?? null,
       subjectLabel: subject?.label ?? null,
       readAt: row.readAt,
       createdAt: row.createdAt,
     }
   })
+
+  const last = pageRows.at(-1)
+  return {
+    items,
+    nextCursor:
+      hasMore && last
+        ? encodeNotificationCursor(last.createdAt, last.id)
+        : null,
+  }
 }
 
 /** How many of the viewer's bells in this workspace are still ringing. */

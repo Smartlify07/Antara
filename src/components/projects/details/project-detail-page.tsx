@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { AlertCircleIcon } from "lucide-react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { TabsSwitcher } from "@/components/projects/details/tabs-switcher"
@@ -16,6 +16,7 @@ import type {
   ProjectDetail,
   ProjectTagOption,
 } from "@/server/services/project-service"
+import type { ProjectDetailSearch } from "@/lib/project-detail-search"
 
 export function ProjectDetailPage({
   workspaceSlug,
@@ -24,6 +25,7 @@ export function ProjectDetailPage({
   members,
   tagOptions,
   canEdit,
+  search,
 }: {
   workspaceSlug: string
   workspaceId: string
@@ -31,12 +33,21 @@ export function ProjectDetailPage({
   members: AssignableMember[]
   tagOptions: ProjectTagOption[]
   canEdit: boolean
+  /** URL intent: a notification's exact pane, or no opinion at all. */
+  search?: ProjectDetailSearch
 }) {
   const [error, setError] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   // Controlled so the switcher's indicator knows which tab to slide to; Radix
   // only reports the change.
-  const [tab, setTab] = useState("overview")
+  const [tab, setTab] = useState<string>(search?.tab ?? "overview")
+
+  // A second notification can arrive while this page is already mounted (the
+  // route stays the same, only the search changes), so the URL stays the
+  // source of truth for which tab is open.
+  useEffect(() => {
+    if (search?.tab) setTab(search.tab)
+  }, [search?.tab])
 
   const memberRefs = project.members
   const leadRef = memberRefs.find((member) => member.isLead) ?? null
@@ -181,6 +192,10 @@ export function ProjectDetailPage({
             workspaceId={workspaceId}
             projectId={project.id}
             members={members}
+            focus={{
+              deliverableId: search?.deliverable,
+              versionId: search?.version,
+            }}
           />
         </TabsContent>
       </Tabs>

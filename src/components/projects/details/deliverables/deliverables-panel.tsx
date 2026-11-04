@@ -10,6 +10,7 @@ import { projectTasksQuery, taskKeys } from "@/lib/queries/tasks"
 import { projectKeys } from "@/lib/queries/projects"
 import type { AssignableMember } from "@/server/services/project-service"
 import { DeliverablesCabinet } from "./deliverables-cabinet"
+import type { DeliverableFocus } from "./deliverables-cabinet"
 import { NewDeliverableDialog } from "./new-deliverable-dialog"
 
 /**
@@ -28,12 +29,15 @@ export function DeliverablesPanel({
   workspaceId,
   projectId,
   members,
+  focus,
 }: {
   workspaceSlug: string
   workspaceId: string
   projectId: string
   /** Project members — the assignable pool for owners and task assignees. */
   members: AssignableMember[]
+  /** A notification's exact target inside the cabinet, when there is one. */
+  focus?: DeliverableFocus
 }) {
   const queryClient = useQueryClient()
   const deliverablesQuery = useQuery(
@@ -104,6 +108,7 @@ export function DeliverablesPanel({
             tasksViewer={{ canWork }}
             deliverablesViewer={{ canManage }}
             members={members}
+            focus={focus}
             onChanged={refresh}
           />
           {deliverables.length === 0 && (

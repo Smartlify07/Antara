@@ -33,12 +33,22 @@ export interface ReviewQueueBadgeState {
   count: number
 }
 
+export interface InboxBadgeState {
+  count: number
+}
+
+/** Counts above this render as "99+" — the badge is a signal, not a total. */
+function badgeCountLabel(count: number): string {
+  return count > 99 ? "99+" : String(count)
+}
+
 export function AppSidebar({
   workspaces,
   teamCount,
   requestsBadge,
   myTasksBadge,
   reviewsBadge,
+  inboxBadge,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   workspaces: WorkspaceListItem[] | null
@@ -46,6 +56,7 @@ export function AppSidebar({
   requestsBadge: RequestBadgeState | null
   myTasksBadge: MyTasksBadgeState | null
   reviewsBadge: ReviewQueueBadgeState | null
+  inboxBadge: InboxBadgeState | null
 }) {
   const location = useLocation()
   const match = location.pathname.match(/^\/w\/([^/]+)/)
@@ -66,6 +77,7 @@ export function AppSidebar({
               !location.pathname.includes("/requests") &&
               !location.pathname.includes("/my-tasks") &&
               !location.pathname.includes("/reviews") &&
+              !location.pathname.includes("/inbox") &&
               !location.pathname.includes("/library"),
           },
           {
@@ -127,17 +139,24 @@ export function AppSidebar({
             icon: <CircleCheckBigIcon />,
             badge:
               myTasksBadge && myTasksBadge.count > 0
-                ? String(myTasksBadge.count)
+                ? badgeCountLabel(myTasksBadge.count)
                 : undefined,
             active: location.pathname.startsWith(`/w/${activeSlug}/my-tasks`),
           },
+          {
+            // The bell's replacement: a real surface with its own page, and
+            // the same unread number as a sidebar badge.
+            title: "Inbox",
+            url: `/w/${activeSlug}/inbox`,
+            icon: <MailOpenIcon />,
+            badge:
+              inboxBadge && inboxBadge.count > 0
+                ? badgeCountLabel(inboxBadge.count)
+                : undefined,
+            active: location.pathname.startsWith(`/w/${activeSlug}/inbox`),
+          },
         ]
       : []),
-    {
-      title: "Inbox",
-      icon: <MailOpenIcon />,
-      badge: "Soon",
-    },
   ]
 
   return (

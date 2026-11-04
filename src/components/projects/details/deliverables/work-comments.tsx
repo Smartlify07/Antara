@@ -2,6 +2,7 @@ import { SendIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { formatRelativeTime } from "@/lib/time"
+import { initial } from "@/lib/person"
 
 /**
  * The borderless comment row + composer shared by the deliverable cabinet's
@@ -37,7 +38,7 @@ export function ThreadRow({ message }: { message: ThreadMessage }) {
         aria-hidden
         className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium"
       >
-        {initialsOf(message)}
+        {initial(message.authorName, message.authorEmail)}
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">
@@ -130,12 +131,4 @@ export function ThreadError({ children }: { children: string }) {
       {children}
     </p>
   )
-}
-
-function initialsOf(message: ThreadMessage): string {
-  const source = message.authorName?.trim() || message.authorEmail?.trim() || ""
-  const first = source[0]
-  // Old threads can outlive their author's account row; the ? keeps the
-  // rhythm of the thread without pretending to know a name.
-  return first ? first.toUpperCase() : "?"
 }

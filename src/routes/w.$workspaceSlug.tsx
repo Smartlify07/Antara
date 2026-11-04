@@ -68,6 +68,7 @@ function useWorkspaceCrumbs(slug: string, title: string): Crumb[] {
     if (tail.startsWith("/requests")) return [...base, { label: "Requests" }]
     if (tail.startsWith("/my-tasks")) return [...base, { label: "My tasks" }]
     if (tail.startsWith("/reviews")) return [...base, { label: "Reviews" }]
+    if (tail.startsWith("/inbox")) return [...base, { label: "Inbox" }]
     if (tail.startsWith("/projects/new")) {
       return [...base, { label: "Projects" }, { label: "New project" }]
     }

@@ -11,11 +11,11 @@ import { Button } from "@/components/ui/button"
 import { REVIEW_STATUS_META } from "@/components/projects/details/deliverables/version-meta"
 import type {
   LibraryApprovalRecord,
-  LibraryPerson,
   LibraryVersionDetail,
 } from "@/server/services/library-service"
 import { libraryAssetQuery } from "@/lib/queries/library"
 import { formatRelativeTime } from "@/lib/time"
+import { displayName } from "@/lib/person"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
 import { ASSET_STATE_META } from "./library-meta"
 import { VersionDecideActions } from "./version-decide-actions"
@@ -201,7 +201,7 @@ function VersionRow({
           {statusChip.label}
         </span>
         <span className="ml-auto truncate text-xs text-muted-foreground">
-          {displayName(version.submitter)} ·{" "}
+          {displayName(version.submitter, "a former member")} ·{" "}
           {formatRelativeTime(version.createdAt)}
         </span>
       </div>
@@ -279,7 +279,7 @@ function DecisionLine({ decision }: { decision: LibraryApprovalRecord }) {
           {decision.decision === "approved" ? "Approved" : "Rejected"}
         </span>
         {" by "}
-        {displayName(decision.approver)}
+        {displayName(decision.approver, "a former member")}
         {" · "}
         {formatRelativeTime(decision.decidedAt)}
         {decision.comment && (
@@ -291,6 +291,3 @@ function DecisionLine({ decision }: { decision: LibraryApprovalRecord }) {
 }
 
 /** The actor convention: a named person, an addressable email, or a past. */
-function displayName(person: LibraryPerson): string {
-  return person.name ?? person.email ?? "a former member"
-}

@@ -1,16 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { avatarTint } from "@/lib/avatar-tint"
-
-function initials(name: string | null): string {
-  return (
-    name
-      ?.split(" ")
-      .map((part) => part[0])
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || "?"
-  )
-}
+import { initials } from "@/lib/person"
 
 /**
  * A person's avatar — one component so the card, the dialog and the thread

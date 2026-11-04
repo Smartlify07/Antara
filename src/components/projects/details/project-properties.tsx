@@ -2,7 +2,7 @@ import { format } from "date-fns"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ProjectPills } from "@/components/projects/details/project-pills"
 import { TagDot } from "@/components/projects/tags-chip"
-import { displayName, initials } from "@/components/projects/member-chip"
+import { displayName, initials } from "@/lib/person"
 import { PROJECT_STATUS_META } from "@/lib/status-meta"
 import { avatarTint } from "@/lib/avatar-tint"
 import type { SelectedTag } from "@/components/projects/tags-chip"
@@ -87,7 +87,7 @@ export function ProjectProperties({
                 <AvatarFallback
                   className={`text-[7px] ${avatarTint(leadAssignable.teamId)}`}
                 >
-                  {initials(leadAssignable)}
+                  {initials(leadAssignable.name, leadAssignable.email)}
                 </AvatarFallback>
               </Avatar>
               <span className="truncate">{displayName(leadAssignable)}</span>
@@ -201,7 +201,7 @@ function AvatarStack({ members }: { members: AssignableMember[] }) {
         >
           {member.image ? <AvatarImage src={member.image} alt="" /> : null}
           <AvatarFallback className={`text-[7px] ${avatarTint(member.teamId)}`}>
-            {initials(member)}
+            {initials(member.name, member.email)}
           </AvatarFallback>
         </Avatar>
       ))}

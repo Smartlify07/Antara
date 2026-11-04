@@ -17,7 +17,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Link, useParams } from "@tanstack/react-router"
-import { NotificationsBell } from "@/components/notifications/notification-bell"
+import { unreadCountQuery } from "@/lib/queries/notifications"
 import { requestBadgeQuery } from "@/lib/queries/requests"
 import { myTasksBadgeQuery } from "@/lib/queries/tasks"
 import { reviewQueueBadgeQuery } from "@/lib/queries/versions"
@@ -66,6 +66,11 @@ export function AppShell({
     enabled: !!workspaceSlug,
   })
 
+  const { data: inboxUnread } = useQuery({
+    ...unreadCountQuery(workspaceSlug ?? ""),
+    enabled: !!workspaceSlug,
+  })
+
   useEffect(() => {
     if (!workspaceSlug) return
 
@@ -95,6 +100,7 @@ export function AppShell({
         requestsBadge={requestsBadge ?? null}
         myTasksBadge={myTasksBadge ?? null}
         reviewsBadge={reviewsBadge ?? null}
+        inboxBadge={inboxUnread === undefined ? null : { count: inboxUnread }}
       />
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
@@ -127,13 +133,8 @@ export function AppShell({
               })}
             </BreadcrumbList>
           </Breadcrumb>
-          {/* The bell is shell furniture, and only means something inside a
-              workspace — its badge and inbox are scoped to the slug. */}
-          {workspaceSlug && (
-            <div className="ml-auto">
-              <NotificationsBell workspaceSlug={workspaceSlug} />
-            </div>
-          )}
+          {/* The bell that used to sit here is now the Inbox nav item in the
+              sidebar — a badge that opens a real page, not a popover. */}
         </header>
         <div className="mx-auto flex w-full max-w-[1840px] flex-1 flex-col gap-4 px-4 py-4 sm:py-6">
           {children}

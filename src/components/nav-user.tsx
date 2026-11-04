@@ -16,17 +16,8 @@ import {
 } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { authClient, useSession } from "@/lib/auth-client"
+import { initials } from "@/lib/person"
 import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react"
-
-function initials(name: string, email: string) {
-  const fromName = name
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase()
-  return fromName || (email[0] ?? "?").toUpperCase()
-}
 
 export function NavUser() {
   const { data, isPending } = useSession()

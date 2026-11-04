@@ -4,6 +4,8 @@
  * instead of collapsing into the same neutral grey.
  */
 
+import { hash } from "@/lib/hash"
+
 const TINTS = [
   "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
   "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
@@ -16,15 +18,6 @@ const TINTS = [
   "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
   "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/20 dark:text-fuchsia-300",
 ]
-
-function hash(value: string): number {
-  let h = 2166136261
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
 
 /** Stable tailwind tint classes for a user id (falls back to name). */
 export function avatarTint(seed: string): string {

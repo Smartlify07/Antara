@@ -4,16 +4,16 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { ArrowUpRightIcon, XIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/time"
-import {
-  ProjectCoverArt,
-  projectCoverColor,
-} from "@/components/workspace/project-cover-art"
+import { hash } from "@/lib/hash"
+import { avatarTint } from "@/lib/avatar-tint"
+import { initial } from "@/lib/person"
+import { projectCoverColor } from "@/lib/project-cover"
+import { ProjectCoverArt } from "@/components/workspace/project-cover-art"
 import type { LibraryFolder } from "./folder-grouping"
 import { setLibraryFolderScope } from "./folder-scope"
 import { ASSET_STATE_META } from "./library-meta"
 import type {
   LibraryAssetSummary,
-  LibraryPerson,
   LibraryVersionSummary,
 } from "@/server/services/library-service"
 import type { VersionReviewStatus } from "@/db/enums"
@@ -53,15 +53,6 @@ const HISTORY_PREVIEW_COUNT = 4
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
 /* ------------------------------- palette -------------------------------- */
-
-function hash(value: string): number {
-  let h = 2166136261
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
 
 /**
  * Book colours — one notch deeper than the project band, so near-white ink
@@ -140,30 +131,6 @@ const FULL_DATE = new Intl.DateTimeFormat("en-GB", {
 
 function formatFullDate(date: Date | string): string {
   return FULL_DATE.format(new Date(date))
-}
-
-/** Stable avatar tints for a person, from the house tint pool. */
-const TINT_POOL = [
-  "bg-rose-100 text-rose-700",
-  "bg-orange-100 text-orange-700",
-  "bg-amber-100 text-amber-700",
-  "bg-lime-100 text-lime-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-teal-100 text-teal-700",
-  "bg-sky-100 text-sky-700",
-  "bg-indigo-100 text-indigo-700",
-  "bg-violet-100 text-violet-700",
-  "bg-fuchsia-100 text-fuchsia-700",
-]
-
-function initialsOf(person: LibraryPerson): string {
-  const first = person.name?.trim()[0] ?? person.email?.trim()[0]
-  return first ? first.toUpperCase() : "?"
-}
-
-function tintOf(person: LibraryPerson): string {
-  const key = person.email ?? person.name ?? ""
-  return TINT_POOL[hash(key) % TINT_POOL.length]
 }
 
 /** The cutout and scoped-header meta line: count and last activity. */
@@ -531,10 +498,12 @@ function AssetRecordSheet({
                 <span
                   className={cn(
                     "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                    tintOf(asset.createdBy)
+                    avatarTint(
+                      asset.createdBy.email ?? asset.createdBy.name ?? ""
+                    )
                   )}
                 >
-                  {initialsOf(asset.createdBy)}
+                  {initial(asset.createdBy.name, asset.createdBy.email)}
                 </span>
                 <span className="truncate text-xs font-medium">
                   {asset.createdBy.name ??

@@ -147,6 +147,13 @@ interface CabinetVersionRow {
 
 /* ----------------------------- deliverable cabinet ------------------------ */
 
+/** A notification's target inside the cabinet: a deliverable, optionally a
+ *  version of it. Survives the panel → cabinet prop hop unchanged. */
+export interface DeliverableFocus {
+  deliverableId?: string
+  versionId?: string
+}
+
 export function DeliverablesCabinet({
   workspaceId,
   projectId,
@@ -156,6 +163,7 @@ export function DeliverablesCabinet({
   tasksViewer,
   deliverablesViewer,
   members,
+  focus,
   onChanged,
 }: {
   workspaceId: string
@@ -170,6 +178,8 @@ export function DeliverablesCabinet({
   /** From the deliverables list — gates owner/deadline management. */
   deliverablesViewer: { canManage: boolean }
   members: AssignableMember[]
+  /** A deep link from a notification, applied once per distinct target. */
+  focus?: DeliverableFocus
   /** The panel's global refresher, per the panel's `refresh`. */
   onChanged: () => void
 }) {
@@ -258,15 +268,37 @@ export function DeliverablesCabinet({
     ? (versionRows.find((row) => row.version.id === activeVersionId) ?? null)
     : null
 
+  const focusDeliverableId = focus?.deliverableId ?? null
+  const focusVersionId = focus?.versionId ?? null
+
+  // A notification deep link opens the cabinet at its target — once per
+  // distinct target, so closing the dialog is not undone by a refetch or a
+  // re-render of the same URL.
+  const appliedFocusRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!focusDeliverableId) return
+    const key = `${focusDeliverableId}:${focusVersionId ?? ""}`
+    if (appliedFocusRef.current === key) return
+    if (!deliverables.some((row) => row.id === focusDeliverableId)) return
+
+    appliedFocusRef.current = key
+    setDirection(0)
+    setActiveId(focusDeliverableId)
+    setActiveVersionId(focusVersionId)
+    setIsOpen(true)
+  }, [focusDeliverableId, focusVersionId, deliverables])
+
   // A deleted draft drops out of the flat rows; before the stale id can
   // wedge the detail pane, climb back to the deliverable — the same unwind
-  // direction the explicit back affordance uses.
+  // direction the explicit back affordance uses. Guarded until the timeline
+  // has answered, or a deep link's version id would be discarded mid-fetch.
   useEffect(() => {
+    if (!versionsQuery.isSuccess) return
     if (activeVersionId !== null && activeRow === null) {
       setDirection(-1)
       setActiveVersionId(null)
     }
-  }, [activeVersionId, activeRow])
+  }, [versionsQuery.isSuccess, activeVersionId, activeRow])
 
   const activeVersion = activeRow?.version ?? null
 
@@ -1894,4 +1926,3 @@ function NeutralAvatar({
     </span>
   )
 }
-

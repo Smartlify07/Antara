@@ -18,6 +18,7 @@ function ProjectDetailRoute() {
   const { workspaceId, workspaceRole, isWorkspaceOwner } =
     Route.useRouteContext()
   const { workspaceSlug, projectSlug } = Route.useParams()
+  const search = Route.useSearch()
 
   const {
     data: project,
@@ -61,6 +62,7 @@ function ProjectDetailRoute() {
       members={members}
       tagOptions={tagOptions}
       canEdit={canEdit}
+      search={search}
     />
   )
 }

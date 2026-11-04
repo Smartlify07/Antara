@@ -1,6 +1,6 @@
 import { waitUntil } from "@vercel/functions"
 import { and, eq, inArray } from "drizzle-orm"
-import { sendNotification, setVapidDetails } from "web-push"
+import * as webPushModule from "web-push"
 import { db } from "@/db"
 import { assets, assetVersions } from "@/db/schema/assets"
 import { deliverables } from "@/db/schema/deliverables"
@@ -35,6 +35,26 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
 const VAPID_SUBJECT =
   process.env.VAPID_SUBJECT ?? "mailto:noreply@smartlify.xyz"
+
+/**
+ * `web-push` is CommonJS. Vite's dev/SSR module runner cannot see named exports
+ * on it, so `import { sendNotification } from "web-push"` throws
+ * "Named export not found" the moment this module is evaluated — which broke
+ * every server function that reaches the notification lane (the inbox and its
+ * unread counter included). Bundled builds tolerated it, which is why it only
+ * showed up at runtime.
+ *
+ * Read the CJS exports through the interop `default` when the loader provides
+ * one, otherwise use the namespace, and keep the whole thing typed as the
+ * module's own surface.
+ */
+type WebPush = typeof webPushModule
+const webPush: WebPush =
+  "default" in (webPushModule as unknown as Record<string, unknown>)
+    ? (webPushModule as unknown as { default: WebPush }).default
+    : webPushModule
+
+const { sendNotification, setVapidDetails } = webPush
 
 function isConfigured(): boolean {
   return Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY)

@@ -6,6 +6,8 @@
  * same tag keeps the same dot everywhere without writing to the database.
  */
 
+import { hash } from "@/lib/hash"
+
 /** Hand-picked hues that stay legible as a small dot on light and dark UI. */
 export const TAG_COLORS = [
   "#e11d48", // rose
@@ -19,15 +21,6 @@ export const TAG_COLORS = [
   "#c026d3", // fuchsia
   "#64748b", // slate
 ] as const
-
-function hash(value: string): number {
-  let h = 2166136261
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
 
 /** Stable colour for a label, used whenever the row has none. */
 export function tagColorFor(label: string): string {

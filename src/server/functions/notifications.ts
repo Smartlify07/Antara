@@ -3,6 +3,7 @@ import { getRequestHeaders } from "@tanstack/react-start/server"
 import { redirect } from "@tanstack/react-router"
 import { auth } from "@/lib/auth"
 import {
+  notificationInboxSchema,
   notificationListSchema,
   notificationReadAllSchema,
   notificationReadSchema,
@@ -17,9 +18,10 @@ import * as workspaceService from "@/server/services/workspace-service"
 
 /**
  * Thin HTTP boundary for the notification lane (FR-047..050). Session
- * handling and workspace resolution live here; the bell's call sites carry
- * only the slug, so the boundary is also the scope check — a slug the session
- * user cannot enter yields an empty bell, never another workspace's rows.
+ * handling and workspace resolution live here; the Inbox page and its badge
+ * carry only the slug, so the boundary is also the scope check — a slug the
+ * session user cannot enter yields an empty inbox, never another workspace's
+ * rows.
  */
 
 async function requireUserId(): Promise<string> {
@@ -32,15 +34,15 @@ async function requireUserId(): Promise<string> {
 }
 
 export const listNotificationsFn = createServerFn({ method: "GET" })
-  .validator(notificationListSchema)
+  .validator(notificationInboxSchema)
   .handler(async ({ data }) => {
     const userId = await requireUserId()
     const access = await workspaceService.getWorkspaceBySlug(
       userId,
       data.workspaceSlug
     )
-    if (!access) return []
-    return listNotifications(access.workspace.id, userId)
+    if (!access) return { items: [], nextCursor: null }
+    return listNotifications(access.workspace.id, userId, data.cursor)
   })
 
 /**

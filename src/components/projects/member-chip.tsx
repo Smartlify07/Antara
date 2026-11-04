@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import {
   CheckIcon,
   UserIcon,
@@ -17,6 +17,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Chip } from "@/components/projects/chip"
 import { avatarTint } from "@/lib/avatar-tint"
+import { displayName, initials } from "@/lib/person"
+import { useFilteredMembers } from "@/hooks/use-filtered-members"
 import type { AssignableMember } from "@/server/services/project-service"
 
 /**
@@ -29,32 +31,6 @@ export type AvatarPerson = {
   name: string | null
   email: string | null
   image: string | null
-}
-
-export function initials(member: AvatarPerson) {
-  const fromName = member.name
-    ?.split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase()
-  return fromName ?? (member.email?.[0] ?? "?").toUpperCase()
-}
-
-export function displayName(member: AvatarPerson) {
-  return member.name ?? member.email ?? "Unknown"
-}
-
-function useFiltered(members: AssignableMember[], query: string) {
-  return useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    if (!needle) return members
-    return members.filter((member) =>
-      `${displayName(member)} ${member.email ?? ""}`
-        .toLowerCase()
-        .includes(needle)
-    )
-  }, [members, query])
 }
 
 function PersonRow({
@@ -78,7 +54,7 @@ function PersonRow({
       <Avatar className="size-5">
         {member.image ? <AvatarImage src={member.image} alt="" /> : null}
         <AvatarFallback className={`text-[9px] ${avatarTint(member.teamId)}`}>
-          {initials(member)}
+          {initials(member.name, member.email)}
         </AvatarFallback>
       </Avatar>
       <span className="flex min-w-0 flex-1 flex-col">
@@ -113,7 +89,7 @@ export function AvatarStack({ members }: { members: AvatarPerson[] }) {
         >
           {member.image ? <AvatarImage src={member.image} alt="" /> : null}
           <AvatarFallback className={`text-[7px] ${avatarTint(member.teamId)}`}>
-            {initials(member)}
+            {initials(member.name, member.email)}
           </AvatarFallback>
         </Avatar>
       ))}
@@ -143,7 +119,7 @@ export function LeadChip({
   onSelect: (teamId: string | null) => void
 }) {
   const [query, setQuery] = useState("")
-  const visible = useFiltered(members, query)
+  const visible = useFilteredMembers(members, query)
   const lead = members.find((member) => member.teamId === leadId) ?? null
 
   return (
@@ -207,7 +183,7 @@ export function OwnerChip({
   onSelect: (teamId: string | null) => void
 }) {
   const [query, setQuery] = useState("")
-  const visible = useFiltered(members, query)
+  const visible = useFilteredMembers(members, query)
   const offList =
     owner && !members.some((member) => member.teamId === owner.teamId)
 
@@ -287,7 +263,7 @@ export function MembersChip({
 }) {
   const [query, setQuery] = useState("")
   const selectable = members.filter((member) => member.teamId !== leadId)
-  const visible = useFiltered(selectable, query)
+  const visible = useFilteredMembers(selectable, query)
   const selected = selectable.filter((member) =>
     selectedIds.includes(member.teamId)
   )
