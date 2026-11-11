@@ -242,6 +242,9 @@ export async function listProjectTasks(
   projectId: string
 ): Promise<{ tasks: TaskCard[]; viewer: { canWork: boolean } }> {
   const access = await requireWorkAccess(workspaceId, userId, projectId)
+  // Membership in this workspace does not prove the project is in it; without
+  // this, another tenant's project id would read its task list.
+  await requireLiveProject(workspaceId, projectId)
   const taskRows = await loadProjectTasks(workspaceId, projectId)
   return {
     tasks: taskRows,

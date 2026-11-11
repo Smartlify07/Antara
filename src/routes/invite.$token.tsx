@@ -38,6 +38,7 @@ export function InviteDecision({
   onDecline,
   pending,
   declined,
+  error,
 }: {
   workspaceTitle: string
   roleTitle: string | null
@@ -45,6 +46,7 @@ export function InviteDecision({
   onDecline: () => void
   pending: boolean
   declined: boolean
+  error?: string | null
 }) {
   const [gone, setGone] = useState(false)
 
@@ -75,6 +77,14 @@ export function InviteDecision({
         />
 
         <div className="flex flex-col gap-2">
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {error}
+            </p>
+          )}
           <Button className="w-full" disabled={pending} onClick={onAccept}>
             {pending && <Loader2 className="animate-spin" />}
             {pending ? "Joining…" : "Accept invite"}
@@ -106,6 +116,7 @@ function InvitePage() {
   const { data: viewer } = useQuery(inviteViewerQuery())
   const navigate = useNavigate()
   const [declined, setDeclined] = useState(false)
+  const [acceptError, setAcceptError] = useState<string | null>(null)
 
   const accept = useMutation({
     mutationFn: (t: string) => acceptInviteFn({ data: { token: t } }),
@@ -119,7 +130,18 @@ function InvitePage() {
           params: { workspaceSlug: result.workspaceSlug },
           replace: true,
         })
+        return
       }
+      setAcceptError(
+        result.code === "wrong_account"
+          ? `This invite was sent to ${
+              inspect.valid ? maskEmail(inspect.emailHint) : "the invited address"
+            }. Sign in with that address to accept it.`
+          : "That invite can no longer be accepted. Ask an admin to send a new one."
+      )
+    },
+    onError: () => {
+      setAcceptError("Something went wrong. Please try again.")
     },
   })
 
@@ -188,7 +210,11 @@ function InvitePage() {
       roleTitle={inspect.roleTitle}
       pending={accept.isPending || decline.isPending}
       declined={declined}
-      onAccept={() => accept.mutate(token)}
+      error={acceptError}
+      onAccept={() => {
+        setAcceptError(null)
+        accept.mutate(token)
+      }}
       onDecline={() => decline.mutate(inspect.valid ? inspect.inviteId : "")}
     />
   )

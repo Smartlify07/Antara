@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isHttpUrl } from "@/lib/link-schemes"
 
 /**
  * Validation for the version lane (FR-019..030): submission, submit-for-
@@ -35,7 +36,13 @@ const submissionCommon = {
 export const submitLinkVersionSchema = z.object({
   ...submissionCommon,
   source: z.literal("external_link"),
-  url: z.string().url("Paste a full URL (including https://)."),
+  url: z
+    .string()
+    .url("Paste a full URL (including https://).")
+    .refine(
+      isHttpUrl,
+      "Paste an http(s) URL — other schemes can run code when opened."
+    ),
   // Free text until the first external integration is chosen (PRD §17);
   // the service derives a coarse label from the URL's host when unset.
   externalProvider: z.string().trim().max(40).optional(),
@@ -48,7 +55,10 @@ export const submitLinkVersionSchema = z.object({
 export const submitUploadVersionSchema = z.object({
   ...submissionCommon,
   source: z.literal("upload"),
-  url: z.string().min(1),
+  url: z
+    .string()
+    .min(1)
+    .refine(isHttpUrl, "The uploaded file URL must be http(s)."),
   provider: z.enum(["cloudinary", "aws"]),
   // The provider-side reference the deletion guard needs later.
   providerKey: z.string().min(1),
