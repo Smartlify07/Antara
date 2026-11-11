@@ -69,8 +69,12 @@ export const markNotificationReadFn = createServerFn({ method: "POST" })
       data.workspaceSlug
     )
     if (!access) return { ok: false }
-    await markNotificationRead(access.workspace.id, userId, data.notificationId)
-    return { ok: true }
+    const marked = await markNotificationRead(
+      access.workspace.id,
+      userId,
+      data.notificationId
+    )
+    return { ok: marked }
   })
 
 export const markAllNotificationsReadFn = createServerFn({ method: "POST" })

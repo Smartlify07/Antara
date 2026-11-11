@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, notFound } from "@tanstack/react-router"
 import { CircleCheckBigIcon } from "@/components/animate-ui/icons/circle-check-big"
 import { ClipboardListIcon } from "@/components/animate-ui/icons/clipboard-list"
 import { EyeIcon } from "@/components/animate-ui/icons/eye"
@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/sidebar"
 
 export const Route = createFileRoute("/dev/sidebar-icons")({
+  // Dev-only gallery; not a public page in production.
+  beforeLoad: () => {
+    if (import.meta.env.PROD) throw notFound()
+  },
   component: SidebarIconsGallery,
 })
 

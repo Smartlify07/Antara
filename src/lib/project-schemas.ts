@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isHttpUrl } from "@/lib/link-schemes"
 
 export const projectSlugSchema = z
   .string()
@@ -99,7 +100,10 @@ export const projectUpdateSchema = z.object({
     .array(
       z.object({
         filename: z.string().trim().min(1).max(255),
-        url: z.string().url(),
+        url: z
+          .string()
+          .url()
+          .refine(isHttpUrl, "Attachment URLs must be http(s)."),
         provider: z.enum(["cloudinary", "aws"]),
         providerKey: z.string().trim().min(1).max(512),
         mimeType: z.string().trim().min(1).max(255),

@@ -156,8 +156,11 @@ export const revokeInviteFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { access } = await requireManager(data.workspaceSlug)
-    await service.revokeInvite(access.workspace.id, data.inviteId)
-    return { ok: true as const }
+    const revoked = await service.revokeInvite(
+      access.workspace.id,
+      data.inviteId
+    )
+    return { ok: revoked }
   })
 
 /**

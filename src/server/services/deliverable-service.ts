@@ -117,6 +117,10 @@ export async function listProjectDeliverables(
   viewer: { canManage: boolean }
 }> {
   const access = await requireWorkAccess(workspaceId, userId, projectId)
+  // `requireWorkAccess` answers "is this person in the workspace", not "does
+  // this project belong to it". Without the second question a member of any
+  // workspace can read another tenant's cards by naming its project id.
+  await requireLiveProject(workspaceId, projectId)
 
   const rows = await db
     .select({

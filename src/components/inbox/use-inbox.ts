@@ -73,6 +73,19 @@ export function useInbox(workspaceSlug: string) {
         queryClient.setQueryData(listKey, context.previousList)
       }
     },
+    onSuccess: (result, _id, context) => {
+      // The mutation resolves even when the row wasn't this user's to mark
+      // (`ok: false`) — undo the optimistic read so the list doesn't claim a
+      // state the server refuses.
+      if (!result.ok) {
+        if (context.previousCount !== undefined) {
+          queryClient.setQueryData(unreadKey, context.previousCount)
+        }
+        if (context.previousList) {
+          queryClient.setQueryData(listKey, context.previousList)
+        }
+      }
+    },
     onSettled: () => {
       // The list is already patched and the cursor order did not change, so
       // only the counter needs the server's word.

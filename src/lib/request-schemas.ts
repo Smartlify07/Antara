@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { createProjectSchema } from "@/lib/project-schemas"
+import { isSafeReferenceLink } from "@/lib/link-schemes"
 
 /**
  * Validation for the Requests module (FR-006..011). Server functions use
@@ -55,12 +56,21 @@ export const submitRequestSchema = z.object({
     .transform((value) => (value ? value : undefined)),
   // Links the requester points at. Lenient on purpose — briefs come from
   // everywhere — but bounded: a wall of links is a brief, and a 2KB link is
-  // a smuggled payload.
+  // a smuggled payload. A blank entry is rejected rather than silently
+  // dropped: the caller should see what they actually submitted.
   referenceLinks: z
-    .array(z.string().trim().max(2048))
+    .array(
+      z
+        .string()
+        .trim()
+        .max(2048)
+        .refine(
+          isSafeReferenceLink,
+          "Use an http(s) or mailto link — other schemes can run code."
+        )
+    )
     .nonempty()
     .max(10)
-    .transform((links) => links.filter((link) => link.length > 0))
     .optional(),
 })
 

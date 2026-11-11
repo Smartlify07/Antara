@@ -631,8 +631,8 @@ export async function markNotificationRead(
   workspaceId: string,
   userId: string,
   notificationId: string
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const updated = await db
     .update(notifications)
     .set({ readAt: new Date() })
     .where(
@@ -643,6 +643,8 @@ export async function markNotificationRead(
         isNull(notifications.readAt)
       )
     )
+    .returning({ id: notifications.id })
+  return updated.length > 0
 }
 
 /** Clears every unread row for the viewer in this workspace. */

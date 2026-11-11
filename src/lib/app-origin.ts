@@ -40,8 +40,16 @@ export function appOrigin(): string {
   // the fallback because it is already configured per environment and holds
   // the same value — but an empty string is a *set* variable, so it must be
   // treated as absent rather than passed through.
+  //
+  // Preview deployments get a URL per commit, so they cannot share one static
+  // value. Vercel exposes the deployment host as `VERCEL_URL`; using it only
+  // when `VERCEL_ENV` is `preview` keeps production's fail-loud behaviour.
   const configured =
-    process.env.APP_URL?.trim() || process.env.BETTER_AUTH_URL?.trim() || ""
+    process.env.APP_URL?.trim() ||
+    process.env.BETTER_AUTH_URL?.trim() ||
+    (process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL.trim()}`
+      : "")
 
   if (!configured) {
     if (process.env.NODE_ENV === "production") {

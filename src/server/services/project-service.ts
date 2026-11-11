@@ -288,6 +288,11 @@ export async function listProjectMembers(
   workspaceId: string,
   projectId: string
 ): Promise<ProjectMemberRef[]> {
+  // The team join below is workspace-scoped, but the project itself was not:
+  // a foreign project id still revealed that the project has members and a
+  // lead. Resolve it against this workspace first.
+  await requireProject(workspaceId, projectId)
+
   const rows = await db
     .select({
       teamId: team.id,

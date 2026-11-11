@@ -1,9 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, notFound } from "@tanstack/react-router"
 import { DeliverablesFolderA } from "@/components/projects/details/folder-experiments/variant-a"
 import { DeliverablesFolderB } from "@/components/projects/details/folder-experiments/variant-b"
 import { DeliverablesFolderC } from "@/components/projects/details/folder-experiments/variant-c"
 
 export const Route = createFileRoute("/dev/deliverables")({
+  // Design-sprint surface with mock data. It must not exist as a public page
+  // in a production build; the route is still resolvable, so the guard turns
+  // it into a 404 there.
+  beforeLoad: () => {
+    if (import.meta.env.PROD) throw notFound()
+  },
   component: DeliverablesGallery,
 })
 

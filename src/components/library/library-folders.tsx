@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { ArrowUpRightIcon, XIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { isHttpUrl } from "@/lib/link-schemes"
 import { formatRelativeTime } from "@/lib/time"
 import { hash } from "@/lib/hash"
 import { avatarTint } from "@/lib/avatar-tint"
@@ -586,20 +587,32 @@ function AssetRecordSheet({
                     {sourceLabel(latest)}
                   </span>
                 </p>
-                <a
-                  href={latest.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="A link to the file; Antara cannot detect changes to a linked file."
-                  className="mt-1.5 block rounded-lg bg-muted/60 px-2.5 py-2 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                >
-                  <span className="block truncate text-xs font-medium">
-                    {domainOf(latest.url)}
-                  </span>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    Open {sourceLabel(latest)}
-                  </span>
-                </a>
+                {isHttpUrl(latest.url) ? (
+                  <a
+                    href={latest.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="A link to the file; Antara cannot detect changes to a linked file."
+                    className="mt-1.5 block rounded-lg bg-muted/60 px-2.5 py-2 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  >
+                    <span className="block truncate text-xs font-medium">
+                      {domainOf(latest.url)}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      Open {sourceLabel(latest)}
+                    </span>
+                  </a>
+                ) : (
+                  // Legacy row predating the scheme allowlist: no href.
+                  <div className="mt-1.5 rounded-lg bg-muted/60 px-2.5 py-2">
+                    <span className="block truncate text-xs font-medium">
+                      {latest.url}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      Unverified link
+                    </span>
+                  </div>
+                )}
               </>
             ) : (
               <p className="mt-1 text-xs text-muted-foreground">

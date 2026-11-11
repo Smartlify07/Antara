@@ -8,6 +8,7 @@ import {
   workspaceInvites,
 } from "@/db/schema/index"
 import { normalizeEmail } from "@/lib/normalize-email"
+import { inviteEmailMatches } from "@/lib/invite-email"
 import {
   hashInviteToken,
   inviteExpiry,
@@ -60,6 +61,7 @@ export class InviteError extends Error {
       | "not_an_admin"
       | "invalid_role"
       | "rate_limited"
+      | "wrong_account"
   ) {
     super(message)
     this.name = "InviteError"
@@ -293,8 +295,11 @@ export async function getRoleTitle(roleId: string) {
  * with no way left to complete it — which is exactly the confusion revoking is
  * meant to end.
  */
-export async function revokeInvite(workspaceId: string, inviteId: string) {
-  await discardPendingInvite(workspaceId, inviteId)
+export async function revokeInvite(
+  workspaceId: string,
+  inviteId: string
+): Promise<boolean> {
+  return discardPendingInvite(workspaceId, inviteId)
 }
 
 /**
@@ -467,6 +472,16 @@ export async function acceptInviteForUser(
 
   const email = normalizeEmail(userEmail)
 
+  // The token proves delivery; this proves the delivery was addressed to the
+  // caller. Without it the link is a workspace password for anyone it reaches,
+  // and the `else` branch below would happily insert a membership for them.
+  if (!inviteEmailMatches(invite.email, email)) {
+    throw new InviteError(
+      "This invite was sent to a different email address. Sign in with that address to accept it.",
+      "wrong_account"
+    )
+  }
+
   await db.transaction(async (tx) => {
     // The reserved seat has two shapes by the time anyone accepts, and this
     // lookup has to match both.
@@ -613,9 +628,12 @@ export async function listPendingInvitesForUser(
  * but the seat can, and a verified session plus an unjoined seat is the same
  * guarantee the token gave.
  *
- * Scoped to the caller: the seat must exist in that workspace, belong to them,
- * and not be joined. Returns null for an id that isn't theirs, so this can't be
- * used to accept into somebody else's workspace.
+ * Scoped to the caller: the invite must be addressed to the caller's email
+ * (the same binding the token path enforces — a pending seat holder must not
+ * be able to spend someone else's invite id for its role) and the seat must
+ * exist in that workspace, belong to them, and not be joined. Returns null
+ * for an id that isn't theirs, so this can't be used to accept into somebody
+ * else's workspace.
  */
 export async function acceptInviteById(
   userId: string,
@@ -634,6 +652,7 @@ export async function acceptInviteById(
     .where(
       and(
         eq(workspaceInvites.id, inviteId),
+        sql`lower(${workspaceInvites.email}) = ${email}`,
         isNull(workspaceInvites.acceptedAt),
         sql`${workspaceInvites.expiresAt} > now()`
       )
