@@ -63,6 +63,16 @@ doppler secrets get DATABASE_URL_UNPOOLED -p antara -c dev --plain   # only when
 work with `pnpm exec eslint <changed paths>` and compare against `HEAD` before
 attributing an error to your change.
 
+Browser auth calls are addressed from `VITE_BETTER_AUTH_URL`, which is
+`http://localhost:3000` in the `dev` config. Run the dev server on **3000**, or a
+login on any other port fails with a CORS error against `localhost:3000` even
+though the page renders. If 3000 is taken, override both URLs:
+
+```powershell
+$env:BETTER_AUTH_URL="http://localhost:3100"; $env:VITE_BETTER_AUTH_URL="http://localhost:3100"
+doppler run -p antara -c dev --preserve-env="BETTER_AUTH_URL,VITE_BETTER_AUTH_URL" -- pnpm exec vite dev --port 3100
+```
+
 ## Working agreements
 
 - Worktrees live in `.worktrees/<slug>` and are gitignored. Install with
