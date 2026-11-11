@@ -7,62 +7,13 @@ import { sendInviteEmail } from "@/lib/email/templates"
 import { normalizeEmail } from "@/lib/normalize-email"
 import * as service from "@/server/services/invite-service"
 import * as inviteService from "@/server/services/invite-service"
-import * as workspaceService from "@/server/services/workspace-service"
+import { requireWorkspaceManager } from "@/server/functions/require-manager"
 import { INVITE_TTL_DAYS } from "@/lib/invite-token"
 
 /**
  * HTTP boundary for workspace invites. Session handling and authorisation
  * live here; all DB work delegates to the service layer.
  */
-
-interface Caller {
-  userId: string
-  email: string
-  name: string
-}
-
-/**
- * The session, and whether the caller may manage this workspace.
- *
- * Throws a redirect when there is no session, so an unauthenticated caller
- * never reaches the service at all.
- *
- * Note the `emailVerified` check. It is not incidental: `requireEmailVerification`
- * means an unverified account cannot normally sign in, but the session is the
- * only thing that proves the caller owns the address an invite is being sent
- * to. Acting on an unverified session would let someone who merely *claimed*
- * an address invite people into it.
- */
-async function requireManager(workspaceSlug: string) {
-  const session = await auth.api.getSession({
-    headers: await getRequestHeaders(),
-  })
-  if (!session?.user)
-    throw redirect({ to: "/login", search: { callbackURL: undefined } })
-  if (!session.user.emailVerified) {
-    throw redirect({ to: "/verify-email", search: { error: undefined } })
-  }
-
-  const access = await workspaceService.getWorkspaceBySlug(
-    session.user.id,
-    workspaceSlug
-  )
-  if (!access) throw redirect({ to: "/dashboard" })
-
-  const isAdmin = access.isOwner || access.role === "admin"
-  if (!isAdmin) throw new Error("Only workspace admins can do that.")
-
-  return {
-    caller: {
-      userId: session.user.id,
-      email: session.user.email,
-      name: session.user.name,
-    } satisfies Caller,
-    access,
-    isAdmin,
-    isOwner: access.isOwner,
-  }
-}
 
 /** Per-request ceiling, separate from the per-day cap. Keeps one paste bounded. */
 const MAX_PER_REQUEST = 20
@@ -95,7 +46,9 @@ export interface InviteOutcome {
 export const createInviteFn = createServerFn({ method: "POST" })
   .validator(createSchema)
   .handler(async ({ data }) => {
-    const { caller, access, isOwner } = await requireManager(data.workspaceSlug)
+    const { caller, access, isOwner } = await requireWorkspaceManager(
+      data.workspaceSlug
+    )
 
     // De-duplicated case-insensitively here too. The client does the same, but
     // the server is the thing that has to be right.
@@ -155,7 +108,7 @@ export const revokeInviteFn = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data }) => {
-    const { access } = await requireManager(data.workspaceSlug)
+    const { access } = await requireWorkspaceManager(data.workspaceSlug)
     const revoked = await service.revokeInvite(
       access.workspace.id,
       data.inviteId
