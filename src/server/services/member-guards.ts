@@ -34,8 +34,10 @@ export interface MemberActionFacts {
   /** The role the target would hold after a `change_role`. */
   nextRole?: string
   /**
-   * Active managers who would remain if this action were applied — the owner
-   * included unless the workspace's owner has left.
+   * Managers who would remain if this action were applied, the owner included.
+   * Cannot reach zero through this API today — the owner always counts — so
+   * this guard is defence-in-depth for a future "leave workspace" or ownership
+   * transfer, not a refusal a user can currently trigger.
    */
   remainingManagers: number
 }

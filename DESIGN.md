@@ -12,13 +12,13 @@
 
 Server-side acceptance (part of done, not a nice-to-have):
 
-| Guard | Behaviour |
-|---|---|
-| Owner row | No actions rendered; server rejects any change targeting the workspace owner |
-| Self | Server rejects changing your own role and removing yourself ("leave workspace" is a separate, unbuilt feature) |
-| Last admin | Server refuses a change that would leave the workspace with zero active admins |
-| Role validity | Role resolved through `resolveWorkspaceRole` (workspace scope only), never by raw id |
-| Removal | `status = 'left'`; every access path (`resolveMembership`, `work-access`, project joins) already filters it out |
+| Guard         | Behaviour                                                                                                       |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| Owner row     | No actions rendered; server rejects any change targeting the workspace owner                                    |
+| Self          | Server rejects changing your own role and removing yourself ("leave workspace" is a separate, unbuilt feature)  |
+| Last admin    | Server refuses a change that would leave the workspace with zero active admins                                  |
+| Role validity | Role resolved through `resolveWorkspaceRole` (workspace scope only), never by raw id                            |
+| Removal       | `status = 'left'`; every access path (`resolveMembership`, `work-access`, project joins) already filters it out |
 
 ## Contract
 
@@ -37,18 +37,18 @@ Avoid:        a confirm dialog for a reversible role change; toasts for failures
 
 ## Locked values
 
-| Token | Value |
-|---|---|
-| Sans / mono | Bricolage Grotesque Variable — `--font-sans`; no mono in this slice |
-| Page H1 / section / body / meta | `text-2xl font-medium tracking-tighter` / `text-base font-medium tracking-tight` / `text-sm tracking-tight` / `text-xs text-muted-foreground` |
-| Display tracking | `tracking-tighter` on the page title, `tracking-tight` on body |
-| Controls / inputs height | `h-8` default button, `h-7` `size="icon-sm"` trigger, `Input` at shadcn default |
-| Radius (control / card / dialog) | `--radius: 0.625rem`; pills are `rounded-full`, rows live in a `rounded-xl border` list |
-| Container / gutters | Inherited from the workspace shell; team page is `flex flex-col gap-6`, no new container |
-| Section padding | Card owns it (`CardContent`); row padding `p-3`, list gap `gap-3` |
-| Accent | None. `--primary` (ink) only; destructive is `--destructive` via `variant="destructive"` |
-| Canvas / surface | `--background` / `--card`, separated by `--border` |
-| Motion | View transitions 180ms `cubic-bezier(0.4, 0, 0.2, 1)`; menus 100ms; nothing else |
+| Token                            | Value                                                                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sans / mono                      | Bricolage Grotesque Variable — `--font-sans`; no mono in this slice                                                                           |
+| Page H1 / section / body / meta  | `text-2xl font-medium tracking-tighter` / `text-base font-medium tracking-tight` / `text-sm tracking-tight` / `text-xs text-muted-foreground` |
+| Display tracking                 | `tracking-tighter` on the page title, `tracking-tight` on body                                                                                |
+| Controls / inputs height         | `h-8` default button, `h-7` `size="icon-sm"` trigger, `Input` at shadcn default                                                               |
+| Radius (control / card / dialog) | `--radius: 0.625rem`; pills are `rounded-full`, rows live in a `rounded-xl border` list                                                       |
+| Container / gutters              | Inherited from the workspace shell; team page is `flex flex-col gap-6`, no new container                                                      |
+| Section padding                  | Card owns it (`CardContent`); row padding `p-3`, list gap `gap-3`                                                                             |
+| Accent                           | None. `--primary` (ink) only; destructive is `--destructive` via `variant="destructive"`                                                      |
+| Canvas / surface                 | `--background` / `--card`, separated by `--border`                                                                                            |
+| Motion                           | View transitions 180ms `cubic-bezier(0.4, 0, 0.2, 1)`; menus 100ms; nothing else                                                              |
 
 ## Reference
 
@@ -58,13 +58,14 @@ Avoid:        a confirm dialog for a reversible role change; toasts for failures
 
 ## Decisions log
 
-| Date | Decision | Why | Supersedes |
-|---|---|---|---|
-| 2026-11-11 | Assignable roles are the two seeded **workspace-scope** roles: `admin`, `member` | `resolveWorkspaceRole` already guarantees workspace scope; project-scope `lead`/`member` share titles and must not leak in. No migration. | — |
-| 2026-11-11 | Removal sets `team.status = 'left'`, never deletes the row | All access paths already filter it; authored versions, comments and approvals keep a real name instead of "a former member" | — |
-| 2026-11-11 | Admins may manage other admins; the owner is untouchable; refuse a change that drops the last admin | The zero-admin guard is the actual protection; owner-only admin management deadlocks a two-admin team when the owner is away | — |
-| 2026-11-11 | Role change applies immediately from a submenu; removal uses `AlertDialog` | Role change is reversible and low-stakes; removal ends someone's access and needs the name in the prompt | — |
-| 2026-11-11 | Extract `requireWorkspaceManager` from `src/server/functions/invites.ts` and share it | A second copy of the session + verified-email + admin gate is a second bug; the codebase's own doctrine (`access-service.ts`) forbids it | — |
+| Date       | Decision                                                                                            | Why                                                                                                                                                                                                                                                                                | Supersedes                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 2026-11-11 | Assignable roles are the two seeded **workspace-scope** roles: `admin`, `member`                    | `resolveWorkspaceRole` already guarantees workspace scope; project-scope `lead`/`member` share titles and must not leak in. No migration.                                                                                                                                          | —                                                                                        |
+| 2026-11-11 | Removal sets `team.status = 'left'`, never deletes the row                                          | All access paths already filter it; authored versions, comments and approvals keep a real name instead of "a former member"                                                                                                                                                        | —                                                                                        |
+| 2026-11-11 | Admins may manage other admins; the owner is untouchable; refuse a change that drops the last admin | The zero-admin guard is the actual protection; owner-only admin management deadlocks a two-admin team when the owner is away                                                                                                                                                       | —                                                                                        |
+| 2026-11-11 | Role change applies immediately from a submenu; removal uses `AlertDialog`                          | Role change is reversible and low-stakes; removal ends someone's access and needs the name in the prompt                                                                                                                                                                           | —                                                                                        |
+| 2026-11-11 | Extract `requireWorkspaceManager` from `src/server/functions/invites.ts` and share it               | A second copy of the session + verified-email + admin gate is a second bug; the codebase's own doctrine (`access-service.ts`) forbids it                                                                                                                                           | —                                                                                        |
+| 2026-11-11 | The owner counts as a manager regardless of `ownerLeftAt`                                           | `resolveMembership` grants the owner admin from `owner_id` and ignores the flag, so counting them out refused removals the owner is entitled to make. The last-admin guard is therefore defence-in-depth, unreachable through today's API — proven by a runtime smoke, not assumed | The first draft's "owner has left" reasoning, which the flag does not actually implement |
 
 ## Do not change
 
@@ -75,6 +76,11 @@ Avoid:        a confirm dialog for a reversible role change; toasts for failures
 
 ## Open questions
 
+- **`ownerLeftAt` is inert.** `workspaces.owner_left_at` is documented as "access
+  goes dormant", but `resolveMembership` never reads it, so an owner flagged as
+  left still has full admin access and can still manage members. Either honour
+  the flag there or delete the column; today it is a comment that lies. Not in
+  this slice.
 - **Re-inviting a removed member collides.** A removed row keeps `user_id` and drops `email` (team check requires exactly one). A fresh invite creates an email seat; the signup backfill then tries to attach that same user to a second row, violating `team_workspace_user_unique`. Decide before invites-to-removed-people ships: revive the `left` row on invite, or make the backfill reopen it. Not in this slice.
 - **Stale admin UI after demotion.** `workspaceRole` is stamped by the route loader, so a demoted admin keeps admin affordances until navigation. Acceptable for now; revisit if admins are demoted mid-session in practice.
 
