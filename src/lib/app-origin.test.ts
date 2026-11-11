@@ -44,6 +44,18 @@ describe("appOrigin", () => {
     expect(appOrigin()).toBe("https://antara-git-fix-authz.vercel.app")
   })
 
+  it("prefers an explicit APP_URL over VERCEL_URL on previews", () => {
+    // The `||` ordering is load-bearing: a configured URL (e.g. a custom
+    // domain for the preview) must not lose to the auto-derived host.
+    setEnv({
+      NODE_ENV: "production",
+      VERCEL_ENV: "preview",
+      VERCEL_URL: "antara-git-fix-authz.vercel.app",
+      APP_URL: "https://preview-antara.test",
+    })
+    expect(appOrigin()).toBe("https://preview-antara.test")
+  })
+
   it("does not use VERCEL_URL as a production fallback", () => {
     setEnv({
       NODE_ENV: "production",

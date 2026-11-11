@@ -39,6 +39,7 @@ export function InviteDecision({
   pending,
   declined,
   error,
+  locked,
 }: {
   workspaceTitle: string
   roleTitle: string | null
@@ -47,6 +48,8 @@ export function InviteDecision({
   pending: boolean
   declined: boolean
   error?: string | null
+  /** True when retrying can't succeed (wrong account) — accept stays off. */
+  locked?: boolean
 }) {
   const [gone, setGone] = useState(false)
 
@@ -85,7 +88,11 @@ export function InviteDecision({
               {error}
             </p>
           )}
-          <Button className="w-full" disabled={pending} onClick={onAccept}>
+          <Button
+            className="w-full"
+            disabled={pending || locked}
+            onClick={onAccept}
+          >
             {pending && <Loader2 className="animate-spin" />}
             {pending ? "Joining…" : "Accept invite"}
           </Button>
@@ -117,6 +124,7 @@ function InvitePage() {
   const navigate = useNavigate()
   const [declined, setDeclined] = useState(false)
   const [acceptError, setAcceptError] = useState<string | null>(null)
+  const [locked, setLocked] = useState(false)
 
   const accept = useMutation({
     mutationFn: (t: string) => acceptInviteFn({ data: { token: t } }),
@@ -132,12 +140,19 @@ function InvitePage() {
         })
         return
       }
+      if (result.code === "wrong_account") {
+        // Retrying with the same account cannot succeed — lock the button
+        // instead of letting it spin uselessly.
+        setLocked(true)
+        setAcceptError(
+          `This invite was sent to ${
+            inspect.valid ? maskEmail(inspect.emailHint) : "the invited address"
+          }. Sign in with that address to accept it.`
+        )
+        return
+      }
       setAcceptError(
-        result.code === "wrong_account"
-          ? `This invite was sent to ${
-              inspect.valid ? maskEmail(inspect.emailHint) : "the invited address"
-            }. Sign in with that address to accept it.`
-          : "That invite can no longer be accepted. Ask an admin to send a new one."
+        "That invite can no longer be accepted. Ask an admin to send a new one."
       )
     },
     onError: () => {
@@ -211,11 +226,12 @@ function InvitePage() {
       pending={accept.isPending || decline.isPending}
       declined={declined}
       error={acceptError}
+      locked={locked}
       onAccept={() => {
         setAcceptError(null)
         accept.mutate(token)
       }}
-      onDecline={() => decline.mutate(inspect.valid ? inspect.inviteId : "")}
+      onDecline={() => decline.mutate(inspect.inviteId)}
     />
   )
 }

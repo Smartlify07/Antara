@@ -628,9 +628,12 @@ export async function listPendingInvitesForUser(
  * but the seat can, and a verified session plus an unjoined seat is the same
  * guarantee the token gave.
  *
- * Scoped to the caller: the seat must exist in that workspace, belong to them,
- * and not be joined. Returns null for an id that isn't theirs, so this can't be
- * used to accept into somebody else's workspace.
+ * Scoped to the caller: the invite must be addressed to the caller's email
+ * (the same binding the token path enforces — a pending seat holder must not
+ * be able to spend someone else's invite id for its role) and the seat must
+ * exist in that workspace, belong to them, and not be joined. Returns null
+ * for an id that isn't theirs, so this can't be used to accept into somebody
+ * else's workspace.
  */
 export async function acceptInviteById(
   userId: string,
@@ -649,6 +652,7 @@ export async function acceptInviteById(
     .where(
       and(
         eq(workspaceInvites.id, inviteId),
+        sql`lower(${workspaceInvites.email}) = ${email}`,
         isNull(workspaceInvites.acceptedAt),
         sql`${workspaceInvites.expiresAt} > now()`
       )

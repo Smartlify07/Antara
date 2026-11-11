@@ -56,7 +56,8 @@ export const submitRequestSchema = z.object({
     .transform((value) => (value ? value : undefined)),
   // Links the requester points at. Lenient on purpose — briefs come from
   // everywhere — but bounded: a wall of links is a brief, and a 2KB link is
-  // a smuggled payload.
+  // a smuggled payload. A blank entry is rejected rather than silently
+  // dropped: the caller should see what they actually submitted.
   referenceLinks: z
     .array(
       z
@@ -70,7 +71,6 @@ export const submitRequestSchema = z.object({
     )
     .nonempty()
     .max(10)
-    .transform((links) => links.filter((link) => link.length > 0))
     .optional(),
 })
 

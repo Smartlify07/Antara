@@ -12,6 +12,26 @@ import { normalizeEmail } from "@/lib/normalize-email"
  */
 const PROD_ORIGIN = "https://antara-lyart.vercel.app"
 
+/**
+ * Preview deployments are reachable through more than one host: the
+ * per-commit deployment URL (where `VERCEL_URL` points `baseURL`) and the
+ * stable branch alias, which proxies to whichever deployment is latest. A
+ * browser on the alias sends the alias as `Origin`, but `baseURL` is the
+ * deployment URL — so better-auth's CSRF middleware would reject those
+ * requests with INVALID_ORIGIN without an extra entry.
+ *
+ * The wildcard is scoped to this team's subdomain rather than `*.vercel.app`:
+ * Vercel hands out `<anything>-<team-slug>.vercel.app` only to that team, so
+ * no other Vercel project can reach the auth endpoints. Only added when
+ * running on a preview — production keeps its single explicit origin.
+ */
+const PREVIEW_TEAM_ORIGIN_PATTERN = "*-obinna-anosikes-projects.vercel.app"
+
+const trustedOrigins =
+  process.env.VERCEL_ENV === "preview"
+    ? [PROD_ORIGIN, PREVIEW_TEAM_ORIGIN_PATTERN]
+    : [PROD_ORIGIN]
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -28,7 +48,7 @@ export const auth = betterAuth({
   // silently emitting localhost.
   baseURL: appOrigin(),
 
-  trustedOrigins: [PROD_ORIGIN],
+  trustedOrigins,
 
   emailAndPassword: {
     enabled: true,
@@ -108,9 +128,8 @@ export const auth = betterAuth({
           // Imported lazily on purpose — see the note in `afterEmailVerification`.
           // A static import here would pull posthog-node into the client graph.
           try {
-            const { captureServerEvent } = await import(
-              "@/server/services/analytics"
-            )
+            const { captureServerEvent } =
+              await import("@/server/services/analytics")
             captureServerEvent({
               distinctId: user.id,
               event: "user_signed_up",
@@ -126,9 +145,8 @@ export const auth = betterAuth({
       create: {
         after: async (session) => {
           try {
-            const { captureServerEvent } = await import(
-              "@/server/services/analytics"
-            )
+            const { captureServerEvent } =
+              await import("@/server/services/analytics")
             captureServerEvent({
               distinctId: session.userId,
               event: "user_signed_in",

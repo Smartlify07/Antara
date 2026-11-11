@@ -1,7 +1,5 @@
 import * as Sentry from "@sentry/tanstackstart-react"
-import handler, {
-  createServerEntry,
-} from "@tanstack/react-start/server-entry"
+import handler, { createServerEntry } from "@tanstack/react-start/server-entry"
 
 /**
  * Custom server entry: wraps the TanStack Start handler with Sentry so server
@@ -23,14 +21,17 @@ if (dsn) {
 /**
  * Baseline response hardening. Set on every response here rather than in the
  * Vercel config alone, so self-hosted/preview runs get the same treatment as
- * the deployed app. CSP is report-only: it cannot break a page while the
- * allowlist is tuned, but violations still surface in the console.
+ * the deployed app. `vercel.json` repeats these for the CDN edge (static
+ * assets served without touching this function) — keep the two lists in
+ * step. CSP is report-only: it cannot break a page while the allowlist is
+ * tuned, but violations still surface in the console.
  */
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   "Content-Security-Policy-Report-Only":
     "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.posthog.com https://*.sentry.io https://api.cloudinary.com; form-action 'self'",
 }
@@ -38,7 +39,15 @@ const SECURITY_HEADERS: Record<string, string> = {
 function withSecurityHeaders(response: Response): Response {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     // A route that sets its own value (e.g. a stricter frame policy) wins.
-    if (!response.headers.has(key)) response.headers.set(key, value)
+    // A header guard on an upstream Response must degrade to "skip" rather
+    // than turn every request into a 500.
+    if (!response.headers.has(key)) {
+      try {
+        response.headers.set(key, value)
+      } catch {
+        // Immutable response: serve it unhardened rather than fail.
+      }
+    }
   }
   return response
 }

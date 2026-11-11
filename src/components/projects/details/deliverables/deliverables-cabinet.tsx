@@ -71,6 +71,7 @@ import {
 } from "@/server/functions/versions"
 import { useSession } from "@/lib/auth-client"
 import { avatarTint } from "@/lib/avatar-tint"
+import { isHttpUrl } from "@/lib/link-schemes"
 import { formatDueDate, formatRelativeTime, fromIsoDay } from "@/lib/time"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
 import { cn } from "@/lib/utils"
@@ -1532,14 +1533,19 @@ function LevelTwo({
                   ? ` (${version.externalProvider})`
                   : ""}{" "}
                 —{" "}
-                <a
-                  href={version.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-foreground underline"
-                >
-                  open file
-                </a>
+                {isHttpUrl(version.url) ? (
+                  <a
+                    href={version.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-foreground underline"
+                  >
+                    open file
+                  </a>
+                ) : (
+                  // Legacy row predating the scheme allowlist: degrade to text.
+                  <span className="text-muted-foreground">open file</span>
+                )}
                 . Antara cannot detect changes to a linked file.
               </>
             ) : (

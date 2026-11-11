@@ -31,6 +31,28 @@ describe("link scheme allowlists", () => {
     }
   })
 
+  it("rejects scheme smuggles the URL parser normalizes away", () => {
+    // The URL constructor trims surrounding whitespace and strips tabs, CR
+    // and LF from the middle of a URL, so a naive prefix check would pass
+    // these. Pinning them guards against a parser behavior change.
+    for (const value of [
+      " javascript:alert(1)",
+      "\tjavascript:alert(1)",
+      "java\tscript:alert(1)",
+      "java\nscript:alert(1)",
+      "java\rscript:alert(1)",
+      "JAVASCRIPT:alert(1)",
+    ]) {
+      expect(isHttpUrl(value)).toBe(false)
+      expect(isSafeReferenceLink(value)).toBe(false)
+    }
+  })
+
+  it("matches schemes case-insensitively", () => {
+    expect(isSafeReferenceLink("MAILTO:ada@example.com")).toBe(true)
+    expect(isSafeReferenceLink("HTTP://example.com")).toBe(true)
+  })
+
   it("rejects javascript: in request reference links", () => {
     const base = {
       workspaceId: "w",

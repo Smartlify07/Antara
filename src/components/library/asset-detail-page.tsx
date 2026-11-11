@@ -14,6 +14,7 @@ import type {
   LibraryVersionDetail,
 } from "@/server/services/library-service"
 import { libraryAssetQuery } from "@/lib/queries/library"
+import { isHttpUrl } from "@/lib/link-schemes"
 import { formatRelativeTime } from "@/lib/time"
 import { displayName } from "@/lib/person"
 import { formatBytes } from "@/components/projects/cloudinary-assets"
@@ -215,14 +216,19 @@ function VersionRow({
               ? " (" + version.externalProvider + ")"
               : ""}{" "}
             —{" "}
-            <a
-              href={version.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              open file
-            </a>
+            {isHttpUrl(version.url) ? (
+              <a
+                href={version.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                open file
+              </a>
+            ) : (
+              // Legacy row predating the scheme allowlist: degrade to text.
+              <span className="text-muted-foreground">open file</span>
+            )}
             . Antara cannot detect changes to a linked file.
           </>
         ) : (

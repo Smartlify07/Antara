@@ -9,6 +9,7 @@ import {
   REQUEST_META,
 } from "@/components/requests/request-meta"
 import { cn } from "@/lib/utils"
+import { isSafeReferenceLink } from "@/lib/link-schemes"
 import { formatDueDate, formatRelativeTime, isOverdue } from "@/lib/time"
 import type { RequestListItem } from "@/server/services/request-service"
 
@@ -134,19 +135,30 @@ export function RequestDetailBody({
             </span>
           </p>
           <ul className="mt-2 flex flex-col gap-1">
-            {request.referenceLinks.map((link) => (
-              <li key={link}>
-                <a
-                  href={link}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex items-center gap-1 text-sm underline underline-offset-2 hover:text-foreground"
-                >
-                  <ExternalLinkIcon className="size-3 shrink-0" />
-                  <span className="truncate">{link}</span>
-                </a>
-              </li>
-            ))}
+            {request.referenceLinks.map((link) => {
+              // Stored links are schema-gated now, but rows that predate the
+              // allowlist must not render into `href` unchecked.
+              const key = `link-${link}`
+              return (
+                <li key={key}>
+                  {isSafeReferenceLink(link) ? (
+                    <a
+                      href={link}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 text-sm underline underline-offset-2 hover:text-foreground"
+                    >
+                      <ExternalLinkIcon className="size-3 shrink-0" />
+                      <span className="truncate">{link}</span>
+                    </a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      <span className="truncate">{link}</span>
+                    </span>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
