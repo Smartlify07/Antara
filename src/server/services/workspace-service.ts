@@ -85,7 +85,16 @@ export async function listWorkspaces(
   const owned = await db
     .select()
     .from(workspaces)
-    .where(and(eq(workspaces.ownerId, userId), isNull(workspaces.deletedAt)))
+    .where(
+      and(
+        eq(workspaces.ownerId, userId),
+        // An owner who has left keeps no ownership-derived entry. Their seat
+        // row below is the only way back in, which is what makes
+        // `owner_left_at` mean dormant rather than decorative.
+        isNull(workspaces.ownerLeftAt),
+        isNull(workspaces.deletedAt)
+      )
+    )
   for (const workspace of owned) {
     items.set(workspace.id, {
       workspace,
