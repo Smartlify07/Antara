@@ -71,8 +71,8 @@ function TeamPage() {
           </CardTitle>
           <CardDescription>
             {canManage
-              ? "Everyone here can see this workspace's projects. Suspending and removing people is coming next."
-              : "Invitations, suspensions, and role changes are coming next."}
+              ? "Everyone here can see this workspace's projects. You can change roles and remove people; suspending is coming next."
+              : "Only workspace admins can change roles or remove people."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -86,6 +86,8 @@ function TeamPage() {
             <TeamMembers
               members={members}
               canManage={canManage}
+              workspaceSlug={workspace.slug}
+              workspaceId={workspaceId}
               onRevokeInvite={(inviteId) => revoke.mutate(inviteId)}
               action={
                 canManage ? (
