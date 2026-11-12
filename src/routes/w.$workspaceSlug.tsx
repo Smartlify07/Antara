@@ -43,6 +43,7 @@ export const Route = createFileRoute("/w/$workspaceSlug")({
       workspaceRole: access.role,
       isWorkspaceOwner: access.isOwner,
       workspaceId: access.workspace.id,
+      userId: access.userId,
     }
   },
   component: WorkspaceLayout,

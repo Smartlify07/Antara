@@ -285,6 +285,12 @@ async function attachPendingInvites(
 
 export interface WorkspaceMemberItem {
   id: string
+  /**
+   * The account behind the seat, or null for a seat nobody has claimed yet.
+   * Exposed so the client can tell which row is the viewer's own — leaving is a
+   * self-action, not an admin one.
+   */
+  userId: string | null
   name: string | null
   email: string | null
   image: string | null
@@ -333,6 +339,7 @@ export async function listWorkspaceMembers(
 
   const items: WorkspaceMemberItem[] = rows.map((row) => ({
     id: row.membership.id,
+    userId: row.membership.userId,
     name: row.member?.name ?? null,
     email: row.member?.email ?? row.membership.email,
     image: row.member?.image ?? null,
@@ -359,6 +366,7 @@ export async function listWorkspaceMembers(
     if (owner) {
       items.unshift({
         id: `owner-${ws.ownerId}`,
+        userId: ws.ownerId,
         name: owner.name,
         email: owner.email,
         image: owner.image,

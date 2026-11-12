@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { checkMemberAction } from "./member-guards"
+import { checkMemberAction, checkSelfLeave } from "./member-guards"
 import type { MemberActionFacts } from "./member-guards"
 
 /**
@@ -103,5 +103,47 @@ describe("checkMemberAction", () => {
     expect(
       checkMemberAction(facts({ isSelf: true, remainingManagers: 0 }))?.code
     ).toBe("self")
+  })
+})
+
+describe("checkSelfLeave", () => {
+  it("lets anyone who is not a manager leave", () => {
+    expect(
+      checkSelfLeave({
+        isManager: false,
+        isOwner: false,
+        remainingManagers: 0,
+      })
+    ).toBeNull()
+  })
+
+  it("lets a manager leave while another manager remains", () => {
+    expect(
+      checkSelfLeave({ isManager: true, isOwner: true, remainingManagers: 1 })
+    ).toBeNull()
+    expect(
+      checkSelfLeave({ isManager: true, isOwner: false, remainingManagers: 1 })
+    ).toBeNull()
+  })
+
+  it("tells an owner to promote someone before leaving", () => {
+    const rejection = checkSelfLeave({
+      isManager: true,
+      isOwner: true,
+      remainingManagers: 0,
+    })
+    expect(rejection?.code).toBe("last_admin")
+    expect(rejection?.message).toContain("Promote another admin")
+  })
+
+  it("tells the last admin to promote someone before leaving", () => {
+    const rejection = checkSelfLeave({
+      isManager: true,
+      isOwner: false,
+      remainingManagers: 0,
+    })
+    expect(rejection?.message).toBe(
+      "You're the last admin. Promote someone before leaving."
+    )
   })
 })

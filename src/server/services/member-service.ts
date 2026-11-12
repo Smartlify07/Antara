@@ -9,7 +9,7 @@ import {
   resolveWorkspaceRole,
 } from "@/server/services/invite-service"
 import type { MemberAction, MemberRejectionCode } from "./member-guards"
-import { checkMemberAction } from "./member-guards"
+import { checkMemberAction, checkSelfLeave } from "./member-guards"
 
 /**
  * Workspace member management: change a role, remove a member.
@@ -20,8 +20,8 @@ import { checkMemberAction } from "./member-guards"
  * Three invariants this file is built around:
  *
  * - The owner is never a target. Their capability comes from `workspaces.owner_id`
- *   (`resolveMembership` grants admin to the owner regardless of any role row),
- *   so mutating their membership row would change nothing in the UI and
+ *   (`resolveMembership` grants admin to the owner while `owner_left_at` is
+ *   null), so mutating their membership row would change nothing in the UI and
  *   everything in the audit trail.
  * - Removal is `status = 'left'`, never a delete. Every access path already
  *   filters that status (`resolveMembership`, `work-access`, project joins), and
@@ -301,4 +301,111 @@ export async function unsuspendMember({
     .where(
       and(eq(team.id, target.membership.id), eq(team.workspaceId, workspaceId))
     )
+}
+
+/**
+ * Managers who would remain if this person left — counting seats only, since
+ * the person is the caller rather than a target.
+ *
+ * Unlike `countRemainingManagers`, the owner is added only when they are
+ * somebody else and still active. A dormant owner adds nothing, and an owner
+ * leaving is not their own safety net.
+ */
+async function countManagersAfterLeaving(
+  workspace: Workspace,
+  actorUserId: string
+): Promise<number> {
+  const rows = await db
+    .select({ userId: team.userId })
+    .from(team)
+    .innerJoin(roles, eq(team.roleId, roles.id))
+    .where(
+      and(
+        eq(team.workspaceId, workspace.id),
+        eq(team.status, "active"),
+        eq(roles.scope, "workspace"),
+        eq(roles.title, SYSTEM_ROLE_ADMIN),
+        ne(team.userId, actorUserId)
+      )
+    )
+
+  const ownerHasSeat = rows.some((row) => row.userId === workspace.ownerId)
+  const ownerAdds =
+    workspace.ownerId !== actorUserId &&
+    workspace.ownerLeftAt === null &&
+    !ownerHasSeat
+  return rows.length + (ownerAdds ? 1 : 0)
+}
+
+export interface LeaveWorkspaceInput {
+  workspaceId: string
+  actorUserId: string
+}
+
+/**
+ * Leaves, as the person themselves.
+ *
+ * Not a removal: nobody else can do this for you, and the row is kept so the
+ * work you authored still resolves to a name. The seat goes to `left`; an owner
+ * additionally has `owner_left_at` stamped, which is what makes their ownership
+ * dormant rather than deleted — the workspace keeps running under whoever they
+ * promoted first.
+ *
+ * `joined_at` is left alone, like removal: it records when they joined, which
+ * is still true.
+ */
+export async function leaveWorkspace({
+  workspaceId,
+  actorUserId,
+}: LeaveWorkspaceInput): Promise<void> {
+  const membership = await resolveMembership(workspaceId, actorUserId)
+  if (!membership) {
+    throw new MemberError("You're not a member of this workspace.", "not_found")
+  }
+
+  const workspaceRows = await db
+    .select()
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+  if (workspaceRows.length === 0) {
+    throw new MemberError("That workspace no longer exists.", "not_found")
+  }
+  const workspace = workspaceRows[0]
+
+  const seatRows = await db
+    .select({ id: team.id })
+    .from(team)
+    .where(
+      and(
+        eq(team.workspaceId, workspaceId),
+        eq(team.userId, actorUserId),
+        ne(team.status, "left")
+      )
+    )
+    .limit(1)
+  const seat = seatRows.length > 0 ? seatRows[0] : null
+
+  const rejection = checkSelfLeave({
+    isManager: membership.isOwner || membership.role === SYSTEM_ROLE_ADMIN,
+    isOwner: membership.isOwner,
+    remainingManagers: await countManagersAfterLeaving(workspace, actorUserId),
+  })
+  if (rejection) throw new MemberError(rejection.message, rejection.code)
+
+  const now = new Date()
+  await db.transaction(async (tx) => {
+    if (seat) {
+      await tx
+        .update(team)
+        .set({ status: "left", updatedAt: now })
+        .where(eq(team.id, seat.id))
+    }
+    if (membership.isOwner) {
+      await tx
+        .update(workspaces)
+        .set({ ownerLeftAt: now, updatedAt: now })
+        .where(eq(workspaces.id, workspaceId))
+    }
+  })
 }

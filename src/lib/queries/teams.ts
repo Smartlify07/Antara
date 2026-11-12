@@ -6,6 +6,7 @@ import {
 import { listWorkspaceMembersFn } from "@/server/functions/workspaces"
 import {
   changeMemberRoleFn,
+  leaveWorkspaceFn,
   removeMemberFn,
   suspendMemberFn,
   unsuspendMemberFn,
@@ -71,4 +72,18 @@ export function useMemberMutations(workspaceSlug: string, workspaceId: string) {
   })
 
   return { changeRole, remove, suspend, unsuspend }
+}
+
+/**
+ * Leaving invalidates the switcher, not the roster: the caller is about to be
+ * redirected out of this workspace, so refreshing its member list would be work
+ * for a page they will no longer be allowed to read.
+ */
+export function useLeaveWorkspace(workspaceSlug: string) {
+  const client = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => leaveWorkspaceFn({ data: { workspaceSlug } }),
+    onSuccess: () => client.invalidateQueries({ queryKey: workspaceKeys.list }),
+  })
 }

@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start"
+import { redirect } from "@tanstack/react-router"
 import { z } from "zod"
-import { requireWorkspaceManager } from "@/server/functions/require-manager"
+import {
+  requireVerifiedSession,
+  requireWorkspaceManager,
+} from "@/server/functions/require-manager"
+import * as workspaceService from "@/server/services/workspace-service"
 import * as service from "@/server/services/member-service"
 
 /**
@@ -93,5 +98,38 @@ export const unsuspendMemberFn = createServerFn({ method: "POST" })
       return { ok: true as const }
     } catch (error) {
       throw toPublicError(error, "Could not unsuspend this member.")
+    }
+  })
+
+/**
+ * Leaving is a self-action, so it needs a verified session and nothing more —
+ * `requireWorkspaceManager` would make the owner an exception to their own exit
+ * and block members from the one action they can take without an admin.
+ *
+ * Returns where the caller should land next, resolved after the write: the
+ * client should not have to guess whether they have another workspace.
+ */
+export const leaveWorkspaceFn = createServerFn({ method: "POST" })
+  .validator(z.object({ workspaceSlug: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const session = await requireVerifiedSession()
+    const access = await workspaceService.getWorkspaceBySlug(
+      session.user.id,
+      data.workspaceSlug
+    )
+    if (!access) throw redirect({ to: "/dashboard" })
+
+    try {
+      await service.leaveWorkspace({
+        workspaceId: access.workspace.id,
+        actorUserId: session.user.id,
+      })
+      return {
+        landingSlug: await workspaceService.resolveLandingWorkspace(
+          session.user.id
+        ),
+      }
+    } catch (error) {
+      throw toPublicError(error, "Could not leave this workspace.")
     }
   })
