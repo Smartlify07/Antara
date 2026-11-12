@@ -73,6 +73,8 @@ Avoid:        a confirm dialog for a reversible role change; toasts for failures
 | 2026-11-12 | Suspension blocks access but keeps the session                                                      | `resolveMembership` already requires `status = 'active'`, so the status is the gate and every route/action refuses immediately. Killing sessions adds a re-login cost on unsuspend and buys nothing the status doesn't already enforce                                       | —                                                                                        |
 | 2026-11-12 | Suspend and unsuspend ship together, toggled by the row                                         | A one-way door in the UI is worse than no door: an admin who suspends by mistake would need a DB edit. The menu item flips with `member.status`, and the roster already renders the "Suspended" pill                                                                    | —                                                                                        |
 | 2026-11-12 | A suspended seat disappears from the workspace switcher and the landing resolver                | Both listed on `status != 'left'`, so a suspended member saw a workspace they could not open and bounced on click. Filtering to `active` makes the switcher agree with `resolveMembership`                                                                               | The earlier `ne(team.status, "left")` filter, which predated suspension                                                                    |
+| 2026-11-12 | Re-inviting a removed member revives the existing seat                                           | A `left` seat keeps `joined_at`, so the invite gate called a former member a current one and blocked the one action an admin most needs after a mistake. Reviving the row keeps a single seat per person and preserves authorship; inserting would collide on `(workspace_id, user_id)` | `assertCanInvite`'s "joined_at is enough to block" rule, and insert-always in `createInvite` |
+| 2026-11-12 | `owner_left_at` is honoured in `resolveMembership`                                               | The column promised dormant access and delivered none of it. Now a dormant owner gets no ownership-derived admin, falls back to their seat, and disappears from the switcher unless that seat is active. The last-manager count follows the same rule                | "The owner counts as a manager regardless of `ownerLeftAt`", which only held while the flag was inert; a dormant owner with an admin seat still counts, through the seat |
 
 ## Do not change
 
@@ -83,22 +85,17 @@ Avoid:        a confirm dialog for a reversible role change; toasts for failures
 
 ## Open questions
 
-- **`ownerLeftAt` is inert.** `workspaces.owner_left_at` is documented as "access
-  goes dormant", but `resolveMembership` never reads it, so an owner flagged as
-  left still has full admin access and can still manage members. Either honour
-  the flag there or delete the column; today it is a comment that lies. Not in
-  this slice.
-- **Re-inviting a removed member collides.** A removed row keeps `user_id` and drops `email` (team check requires exactly one). A fresh invite creates an email seat; the signup backfill then tries to attach that same user to a second row, violating `team_workspace_user_unique`. Decide before invites-to-removed-people ships: revive the `left` row on invite, or make the backfill reopen it. Not in this slice.
+- **Nothing sets `owner_left_at` yet.** The flag is now honoured end to end, but there is no "leave workspace" or ownership-transfer flow that writes it, so no user can reach the dormant state. Decide the product shape before building it: leaving probably needs an ownership transfer, not just a flag.
+- **A suspended member cannot be re-invited, only unsuspended.** `assertCanInvite` blocks any seat with `joinedAt` that is not `left`, which is right — but the refusal reads "already in this workspace" when the actionable answer is "unsuspend them".
 - **Stale admin UI after demotion.** `workspaceRole` is stamped by the route loader, so a demoted admin keeps admin affordances until navigation. Acceptable for now; revisit if admins are demoted mid-session in practice.
 
 ## This vertical slice
 
-1. **Server** — `member-guards` gains `suspend` / `unsuspend` with status-transition no-ops; `member-service` gains `suspendMember` / `unsuspendMember`; `functions/members.ts` exposes both behind the same manager gate.
-2. **Visibility** — `listWorkspaces` and `resolveLandingWorkspace` filter `status = 'active'`, so a suspended seat stops advertising a workspace it cannot open.
-3. **Client** — one shared `MemberConfirmDialog` for remove and suspend (replacing `remove-member-dialog.tsx`), a `MemberActionsMenu`, and a menu item that flips Suspend/Unsuspend with the seat's status. Unsuspend applies immediately; suspend confirms.
-4. **Proof** — typecheck, tests, build, then the dev-server flow with two accounts: suspend a member (access refused, hidden from their switcher), unsuspend (access restored), plus the DB rows.
+1. **Invite revival** — `assertCanInvite` stops treating a `left` seat as a member; `createInvite` revives that row (pending, role from the invite) instead of inserting a second seat, and clears `joined_at` so acceptance is still required.
+2. **Owner dormancy** — `resolveMembership` requires `owner_left_at IS NULL` for the owner-derived admin; `listWorkspaces` stops listing owned workspaces for a dormant owner; `countRemainingManagers` only counts the owner when they have not left.
+3. **Proof** — typecheck, tests, build, and a runtime pass over both flows against the dev database.
 
 ## Next vertical slice
 
-- **Re-inviting a removed member.** Decide whether an invite revives the `left` row or the signup backfill reopens it, then implement — it is the last gap in the invite/membership story.
-- **`ownerLeftAt`.** Either honour it in `resolveMembership` or delete the column; it currently promises dormancy it does not deliver.
+- **"Leave workspace" for owners**, or an explicit decision that ownership never leaves. The flag exists and is honoured; no flow writes it.
+- **Suspension-aware invite refusal** — say "unsuspend them" instead of "already in this workspace".

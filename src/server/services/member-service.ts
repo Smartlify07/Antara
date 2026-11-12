@@ -97,15 +97,11 @@ async function requireManager(
 /**
  * Managers who would remain if `targetId` stopped being one.
  *
- * The owner counts even without a seat row: `resolveMembership` grants them
- * admin from `workspaces.owner_id`, not from `team`, so a legacy workspace
- * where the owner never got a row still isn't treated as orphaned.
- *
- * `ownerLeftAt` is deliberately ignored, because `resolveMembership` ignores it
- * too — an owner flagged as "left" can still manage this workspace, so counting
- * them out here would refuse a removal the owner is entitled to make. That the
- * flag does not actually suspend an owner's access is recorded as an open
- * question in DESIGN.md.
+ * The owner counts even without a seat row, unless they have left: with the
+ * flag set, `resolveMembership` no longer grants the owner's admin, so counting
+ * them here would allow a change nobody would be left to undo. A dormant owner
+ * who kept an ordinary admin seat is still counted — through that row, which is
+ * the role they would actually act with.
  */
 async function countRemainingManagers(
   workspace: Workspace,
@@ -126,7 +122,8 @@ async function countRemainingManagers(
     )
 
   const ownerHasSeat = rows.some((row) => row.userId === workspace.ownerId)
-  return rows.length + (ownerHasSeat ? 0 : 1)
+  const ownerStillManages = workspace.ownerLeftAt === null && !ownerHasSeat
+  return rows.length + (ownerStillManages ? 1 : 0)
 }
 
 function targetFacts(
