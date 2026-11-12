@@ -103,7 +103,10 @@ export async function listWorkspaces(
     .where(
       and(
         eq(team.userId, userId),
-        ne(team.status, "left"),
+        // Active only. A suspended seat has no access, and `resolveMembership`
+        // refuses it, so listing it here would show a workspace that bounces
+        // on click. `left` is excluded by the same clause.
+        eq(team.status, "active"),
         // A reserved seat exists before anyone accepts. Without this the
         // workspace appears in the switcher for someone who has been invited
         // but has not joined — visible membership for a decision they haven't
@@ -158,7 +161,9 @@ export async function resolveLandingWorkspace(
     .where(
       and(
         eq(team.userId, userId),
-        ne(team.status, "left"),
+        // Active only, for the same reason as `listWorkspaces`: a suspended
+        // seat cannot open the workspace it would otherwise land on.
+        eq(team.status, "active"),
         // Same reason as `listWorkspaces`: a pending seat must not be able to
         // pick where `/dashboard` sends somebody. Landing a not-yet-member
         // inside the workspace is the consent gate with the gate removed.

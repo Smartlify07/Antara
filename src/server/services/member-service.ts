@@ -141,6 +141,7 @@ function targetFacts(
     isSelf: target.membership.userId === actorUserId,
     isPending: target.membership.joinedAt === null,
     currentRole: target.roleTitle,
+    currentStatus: target.membership.status,
     remainingManagers,
   }
 }
@@ -232,6 +233,74 @@ export async function removeMember({
   await db
     .update(team)
     .set({ status: "left", updatedAt: new Date() })
+    .where(
+      and(eq(team.id, target.membership.id), eq(team.workspaceId, workspaceId))
+    )
+}
+
+export interface MemberSuspensionInput {
+  workspaceId: string
+  membershipId: string
+  actorUserId: string
+}
+
+/**
+ * Pauses someone's access without touching their seat.
+ *
+ * Suspension is not removal: the row stays, the role stays, `joinedAt` stays,
+ * and signing in is still possible — but `resolveMembership` only accepts
+ * `status = 'active'`, so every workspace route, server function and project
+ * access refuses them until they are unsuspended. That is why this needs no
+ * session surgery: the gate is downstream of the status, not of the cookie.
+ */
+export async function suspendMember({
+  workspaceId,
+  membershipId,
+  actorUserId,
+}: MemberSuspensionInput): Promise<void> {
+  await requireManager(workspaceId, actorUserId)
+  const target = await loadTarget(workspaceId, membershipId)
+
+  assertAllowed(
+    targetFacts(
+      "suspend",
+      target,
+      actorUserId,
+      await countRemainingManagers(target.workspace, target.membership.id)
+    )
+  )
+
+  await db
+    .update(team)
+    .set({ status: "suspended", updatedAt: new Date() })
+    .where(
+      and(eq(team.id, target.membership.id), eq(team.workspaceId, workspaceId))
+    )
+}
+
+/** Restores a suspended seat. The role and history were never removed. */
+export async function unsuspendMember({
+  workspaceId,
+  membershipId,
+  actorUserId,
+}: MemberSuspensionInput): Promise<void> {
+  await requireManager(workspaceId, actorUserId)
+  const target = await loadTarget(workspaceId, membershipId)
+
+  assertAllowed(
+    targetFacts(
+      "unsuspend",
+      target,
+      actorUserId,
+      // Unsuspending can only add a manager, so this count never refuses it;
+      // it is passed for completeness rather than as a live constraint.
+      await countRemainingManagers(target.workspace, target.membership.id)
+    )
+  )
+
+  await db
+    .update(team)
+    .set({ status: "active", updatedAt: new Date() })
     .where(
       and(eq(team.id, target.membership.id), eq(team.workspaceId, workspaceId))
     )

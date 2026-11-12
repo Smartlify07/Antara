@@ -40,7 +40,7 @@ export function TeamMemberRow({
 
   return (
     <div>
-      <div className="flex items-center gap-3 p-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3">
         <Avatar className="size-9">
           <AvatarImage src={member.image ?? undefined} alt="" />
           <AvatarFallback
@@ -63,27 +63,32 @@ export function TeamMemberRow({
           </span>
         </div>
 
-        {member.isPending ? (
-          <MemberPill tone="pending">Awaiting</MemberPill>
-        ) : (
-          member.status === "suspended" && (
-            <MemberPill tone="muted">Suspended</MemberPill>
-          )
-        )}
+        {/* On a phone the badges and the menu take their own line: a suspended
+            member carries two pills, and sharing one row with the name left
+            about four characters of it. `sm:w-auto` restores the single row. */}
+        <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+          {member.isPending ? (
+            <MemberPill tone="pending">Awaiting</MemberPill>
+          ) : (
+            member.status === "suspended" && (
+              <MemberPill tone="muted">Suspended</MemberPill>
+            )
+          )}
 
-        <MemberPill tone={member.isOwner ? "owner" : "role"}>
-          {member.isOwner ? "owner" : member.role}
-        </MemberPill>
+          <MemberPill tone={member.isOwner ? "owner" : "role"}>
+            {member.isOwner ? "owner" : member.role}
+          </MemberPill>
 
-        {canManage && !member.isOwner && (
-          <MemberActions
-            member={member}
-            workspaceSlug={workspaceSlug}
-            workspaceId={workspaceId}
-            onRevokeInvite={onRevokeInvite}
-            onError={setError}
-          />
-        )}
+          {canManage && !member.isOwner && (
+            <MemberActions
+              member={member}
+              workspaceSlug={workspaceSlug}
+              workspaceId={workspaceId}
+              onRevokeInvite={onRevokeInvite}
+              onError={setError}
+            />
+          )}
+        </div>
       </div>
 
       {error && (

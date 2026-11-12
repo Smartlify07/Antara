@@ -61,3 +61,37 @@ export const removeMemberFn = createServerFn({ method: "POST" })
       throw toPublicError(error, "Could not remove this member.")
     }
   })
+
+export const suspendMemberFn = createServerFn({ method: "POST" })
+  .validator(memberSchema)
+  .handler(async ({ data }) => {
+    const { caller, access } = await requireWorkspaceManager(data.workspaceSlug)
+
+    try {
+      await service.suspendMember({
+        workspaceId: access.workspace.id,
+        membershipId: data.membershipId,
+        actorUserId: caller.userId,
+      })
+      return { ok: true as const }
+    } catch (error) {
+      throw toPublicError(error, "Could not suspend this member.")
+    }
+  })
+
+export const unsuspendMemberFn = createServerFn({ method: "POST" })
+  .validator(memberSchema)
+  .handler(async ({ data }) => {
+    const { caller, access } = await requireWorkspaceManager(data.workspaceSlug)
+
+    try {
+      await service.unsuspendMember({
+        workspaceId: access.workspace.id,
+        membershipId: data.membershipId,
+        actorUserId: caller.userId,
+      })
+      return { ok: true as const }
+    } catch (error) {
+      throw toPublicError(error, "Could not unsuspend this member.")
+    }
+  })

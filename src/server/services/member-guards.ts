@@ -10,7 +10,9 @@
  * there.
  */
 
-export type MemberAction = "change_role" | "remove"
+import type { MembershipStatus } from "@/db/enums"
+
+export type MemberAction = "change_role" | "remove" | "suspend" | "unsuspend"
 
 export type MemberRejectionCode =
   "owner" | "self" | "pending" | "noop" | "last_admin"
@@ -33,6 +35,8 @@ export interface MemberActionFacts {
   currentRole: string
   /** The role the target would hold after a `change_role`. */
   nextRole?: string
+  /** The seat's current status, which `suspend` and `unsuspend` read. */
+  currentStatus: MembershipStatus
   /**
    * Managers who would remain if this action were applied, the owner included.
    * Cannot reach zero through this API today — the owner always counts — so
@@ -42,27 +46,29 @@ export interface MemberActionFacts {
   remainingManagers: number
 }
 
+const OWNER_MESSAGE: Record<MemberAction, string> = {
+  change_role: "The workspace owner's role can't be changed.",
+  remove: "The workspace owner can't be removed.",
+  suspend: "The workspace owner can't be suspended.",
+  unsuspend: "The workspace owner is never suspended.",
+}
+
+const SELF_MESSAGE: Record<MemberAction, string> = {
+  change_role: "You can't change your own role. Ask another admin to do it.",
+  remove: "You can't remove yourself. Ask another admin to do it.",
+  suspend: "You can't suspend yourself. Ask another admin to do it.",
+  unsuspend: "You can't unsuspend yourself. Ask another admin to do it.",
+}
+
 export function checkMemberAction(
   facts: MemberActionFacts
 ): MemberRejection | null {
   if (facts.isOwner) {
-    return {
-      code: "owner",
-      message:
-        facts.action === "remove"
-          ? "The workspace owner can't be removed."
-          : "The workspace owner's role can't be changed.",
-    }
+    return { code: "owner", message: OWNER_MESSAGE[facts.action] }
   }
 
   if (facts.isSelf) {
-    return {
-      code: "self",
-      message:
-        facts.action === "remove"
-          ? "You can't remove yourself. Ask another admin to do it."
-          : "You can't change your own role. Ask another admin to do it.",
-    }
+    return { code: "self", message: SELF_MESSAGE[facts.action] }
   }
 
   if (facts.isPending) {
@@ -80,8 +86,16 @@ export function checkMemberAction(
     }
   }
 
-  // Load-bearing even though the owner usually counts: a workspace whose owner
-  // has left must not lose its last working admin.
+  if (facts.action === "suspend" && facts.currentStatus !== "active") {
+    return { code: "noop", message: "They're already suspended." }
+  }
+
+  if (facts.action === "unsuspend" && facts.currentStatus !== "suspended") {
+    return { code: "noop", message: "They aren't suspended." }
+  }
+
+  // Suspending an admin removes them from the manager count, so it carries the
+  // same risk as demoting or removing one.
   if (facts.remainingManagers < 1) {
     return {
       code: "last_admin",
