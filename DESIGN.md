@@ -4,21 +4,25 @@
 
 ## The 0→1 action
 
-**Done when a workspace admin can change a member's role and remove a member, and the roster plus the sidebar count show the result without a reload.**
+**Done when a workspace admin can change a member's role, suspend or unsuspend them, and remove them, and the roster plus the sidebar count show the result without a reload.**
 
-- Primary action: the per-row `⋯` menu on `/w/:slug/team` → **Change role** and **Remove from workspace**.
-- Where the result goes: `team.role_id` (role change) and `team.status = 'left'` (removal) in Postgres, then `teamKeys.members(workspaceId)` and `workspaceKeys.teamCount(slug)` are invalidated.
-- Current status: **stub**. Both menu items are `DropdownMenuItem disabled` (`src/components/team/team-members.tsx:132–140`); no server function exists for either. This slice is the wiring, not a polish pass.
+- Primary actions: the per-row `⋯` menu on `/w/:slug/team` → **Change role**, **Suspend / Unsuspend**, **Remove from workspace**.
+- Where the result goes: `team.role_id` (role change), `team.status = 'suspended' | 'active'` (suspend / unsuspend) and `team.status = 'left'` (removal) in Postgres, then `teamKeys.members(workspaceId)` and `workspaceKeys.teamCount(slug)` are invalidated.
+- Current status: **wired** for role and removal (PR #38), **wired for suspension** in this slice. Suspension reuses `resolveMembership`'s existing `status = 'active'` requirement, so access stops without touching sessions.
 
 Server-side acceptance (part of done, not a nice-to-have):
 
-| Guard         | Behaviour                                                                                                       |
-| ------------- | --------------------------------------------------------------------------------------------------------------- |
-| Owner row     | No actions rendered; server rejects any change targeting the workspace owner                                    |
-| Self          | Server rejects changing your own role and removing yourself ("leave workspace" is a separate, unbuilt feature)  |
-| Last admin    | Server refuses a change that would leave the workspace with zero active admins                                  |
-| Role validity | Role resolved through `resolveWorkspaceRole` (workspace scope only), never by raw id                            |
-| Removal       | `status = 'left'`; every access path (`resolveMembership`, `work-access`, project joins) already filters it out |
+| Guard         | Behaviour                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Owner row     | No actions rendered; server rejects any change targeting the workspace owner                                                    |
+| Self          | Server rejects acting on your own seat (role, suspension, removal) — "leave workspace" is a separate, unbuilt feature           |
+| Pending seat  | An unaccepted invite can only be revoked; it has no status to suspend                                                           |
+| No-op         | Re-applying the current role, suspending a suspended member, or unsuspending an active one is recorded with a reason             |
+| Last admin    | Server refuses a change that would leave nobody able to manage, including suspending the last admin                              |
+| Role validity | Role resolved through `resolveWorkspaceRole` (workspace scope only), never by raw id                                            |
+| Suspension    | `status = 'suspended'`; `resolveMembership` only accepts `active`, so routes, server functions and project access all refuse    |
+| Removal       | `status = 'left'`; every access path (`resolveMembership`, `work-access`, project joins) already filters it out                  |
+| Visibility    | A suspended seat is hidden from the workspace switcher and the landing resolver, so nobody sees a workspace that bounces on click |
 
 ## Contract
 
@@ -66,6 +70,9 @@ Avoid:        a confirm dialog for a reversible role change; toasts for failures
 | 2026-11-11 | Role change applies immediately from a submenu; removal uses `AlertDialog`                          | Role change is reversible and low-stakes; removal ends someone's access and needs the name in the prompt                                                                                                                                                                           | —                                                                                        |
 | 2026-11-11 | Extract `requireWorkspaceManager` from `src/server/functions/invites.ts` and share it               | A second copy of the session + verified-email + admin gate is a second bug; the codebase's own doctrine (`access-service.ts`) forbids it                                                                                                                                           | —                                                                                        |
 | 2026-11-11 | The owner counts as a manager regardless of `ownerLeftAt`                                           | `resolveMembership` grants the owner admin from `owner_id` and ignores the flag, so counting them out refused removals the owner is entitled to make. The last-admin guard is therefore defence-in-depth, unreachable through today's API — proven by a runtime smoke, not assumed | The first draft's "owner has left" reasoning, which the flag does not actually implement |
+| 2026-11-12 | Suspension blocks access but keeps the session                                                      | `resolveMembership` already requires `status = 'active'`, so the status is the gate and every route/action refuses immediately. Killing sessions adds a re-login cost on unsuspend and buys nothing the status doesn't already enforce                                       | —                                                                                        |
+| 2026-11-12 | Suspend and unsuspend ship together, toggled by the row                                         | A one-way door in the UI is worse than no door: an admin who suspends by mistake would need a DB edit. The menu item flips with `member.status`, and the roster already renders the "Suspended" pill                                                                    | —                                                                                        |
+| 2026-11-12 | A suspended seat disappears from the workspace switcher and the landing resolver                | Both listed on `status != 'left'`, so a suspended member saw a workspace they could not open and bounced on click. Filtering to `active` makes the switcher agree with `resolveMembership`                                                                               | The earlier `ne(team.status, "left")` filter, which predated suspension                                                                    |
 
 ## Do not change
 
@@ -84,9 +91,14 @@ Avoid:        a confirm dialog for a reversible role change; toasts for failures
 - **Re-inviting a removed member collides.** A removed row keeps `user_id` and drops `email` (team check requires exactly one). A fresh invite creates an email seat; the signup backfill then tries to attach that same user to a second row, violating `team_workspace_user_unique`. Decide before invites-to-removed-people ships: revive the `left` row on invite, or make the backfill reopen it. Not in this slice.
 - **Stale admin UI after demotion.** `workspaceRole` is stamped by the route loader, so a demoted admin keeps admin affordances until navigation. Acceptable for now; revisit if admins are demoted mid-session in practice.
 
-## Next vertical slice (stop after this)
+## This vertical slice
 
-1. **Server** — `src/server/services/member-service.ts`: `changeMemberRole`, `removeMember`, both taking `(workspaceId, membershipId, actorUserId)` and enforcing the guard table. Reuse `resolveWorkspaceRole`. Thin `src/server/functions/members.ts` with a shared `requireWorkspaceManager`.
-2. **Client** — split `team-members.tsx` (158 lines) into `team-members.tsx` (search + list), `team-member-row.tsx`, `member-actions.tsx` (submenu + remove dialog), and one `member-pill.tsx` for the three pill shapes it currently inlines.
-3. **Query layer** — `src/lib/queries/teams.ts` mutations, invalidating members + team count together.
-4. **Proof** — `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, then the real flow on the dev server with two accounts: owner demotes an admin, demotes the last admin (refused), removes a member, removed member's next request 403s back to `/dashboard`.
+1. **Server** — `member-guards` gains `suspend` / `unsuspend` with status-transition no-ops; `member-service` gains `suspendMember` / `unsuspendMember`; `functions/members.ts` exposes both behind the same manager gate.
+2. **Visibility** — `listWorkspaces` and `resolveLandingWorkspace` filter `status = 'active'`, so a suspended seat stops advertising a workspace it cannot open.
+3. **Client** — one shared `MemberConfirmDialog` for remove and suspend (replacing `remove-member-dialog.tsx`), a `MemberActionsMenu`, and a menu item that flips Suspend/Unsuspend with the seat's status. Unsuspend applies immediately; suspend confirms.
+4. **Proof** — typecheck, tests, build, then the dev-server flow with two accounts: suspend a member (access refused, hidden from their switcher), unsuspend (access restored), plus the DB rows.
+
+## Next vertical slice
+
+- **Re-inviting a removed member.** Decide whether an invite revives the `left` row or the signup backfill reopens it, then implement — it is the last gap in the invite/membership story.
+- **`ownerLeftAt`.** Either honour it in `resolveMembership` or delete the column; it currently promises dormancy it does not deliver.

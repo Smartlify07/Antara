@@ -18,6 +18,7 @@ function facts(overrides: Partial<MemberActionFacts>): MemberActionFacts {
     isPending: false,
     currentRole: "member",
     nextRole: "admin",
+    currentStatus: "active",
     remainingManagers: 1,
     ...overrides,
   }
@@ -34,6 +35,9 @@ describe("checkMemberAction", () => {
     expect(
       checkMemberAction(facts({ isOwner: true, action: "remove" }))?.message
     ).toBe("The workspace owner can't be removed.")
+    expect(
+      checkMemberAction(facts({ isOwner: true, action: "suspend" }))?.message
+    ).toBe("The workspace owner can't be suspended.")
   })
 
   it("refuses acting on yourself", () => {
@@ -41,6 +45,9 @@ describe("checkMemberAction", () => {
     expect(
       checkMemberAction(facts({ isSelf: true, action: "remove" }))?.message
     ).toContain("can't remove yourself")
+    expect(
+      checkMemberAction(facts({ isSelf: true, action: "suspend" }))?.message
+    ).toContain("can't suspend yourself")
   })
 
   it("refuses a pending seat, which must be revoked instead", () => {
@@ -55,8 +62,36 @@ describe("checkMemberAction", () => {
     expect(rejection?.message).toBe("They already have the admin role.")
   })
 
+  it("suspends an active member and refuses a second suspend", () => {
+    expect(checkMemberAction(facts({ action: "suspend" }))).toBeNull()
+    expect(
+      checkMemberAction(
+        facts({ action: "suspend", currentStatus: "suspended" })
+      )?.message
+    ).toBe("They're already suspended.")
+  })
+
+  it("unsuspends a suspended member and refuses a redundant unsuspend", () => {
+    expect(
+      checkMemberAction(
+        facts({ action: "unsuspend", currentStatus: "suspended" })
+      )
+    ).toBeNull()
+    expect(checkMemberAction(facts({ action: "unsuspend" }))?.message).toBe(
+      "They aren't suspended."
+    )
+  })
+
+  it("lets a suspended member be removed", () => {
+    expect(
+      checkMemberAction(facts({ action: "remove", currentStatus: "suspended" }))
+    ).toBeNull()
+  })
+
   it("refuses a change that would leave nobody able to manage", () => {
-    const rejection = checkMemberAction(facts({ remainingManagers: 0 }))
+    const rejection = checkMemberAction(
+      facts({ action: "suspend", remainingManagers: 0 })
+    )
     expect(rejection?.code).toBe("last_admin")
   })
 

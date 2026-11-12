@@ -4,7 +4,12 @@ import {
   useQueryClient,
 } from "@tanstack/react-query"
 import { listWorkspaceMembersFn } from "@/server/functions/workspaces"
-import { changeMemberRoleFn, removeMemberFn } from "@/server/functions/members"
+import {
+  changeMemberRoleFn,
+  removeMemberFn,
+  suspendMemberFn,
+  unsuspendMemberFn,
+} from "@/server/functions/members"
 import { workspaceKeys } from "@/lib/queries/workspaces"
 
 export const teamKeys = {
@@ -53,5 +58,17 @@ export function useMemberMutations(workspaceSlug: string, workspaceId: string) {
     onSuccess: invalidate,
   })
 
-  return { changeRole, remove }
+  const suspend = useMutation({
+    mutationFn: (membershipId: string) =>
+      suspendMemberFn({ data: { workspaceSlug, membershipId } }),
+    onSuccess: invalidate,
+  })
+
+  const unsuspend = useMutation({
+    mutationFn: (membershipId: string) =>
+      unsuspendMemberFn({ data: { workspaceSlug, membershipId } }),
+    onSuccess: invalidate,
+  })
+
+  return { changeRole, remove, suspend, unsuspend }
 }

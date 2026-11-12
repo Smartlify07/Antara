@@ -71,8 +71,8 @@ function TeamPage() {
           </CardTitle>
           <CardDescription>
             {canManage
-              ? "Everyone here can see this workspace's projects. You can change roles and remove people; suspending is coming next."
-              : "Only workspace admins can change roles or remove people."}
+              ? "Everyone here can see this workspace's projects. You can change roles, suspend, and remove people."
+              : "Only workspace admins can manage members."}
           </CardDescription>
         </CardHeader>
         <CardContent>
