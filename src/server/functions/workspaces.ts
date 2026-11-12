@@ -165,12 +165,12 @@ export const touchWorkspaceFn = createServerFn({ method: "POST" })
 export const getWorkspaceFn = createServerFn({ method: "GET" })
   .validator(z.object({ slug: z.string() }))
   .handler(async ({ data }) => {
-    const access = await service.getWorkspaceBySlug(
-      await requireUserId(),
-      data.slug
-    )
+    const userId = await requireUserId()
+    const access = await service.getWorkspaceBySlug(userId, data.slug)
     if (!access) throw redirect({ to: "/dashboard" })
-    return access
+    // The session id rides along so the team page can mark the viewer's own
+    // row without a second round trip just to ask who they are.
+    return { ...access, userId }
   })
 
 /**

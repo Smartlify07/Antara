@@ -226,7 +226,7 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
   // Scoped to THIS workspace on purpose. Asking whether a `user` row exists
   // anywhere would turn any admin into an oracle over the whole user base.
   const joined = await db
-    .select({ id: team.id })
+    .select({ id: team.id, status: team.status })
     .from(team)
     .innerJoin(user, eq(team.userId, user.id))
     .where(
@@ -250,8 +250,14 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
     .limit(1)
 
   if (joined.length > 0) {
+    // A suspended seat is the one case with an obvious next step, so say it.
+    // "Already in this workspace" reads like a fact to accept; the admin's
+    // actual route is the unsuspend item on the team row.
+    const onlySuspended = joined.every((row) => row.status === "suspended")
     throw new InviteError(
-      "That address is already in this workspace.",
+      onlySuspended
+        ? "That person is suspended in this workspace. Unsuspend them from the team page instead."
+        : "That address is already in this workspace.",
       "already_member"
     )
   }

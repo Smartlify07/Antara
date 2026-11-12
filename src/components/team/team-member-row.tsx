@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { LeaveWorkspaceAction } from "@/components/team/leave-workspace-action"
 import { MemberActions } from "@/components/team/member-actions"
 import { MemberPill } from "@/components/team/member-pill"
 import { avatarTint } from "@/lib/avatar-tint"
@@ -17,8 +18,10 @@ function initials(member: WorkspaceMemberItem) {
 
 /**
  * One person on the roster: identity, two status pills, and the actions menu.
- * The owner gets no menu at all — their capability comes from `owner_id`, so
- * every item behind it would be refused by the server.
+ *
+ * The owner has no management menu — their capability comes from `owner_id`,
+ * so every item behind it would be refused by the server — but everyone,
+ * owner included, gets the leave control on their own row.
  *
  * The error line lives here, under the row, because `MemberActions` unmounts
  * with the menu it reported from.
@@ -26,17 +29,21 @@ function initials(member: WorkspaceMemberItem) {
 export function TeamMemberRow({
   member,
   canManage,
+  currentUserId,
   workspaceSlug,
   workspaceId,
   onRevokeInvite,
 }: {
   member: WorkspaceMemberItem
   canManage: boolean
+  /** The viewer's account id, so their own row can offer Leave. */
+  currentUserId: string
   workspaceSlug: string
   workspaceId: string
   onRevokeInvite?: (inviteId: string) => void
 }) {
   const [error, setError] = useState<string | null>(null)
+  const isSelf = member.userId !== null && member.userId === currentUserId
 
   return (
     <div>
@@ -79,14 +86,19 @@ export function TeamMemberRow({
             {member.isOwner ? "owner" : member.role}
           </MemberPill>
 
-          {canManage && !member.isOwner && (
-            <MemberActions
-              member={member}
-              workspaceSlug={workspaceSlug}
-              workspaceId={workspaceId}
-              onRevokeInvite={onRevokeInvite}
-              onError={setError}
-            />
+          {isSelf ? (
+            <LeaveWorkspaceAction workspaceSlug={workspaceSlug} />
+          ) : (
+            canManage &&
+            !member.isOwner && (
+              <MemberActions
+                member={member}
+                workspaceSlug={workspaceSlug}
+                workspaceId={workspaceId}
+                onRevokeInvite={onRevokeInvite}
+                onError={setError}
+              />
+            )
           )}
         </div>
       </div>

@@ -32,14 +32,7 @@ export interface WorkspaceManager {
 export async function requireWorkspaceManager(
   workspaceSlug: string
 ): Promise<WorkspaceManager> {
-  const session = await auth.api.getSession({
-    headers: await getRequestHeaders(),
-  })
-  if (!session?.user)
-    throw redirect({ to: "/login", search: { callbackURL: undefined } })
-  if (!session.user.emailVerified) {
-    throw redirect({ to: "/verify-email", search: { error: undefined } })
-  }
+  const session = await requireVerifiedSession()
 
   const access = await workspaceService.getWorkspaceBySlug(
     session.user.id,
@@ -59,4 +52,28 @@ export async function requireWorkspaceManager(
     access,
     isOwner: access.isOwner,
   }
+}
+
+/**
+ * A session that has been verified, or a redirect that explains why not.
+ *
+ * Split out from `requireWorkspaceManager` because some actions need only a
+ * verified *person*, not admin rights over a workspace — accepting an invite,
+ * and leaving one.
+ *
+ * The `emailVerified` check is the load-bearing one: a seat is reserved for an
+ * address that may have no account, so registering that address succeeds, and
+ * anyone who could act on an unverified session could walk into the workspace.
+ */
+export async function requireVerifiedSession() {
+  const session = await auth.api.getSession({
+    headers: await getRequestHeaders(),
+  })
+  if (!session?.user) {
+    throw redirect({ to: "/login", search: { callbackURL: undefined } })
+  }
+  if (!session.user.emailVerified) {
+    throw redirect({ to: "/verify-email", search: { error: undefined } })
+  }
+  return session
 }

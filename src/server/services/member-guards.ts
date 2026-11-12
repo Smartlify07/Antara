@@ -60,6 +60,33 @@ const SELF_MESSAGE: Record<MemberAction, string> = {
   unsuspend: "You can't unsuspend yourself. Ask another admin to do it.",
 }
 
+/**
+ * The self-action guard: can this person leave?
+ *
+ * Only managers are constrained. Someone with no manager rights leaving a
+ * workspace cannot orphan it, so the last-manager rule is not their business.
+ */
+export interface SelfLeaveFacts {
+  /** The caller holds workspace admin, or owns the workspace. */
+  isManager: boolean
+  /** The caller is the workspace owner. */
+  isOwner: boolean
+  /** Managers who would remain if the caller left. */
+  remainingManagers: number
+}
+
+export function checkSelfLeave(facts: SelfLeaveFacts): MemberRejection | null {
+  if (!facts.isManager) return null
+  if (facts.remainingManagers > 0) return null
+
+  return {
+    code: "last_admin",
+    message: facts.isOwner
+      ? "Promote another admin before leaving — otherwise nobody could manage this workspace."
+      : "You're the last admin. Promote someone before leaving.",
+  }
+}
+
 export function checkMemberAction(
   facts: MemberActionFacts
 ): MemberRejection | null {

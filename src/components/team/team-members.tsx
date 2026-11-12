@@ -12,6 +12,7 @@ export function TeamMembers({
   members,
   canManage,
   action,
+  currentUserId,
   workspaceSlug,
   workspaceId,
   onRevokeInvite,
@@ -20,6 +21,8 @@ export function TeamMembers({
   canManage: boolean
   /** Slot for the invite button, so it isn't duplicated per consumer. */
   action?: React.ReactNode
+  /** The viewer's account id, so their own row offers Leave. */
+  currentUserId: string
   workspaceSlug: string
   /** Keys the member query — a different identifier from the slug. */
   workspaceId: string
@@ -56,6 +59,7 @@ export function TeamMembers({
             key={member.id}
             member={member}
             canManage={canManage}
+            currentUserId={currentUserId}
             workspaceSlug={workspaceSlug}
             workspaceId={workspaceId}
             onRevokeInvite={onRevokeInvite}

@@ -7,7 +7,10 @@ import { sendInviteEmail } from "@/lib/email/templates"
 import { normalizeEmail } from "@/lib/normalize-email"
 import * as service from "@/server/services/invite-service"
 import * as inviteService from "@/server/services/invite-service"
-import { requireWorkspaceManager } from "@/server/functions/require-manager"
+import {
+  requireVerifiedSession,
+  requireWorkspaceManager,
+} from "@/server/functions/require-manager"
 import { INVITE_TTL_DAYS } from "@/lib/invite-token"
 
 /**
@@ -184,31 +187,6 @@ export const acceptInviteFn = createServerFn({ method: "POST" })
       throw e
     }
   })
-
-/**
- * A session that has been verified, or a redirect that explains why not.
- *
- * Split out from `requireManager` because accepting and declining need only a
- * verified *person*, not admin rights over the workspace. The `emailVerified`
- * check is the load-bearing one: a seat is reserved for an address that may have
- * no account, so registering that address succeeds, and anyone who could act on
- * an unverified session could walk into the workspace.
- */
-async function requireVerifiedSession() {
-  const session = await auth.api.getSession({
-    headers: await getRequestHeaders(),
-  })
-  if (!session?.user) {
-    throw redirect({ to: "/login", search: { callbackURL: undefined } })
-  }
-  if (!session.user.emailVerified) {
-    throw redirect({
-      to: "/verify-email",
-      search: { error: undefined },
-    })
-  }
-  return session
-}
 
 /**
  * Who is asking, for the invite landing page.
