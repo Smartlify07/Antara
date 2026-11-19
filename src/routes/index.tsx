@@ -9,6 +9,7 @@ import StatsSection from "@/components/stats-2"
 import Pricing from "@/components/pricing-2"
 import FAQs from "@/components/faqs-1"
 import CallToAction from "@/components/call-to-action-2"
+import LogoCloud from "@/components/logo-cloud"
 import Footer from "@/components/footer-2"
 
 export const Route = createFileRoute("/")({
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/")({
 
 function LandingPage() {
   return (
-    <div className="bg-background min-h-svh">
+    <div className="min-h-svh bg-background">
       <SiteNotchNav />
       <HeroSection />
       <FeaturesGrid />
@@ -37,6 +38,7 @@ function LandingPage() {
       <Pricing />
       <FAQs />
       <CallToAction />
+      <LogoCloud />
       <Footer />
     </div>
   )

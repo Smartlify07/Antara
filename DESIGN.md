@@ -230,15 +230,17 @@ gap. Loosening either brings back the "stacked blocks" read; the serif and the
 sans only share a block if they sit closer than their own line-heights would
 suggest.
 
-### Logo cloud — SSR width fix (2026-11-18)
+### Logo cloud — moved to the foot (2026-11-19)
 
-`LogoCloud` picks its desktop row vs the `InfiniteSlider` from
-`useMedia("(min-width: 64rem)")`, which starts at `true`. Every SSR response
-therefore shipped the non-wrapping desktop row, and at 390 that row ran to
-769px — a 379px sideways scroll until hydration swapped it out. The row now
-carries `hidden lg:flex`, so it cannot render below `lg` whether or not
-hydration has happened. Verified on the built preview: `docW` 390 with the
-mobile slider (12 marks, masked edges), desktop still `flex`.
+The client marks are no longer under the hero mockup. They are the last block
+before the footer, and they scroll at every width: one `InfiniteSlider` at
+40px/s with an `88% → 99%` side mask, so there is no static desktop row. That
+retires the earlier `useMedia` branch — and with it the SSR width bug below,
+since one render path has nothing to swap after hydration.
+
+The previous row shipped `hidden lg:flex` to keep 390px from scrolling
+sideways; that fix is gone with the row. Re-check `docW` at 390 after any change
+to the strip.
 
 
 ### Hero copy — revised 2026-11-17 (second copy pass)
@@ -363,20 +365,21 @@ delete.
 
 ---
 
-## Auth — signup backdrop
+## Auth — panel backdrop
 
-Decided 2026-11-19. Signup's right-hand testimonial panel uses the hero mesh
-instead of the daylight studio photo; login keeps the photo.
+Decided 2026-11-19. Signup and login both use the hero mesh for the right-hand
+testimonial panel. The daylight studio photo remains the default for the other
+auth surfaces — verification, invites, error and workspace creation.
 
 `.hero-mesh` now reads its base ramp direction from `--mesh-angle` with a
 `145deg` fallback, and `.auth-mesh` supplies `30deg`. Both classes render on the
-signup panel, so the five layers and their stops stay one definition — only the
-base direction changes. The grain comes along: a ramp this shallow bands on
-8-bit displays without it.
+signup and login panels, so the five layers and their stops stay one definition
+— only the base direction changes. The grain comes along: a ramp this shallow
+bands on 8-bit displays without it.
 
 The glass card (`bg-black/55`) is unchanged. Over the photo it composites to
 near-black; over the pale mesh it lands mid-grey. That is the current state, not
-a settled decision — revisit the card if the signup panel reads washed out.
+a settled decision — revisit the card if the auth panel reads washed out.
 
 
 ---

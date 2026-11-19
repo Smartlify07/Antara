@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router"
 import { ArrowUpRight, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { HeroAppPreview } from "@/components/hero-app-preview"
-import LogoCloud from "@/components/hero-section-2-logo-cloud"
 
 /**
  * The hero fill is a mesh of three sky stops — `#38bdf8`, `#bae6fd`,
@@ -28,7 +27,7 @@ export default function HeroSection() {
       <section className="relative flex min-h-svh flex-col overflow-hidden bg-[#bae6fd]">
         <div
           aria-hidden
-          className="hero-mesh animate-in fade-in absolute inset-0 duration-[1100ms] ease-out motion-reduce:animate-none"
+          className="hero-mesh absolute inset-0 animate-in duration-[1100ms] ease-out fade-in motion-reduce:animate-none"
         />
         <div
           aria-hidden
@@ -38,7 +37,7 @@ export default function HeroSection() {
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col items-center justify-center px-6 pt-32 pb-24 text-center">
           <h1 className="max-w-[17.5em] text-[clamp(2.5rem,6.4vw,5.5rem)] leading-[0.94] font-semibold tracking-[-0.045em] text-balance text-[#0a0a0a]">
             Work finds its place.
-            <span className="mt-1 block font-display text-[calc(clamp(2.5rem,6.4vw,5.5rem)-4px)] leading-[1.02] font-normal tracking-[-0.025em] text-balance italic text-[#0a0a0a]">
+            <span className="mt-1 block font-display text-[calc(clamp(2.5rem,6.4vw,5.5rem)-4px)] leading-[1.02] font-normal tracking-[-0.025em] text-balance text-[#0a0a0a] italic">
               Nothing lost.
             </span>
           </h1>
@@ -105,8 +104,6 @@ export default function HeroSection() {
           </div>
         </div>
       </section>
-
-      <LogoCloud />
     </>
   )
 }

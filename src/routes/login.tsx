@@ -51,7 +51,7 @@ function LoginPage() {
   }, [data?.session, navigate, target])
 
   return (
-    <AuthLayout>
+    <AuthLayout panel="mesh">
       <LoginForm callbackURL={target} />
     </AuthLayout>
   )
