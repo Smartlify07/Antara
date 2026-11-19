@@ -19,7 +19,7 @@ export const Route = createFileRoute("/w/$workspaceSlug/team")({
 })
 
 function TeamPage() {
-  const { workspace, workspaceId, workspaceRole, isWorkspaceOwner } =
+  const { workspace, workspaceId, workspaceRole, isWorkspaceOwner, userId } =
     Route.useRouteContext()
 
   // Cached under a key, so the invite mutations can invalidate this list
@@ -71,8 +71,8 @@ function TeamPage() {
           </CardTitle>
           <CardDescription>
             {canManage
-              ? "Everyone here can see this workspace's projects. Suspending and removing people is coming next."
-              : "Invitations, suspensions, and role changes are coming next."}
+              ? "Everyone here can see this workspace's projects. You can change roles, suspend, and remove people."
+              : "Only workspace admins can manage members."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -86,6 +86,9 @@ function TeamPage() {
             <TeamMembers
               members={members}
               canManage={canManage}
+              currentUserId={userId}
+              workspaceSlug={workspace.slug}
+              workspaceId={workspaceId}
               onRevokeInvite={(inviteId) => revoke.mutate(inviteId)}
               action={
                 canManage ? (

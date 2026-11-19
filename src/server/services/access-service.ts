@@ -19,6 +19,12 @@ export interface Membership {
  * recipient had never agreed to join.
  *
  * Every caller must go through here. A second copy is a second bug.
+ *
+ * `owner_left_at` is honoured here and only here: an owner flagged as gone has
+ * no ownership-derived access, and falls through to their seat row like anyone
+ * else. The flag was dead for a while — the schema promised dormancy that this
+ * function did not deliver — which meant an owner who left still managed the
+ * workspace they had left.
  */
 export async function resolveMembership(
   workspaceId: string,
@@ -31,12 +37,17 @@ export async function resolveMembership(
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.ownerId, userId),
+        // A dormant owner is not a manager. Falls through to the seat lookup
+        // below, so an owner who kept an ordinary seat still has that seat's
+        // role and nothing more.
+        isNull(workspaces.ownerLeftAt),
         isNull(workspaces.deletedAt)
       )
     )
     .limit(1)
 
-  // The owner is not a member row, so they are resolved separately.
+  // The owner is not required to have a member row, so they are resolved
+  // separately.
   if (owned) return { role: "admin", isOwner: true }
 
   const [membership] = await db

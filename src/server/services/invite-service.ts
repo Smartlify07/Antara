@@ -144,16 +144,26 @@ export async function createInvite(input: CreateInviteInput): Promise<{
 
     await deleteUnjoinedSeat(tx, input.workspaceId, email)
 
+    // A removed person still has their row: it keeps `joined_at` and the
+    // account, which is what preserves their name on the work they authored.
+    // Reviving it is the only shape that satisfies both unique indexes —
+    // inserting would leave two seats for one person, and the next backfill or
+    // accept would collide on `(workspace_id, user_id)`.
+    const revived = await reviveLeftSeat(tx, input.workspaceId, email, role.id)
+
     // Reserve the seat immediately, so the invitee appears in the member list
-    // marked as awaiting rather than only in a separate invites list. The seat
-    // carries `user_id = null` until the link is redeemed.
-    await tx.insert(team).values({
-      workspaceId: input.workspaceId,
-      email,
-      roleId: role.id,
-      status: "active",
-      invitedAt: new Date(),
-    })
+    // marked as awaiting rather than only in a separate invites list. A fresh
+    // seat carries `user_id = null` until the link is redeemed; a revived one
+    // keeps the account it already had and is matched by it on accept.
+    if (!revived) {
+      await tx.insert(team).values({
+        workspaceId: input.workspaceId,
+        email,
+        roleId: role.id,
+        status: "active",
+        invitedAt: new Date(),
+      })
+    }
 
     await tx.insert(workspaceInvites).values({
       workspaceId: input.workspaceId,
@@ -200,17 +210,23 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
     )
   }
 
-  // Only a *joined* membership blocks an invite.
+  // Only a *joined, current* membership blocks an invite.
   //
   // A seat reserved by address does not — that is the replace-and-reissue path,
   // and `createInvite` clears the old seat in the same transaction. Rejecting it
   // would make a second invite to someone already invited impossible, and that
   // is the common case: the first mail gets lost.
   //
+  // Removed members are deliberately not blocked either. A `left` seat keeps
+  // `joinedAt`, so the old check treated a former member as a current one and
+  // made re-inviting impossible — the one action an admin is most likely to
+  // want after removing somebody by mistake. `createInvite` revives that row
+  // rather than inserting a second one.
+  //
   // Scoped to THIS workspace on purpose. Asking whether a `user` row exists
   // anywhere would turn any admin into an oracle over the whole user base.
   const joined = await db
-    .select({ id: team.id })
+    .select({ id: team.id, status: team.status })
     .from(team)
     .innerJoin(user, eq(team.userId, user.id))
     .where(
@@ -227,14 +243,21 @@ async function assertCanInvite(input: CreateInviteInput): Promise<void> {
         // already in the workspace, and could never be re-invited. Since the
         // invite is what sends the mail, that is a dead end: they can't be
         // reached and they aren't a member.
-        isNotNull(team.joinedAt)
+        isNotNull(team.joinedAt),
+        ne(team.status, "left")
       )
     )
     .limit(1)
 
   if (joined.length > 0) {
+    // A suspended seat is the one case with an obvious next step, so say it.
+    // "Already in this workspace" reads like a fact to accept; the admin's
+    // actual route is the unsuspend item on the team row.
+    const onlySuspended = joined.every((row) => row.status === "suspended")
     throw new InviteError(
-      "That address is already in this workspace.",
+      onlySuspended
+        ? "That person is suspended in this workspace. Unsuspend them from the team page instead."
+        : "That address is already in this workspace.",
       "already_member"
     )
   }
@@ -356,6 +379,68 @@ async function discardPendingInvite(
 /** The transaction handle, so a helper can join a caller's transaction. */
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
+/** The account holding `email`, if there is one. Scoped by address, not id. */
+async function findUserByEmail(tx: Tx, email: string) {
+  const rows = await tx
+    .select({ id: user.id })
+    .from(user)
+    .where(sql`lower(${user.email}) = ${email}`)
+    .limit(1)
+  if (rows.length === 0) return null
+  return rows[0]
+}
+
+/**
+ * Turns a removed seat back into a pending one, or reports that there was none.
+ *
+ * The row is reused rather than replaced so versions, comments and approvals
+ * keep pointing at a seat whose name is still resolved. `joined_at` is cleared
+ * because the person has to accept the new invite — they are not a member again
+ * simply because an admin typed their address.
+ *
+ * The identity columns follow the `team` check constraint (exactly one of
+ * `user_id`/`email`): a known account is addressed by id with the email cleared,
+ * matching the shape the verification backfill produces; an address with no
+ * account keeps the email.
+ */
+async function reviveLeftSeat(
+  tx: Tx,
+  workspaceId: string,
+  email: string,
+  roleId: string
+): Promise<boolean> {
+  const holder = await findUserByEmail(tx, email)
+  const identity = holder
+    ? or(eq(team.userId, holder.id), sql`lower(${team.email}) = ${email}`)
+    : sql`lower(${team.email}) = ${email}`
+
+  const leftRows = await tx
+    .select({ id: team.id })
+    .from(team)
+    .where(
+      and(eq(team.workspaceId, workspaceId), eq(team.status, "left"), identity)
+    )
+    .limit(1)
+
+  if (leftRows.length === 0) return false
+  const left = leftRows[0]
+
+  await tx
+    .update(team)
+    .set({
+      userId: holder?.id ?? null,
+      email: holder ? null : email,
+      roleId,
+      status: "active",
+      invitedAt: new Date(),
+      joinedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(team.id, left.id))
+
+  return true
+}
+
 /**
  * Removes the seat reserved for `email`, if there is one that was never joined.
  *
@@ -381,11 +466,7 @@ async function deleteUnjoinedSeat(
   workspaceId: string,
   email: string
 ): Promise<void> {
-  const [holder] = await tx
-    .select({ id: user.id })
-    .from(user)
-    .where(sql`lower(${user.email}) = ${email}`)
-    .limit(1)
+  const holder = await findUserByEmail(tx, email)
 
   await tx
     .delete(team)

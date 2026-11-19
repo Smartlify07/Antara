@@ -85,7 +85,16 @@ export async function listWorkspaces(
   const owned = await db
     .select()
     .from(workspaces)
-    .where(and(eq(workspaces.ownerId, userId), isNull(workspaces.deletedAt)))
+    .where(
+      and(
+        eq(workspaces.ownerId, userId),
+        // An owner who has left keeps no ownership-derived entry. Their seat
+        // row below is the only way back in, which is what makes
+        // `owner_left_at` mean dormant rather than decorative.
+        isNull(workspaces.ownerLeftAt),
+        isNull(workspaces.deletedAt)
+      )
+    )
   for (const workspace of owned) {
     items.set(workspace.id, {
       workspace,
@@ -103,7 +112,10 @@ export async function listWorkspaces(
     .where(
       and(
         eq(team.userId, userId),
-        ne(team.status, "left"),
+        // Active only. A suspended seat has no access, and `resolveMembership`
+        // refuses it, so listing it here would show a workspace that bounces
+        // on click. `left` is excluded by the same clause.
+        eq(team.status, "active"),
         // A reserved seat exists before anyone accepts. Without this the
         // workspace appears in the switcher for someone who has been invited
         // but has not joined — visible membership for a decision they haven't
@@ -158,7 +170,9 @@ export async function resolveLandingWorkspace(
     .where(
       and(
         eq(team.userId, userId),
-        ne(team.status, "left"),
+        // Active only, for the same reason as `listWorkspaces`: a suspended
+        // seat cannot open the workspace it would otherwise land on.
+        eq(team.status, "active"),
         // Same reason as `listWorkspaces`: a pending seat must not be able to
         // pick where `/dashboard` sends somebody. Landing a not-yet-member
         // inside the workspace is the consent gate with the gate removed.
@@ -271,6 +285,12 @@ async function attachPendingInvites(
 
 export interface WorkspaceMemberItem {
   id: string
+  /**
+   * The account behind the seat, or null for a seat nobody has claimed yet.
+   * Exposed so the client can tell which row is the viewer's own — leaving is a
+   * self-action, not an admin one.
+   */
+  userId: string | null
   name: string | null
   email: string | null
   image: string | null
@@ -319,6 +339,7 @@ export async function listWorkspaceMembers(
 
   const items: WorkspaceMemberItem[] = rows.map((row) => ({
     id: row.membership.id,
+    userId: row.membership.userId,
     name: row.member?.name ?? null,
     email: row.member?.email ?? row.membership.email,
     image: row.member?.image ?? null,
@@ -345,6 +366,7 @@ export async function listWorkspaceMembers(
     if (owner) {
       items.unshift({
         id: `owner-${ws.ownerId}`,
+        userId: ws.ownerId,
         name: owner.name,
         email: owner.email,
         image: owner.image,

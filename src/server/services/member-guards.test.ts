@@ -1,0 +1,149 @@
+import { describe, expect, it } from "vitest"
+import { checkMemberAction, checkSelfLeave } from "./member-guards"
+import type { MemberActionFacts } from "./member-guards"
+
+/**
+ * The member-management guard table, pressed without a database.
+ *
+ * Each guard exists because the alternative is a workspace that can be
+ * orphaned, a member who can strand themselves, or a pending invitee whose
+ * reserved seat gets treated as a joined member.
+ */
+
+function facts(overrides: Partial<MemberActionFacts>): MemberActionFacts {
+  return {
+    action: "change_role",
+    isOwner: false,
+    isSelf: false,
+    isPending: false,
+    currentRole: "member",
+    nextRole: "admin",
+    currentStatus: "active",
+    remainingManagers: 1,
+    ...overrides,
+  }
+}
+
+describe("checkMemberAction", () => {
+  it("allows a plain role change and a removal", () => {
+    expect(checkMemberAction(facts({}))).toBeNull()
+    expect(checkMemberAction(facts({ action: "remove" }))).toBeNull()
+  })
+
+  it("refuses every action against the owner", () => {
+    expect(checkMemberAction(facts({ isOwner: true }))?.code).toBe("owner")
+    expect(
+      checkMemberAction(facts({ isOwner: true, action: "remove" }))?.message
+    ).toBe("The workspace owner can't be removed.")
+    expect(
+      checkMemberAction(facts({ isOwner: true, action: "suspend" }))?.message
+    ).toBe("The workspace owner can't be suspended.")
+  })
+
+  it("refuses acting on yourself", () => {
+    expect(checkMemberAction(facts({ isSelf: true }))?.code).toBe("self")
+    expect(
+      checkMemberAction(facts({ isSelf: true, action: "remove" }))?.message
+    ).toContain("can't remove yourself")
+    expect(
+      checkMemberAction(facts({ isSelf: true, action: "suspend" }))?.message
+    ).toContain("can't suspend yourself")
+  })
+
+  it("refuses a pending seat, which must be revoked instead", () => {
+    expect(checkMemberAction(facts({ isPending: true }))?.code).toBe("pending")
+  })
+
+  it("records a no-op role change instead of re-deciding it", () => {
+    const rejection = checkMemberAction(
+      facts({ currentRole: "admin", nextRole: "admin" })
+    )
+    expect(rejection?.code).toBe("noop")
+    expect(rejection?.message).toBe("They already have the admin role.")
+  })
+
+  it("suspends an active member and refuses a second suspend", () => {
+    expect(checkMemberAction(facts({ action: "suspend" }))).toBeNull()
+    expect(
+      checkMemberAction(
+        facts({ action: "suspend", currentStatus: "suspended" })
+      )?.message
+    ).toBe("They're already suspended.")
+  })
+
+  it("unsuspends a suspended member and refuses a redundant unsuspend", () => {
+    expect(
+      checkMemberAction(
+        facts({ action: "unsuspend", currentStatus: "suspended" })
+      )
+    ).toBeNull()
+    expect(checkMemberAction(facts({ action: "unsuspend" }))?.message).toBe(
+      "They aren't suspended."
+    )
+  })
+
+  it("lets a suspended member be removed", () => {
+    expect(
+      checkMemberAction(facts({ action: "remove", currentStatus: "suspended" }))
+    ).toBeNull()
+  })
+
+  it("refuses a change that would leave nobody able to manage", () => {
+    const rejection = checkMemberAction(
+      facts({ action: "suspend", remainingManagers: 0 })
+    )
+    expect(rejection?.code).toBe("last_admin")
+  })
+
+  it("checks the owner and self before the last-admin count", () => {
+    // A guard's message has to name the reason the caller can act on.
+    expect(
+      checkMemberAction(facts({ isOwner: true, remainingManagers: 0 }))?.code
+    ).toBe("owner")
+    expect(
+      checkMemberAction(facts({ isSelf: true, remainingManagers: 0 }))?.code
+    ).toBe("self")
+  })
+})
+
+describe("checkSelfLeave", () => {
+  it("lets anyone who is not a manager leave", () => {
+    expect(
+      checkSelfLeave({
+        isManager: false,
+        isOwner: false,
+        remainingManagers: 0,
+      })
+    ).toBeNull()
+  })
+
+  it("lets a manager leave while another manager remains", () => {
+    expect(
+      checkSelfLeave({ isManager: true, isOwner: true, remainingManagers: 1 })
+    ).toBeNull()
+    expect(
+      checkSelfLeave({ isManager: true, isOwner: false, remainingManagers: 1 })
+    ).toBeNull()
+  })
+
+  it("tells an owner to promote someone before leaving", () => {
+    const rejection = checkSelfLeave({
+      isManager: true,
+      isOwner: true,
+      remainingManagers: 0,
+    })
+    expect(rejection?.code).toBe("last_admin")
+    expect(rejection?.message).toContain("Promote another admin")
+  })
+
+  it("tells the last admin to promote someone before leaving", () => {
+    const rejection = checkSelfLeave({
+      isManager: true,
+      isOwner: false,
+      remainingManagers: 0,
+    })
+    expect(rejection?.message).toBe(
+      "You're the last admin. Promote someone before leaving."
+    )
+  })
+})
