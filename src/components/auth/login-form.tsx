@@ -4,7 +4,6 @@ import { Loader2 } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
-import { Logo } from "@/components/logo"
 import { GoogleButton } from "@/components/auth/google-button"
 import { ResendVerification } from "@/components/auth/resend-verification"
 import {
@@ -70,20 +69,19 @@ export function LoginForm({ callbackURL }: { callbackURL?: string | null }) {
       noValidate
     >
       <FieldGroup>
-        <div className="flex flex-col items-center gap-2 text-center">
-          <Logo className="size-10 text-primary" />
-          <h1 className="text-2xl font-medium tracking-tighter">
-            Welcome back
+        <div className="flex flex-col gap-1.5 text-center">
+          <h1 className="text-[2rem] leading-[1.05] font-semibold tracking-[-0.05em]">
+            Welcome back.
           </h1>
-          <p className="text-sm tracking-tight text-balance text-muted-foreground">
-            Log in to pick up where your team left off.
+          <p className="font-display text-[1.75rem] leading-none italic">
+            Your work is waiting.
           </p>
         </div>
 
         {serverError && (
           <p
             role="alert"
-            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive"
           >
             {serverError}
           </p>
@@ -119,7 +117,11 @@ export function LoginForm({ callbackURL }: { callbackURL?: string | null }) {
         </Field>
 
         <Field>
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="h-11 rounded-xl text-[15px]"
+          >
             {isSubmitting && <Loader2 className="animate-spin" />}
             {isSubmitting ? "Logging in…" : "Log in"}
           </Button>
@@ -132,6 +134,7 @@ export function LoginForm({ callbackURL }: { callbackURL?: string | null }) {
             label="Continue with Google"
             callbackURL={callbackURL}
             onError={(message) => setServerError(message)}
+            className="h-11 rounded-xl text-[15px]"
           />
           <FieldDescription className="px-6 text-center">
             Don&apos;t have an account?{" "}

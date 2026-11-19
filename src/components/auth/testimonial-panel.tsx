@@ -3,10 +3,21 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { Logo } from "@/components/logo"
 import { testimonials } from "./testimonials"
+import { TestimonialBackdrop } from "./testimonial-backdrop"
+import type { AuthPanelVariant } from "./testimonial-backdrop"
 
 const ROTATE_MS = 6500
 
-export function TestimonialPanel() {
+/**
+ * The arrival surface for auth. One backdrop, one floating glass card: the
+ * surface carries the atmosphere, the card carries the proof. Signup swaps the
+ * photograph for the hero's sky mesh at its own angle; login keeps the photo.
+ */
+export function TestimonialPanel({
+  variant = "photo",
+}: {
+  variant?: AuthPanelVariant
+}) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
   const reduceMotion = useReducedMotion()
@@ -20,90 +31,77 @@ export function TestimonialPanel() {
     return () => clearInterval(id)
   }, [paused, reduceMotion])
 
-  const active = testimonials[index]!
+  const active = testimonials[index]
 
   return (
     <aside
-      className="relative hidden overflow-hidden bg-primary text-primary-foreground lg:block"
+      className={cn(
+        "relative hidden min-h-svh overflow-hidden lg:block",
+        variant === "photo" ? "bg-[#eee9e1]" : "bg-[#f0f9ff]"
+      )}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-roledescription="carousel"
       aria-label="Customer testimonials"
     >
-      {/* Backdrop layers: glow + grid + watermark, all token-derived. */}
-      <div
-        aria-hidden
-        className="absolute -top-32 -right-32 size-[28rem] rounded-full bg-primary-foreground/[0.07] blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="absolute -bottom-40 -left-24 size-[24rem] rounded-full bg-primary-foreground/[0.05] blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 [background-image:linear-gradient(to_right,var(--color-primary-foreground)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-primary-foreground)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_40%,black,transparent)] [background-size:2.5rem_2.5rem] opacity-[0.13]"
-      />
-      <div
-        aria-hidden
-        className="absolute -top-10 left-6 font-serif text-[16rem] leading-none text-primary-foreground/10 select-none"
-      >
-        &ldquo;
+      <TestimonialBackdrop variant={variant} />
+
+      <div className="absolute top-7 left-6 inline-flex items-center gap-2 rounded-full bg-black/55 px-3 py-2 text-white ring-1 ring-white/15 backdrop-blur-xl sm:left-10">
+        <Logo className="size-4 text-brand" />
+        <span className="text-sm font-semibold tracking-tight">Antara</span>
       </div>
 
-      <div className="absolute top-0 right-0 flex items-center gap-2 p-10 xl:p-14">
-        <Logo className="size-7" />
-        <span className="text-lg font-medium tracking-tight">Antara</span>
-      </div>
-
-      <div className="relative flex h-full flex-col justify-end p-10 xl:p-14">
-        <AnimatePresence mode="wait">
-          <motion.figure
-            key={index}
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
-            animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -24 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-          >
-            <div className="mb-6 flex items-center gap-3">
-              <span
-                aria-hidden
-                className="flex size-11 items-center justify-center rounded-full bg-primary-foreground/15 text-sm font-semibold tracking-wide text-primary-foreground ring-1 ring-white/20 ring-inset"
-              >
-                {active.initials}
-              </span>
-              <figcaption>
-                <div className="text-sm font-semibold">{active.name}</div>
-                <div className="text-xs text-primary-foreground/70">
-                  {active.role}, {active.studio}
+      <div className="relative flex h-full min-h-svh flex-col justify-end p-6 xl:p-10">
+        <div className="max-w-md rounded-[30px] bg-black/55 p-6 text-white ring-1 ring-white/15 backdrop-blur-2xl xl:p-8">
+          <AnimatePresence mode="wait">
+            <motion.figure
+              key={index}
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+            >
+              <blockquote className="text-[17px] leading-snug font-medium text-balance xl:text-lg">
+                &ldquo;{active.quote}&rdquo;
+              </blockquote>
+              <figcaption className="mt-5 flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="flex size-9 items-center justify-center rounded-full bg-white/15 text-[11px] font-semibold tracking-wide text-white ring-1 ring-white/20 ring-inset"
+                >
+                  {active.initials}
+                </span>
+                <div>
+                  <div className="text-sm font-semibold">{active.name}</div>
+                  <div className="text-xs text-white/60">
+                    {active.role}, {active.studio}
+                  </div>
                 </div>
               </figcaption>
-            </div>
-            <blockquote className="max-w-md text-lg leading-relaxed font-medium text-balance xl:text-xl">
-              &ldquo;{active.quote}&rdquo;
-            </blockquote>
-          </motion.figure>
-        </AnimatePresence>
+            </motion.figure>
+          </AnimatePresence>
 
-        <div
-          className="mt-8 flex items-center gap-2"
-          role="tablist"
-          aria-label="Testimonials"
-        >
-          {testimonials.map((t, i) => (
-            <button
-              key={t.name}
-              role="tab"
-              aria-selected={i === index}
-              aria-label={`Show testimonial from ${t.name}`}
-              onClick={() => setIndex(i)}
-              className={cn(
-                "h-1.5 rounded-full transition-all duration-300",
-                i === index
-                  ? "w-6 bg-primary-foreground"
-                  : "w-1.5 bg-primary-foreground/30 hover:bg-primary-foreground/50"
-              )}
-            />
-          ))}
+          <div
+            className="mt-6 flex items-center gap-2"
+            role="tablist"
+            aria-label="Testimonials"
+          >
+            {testimonials.map((t, i) => (
+              <button
+                key={t.name}
+                role="tab"
+                aria-selected={i === index}
+                aria-label={`Show testimonial from ${t.name}`}
+                onClick={() => setIndex(i)}
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300",
+                  i === index
+                    ? "w-6 bg-white"
+                    : "w-1.5 bg-white/30 hover:bg-white/50"
+                )}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </aside>

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 
 import HeroSection from "@/components/hero-section-2"
+import { SiteNotchNav } from "@/components/site-notch-nav"
 import FeaturesGrid from "@/components/features-3"
 import FeaturesHighlights from "@/components/features-4"
 import ContentSection from "@/components/content-2"
@@ -13,7 +14,7 @@ import Footer from "@/components/footer-2"
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Antara — One home for every creative project" },
+      { title: "Antara — Work finds its place" },
       {
         name: "description",
         content:
@@ -27,6 +28,7 @@ export const Route = createFileRoute("/")({
 function LandingPage() {
   return (
     <div className="bg-background min-h-svh">
+      <SiteNotchNav />
       <HeroSection />
       <FeaturesGrid />
       <FeaturesHighlights />

@@ -47,7 +47,7 @@ export default function LogoCloud() {
     <section className="bg-background">
       <div className="relative m-auto max-w-7xl **:fill-foreground lg:px-6">
         {isLarge ? (
-          <div className="relative flex items-center justify-between px-6 py-12">
+          <div className="relative hidden items-center justify-between px-6 py-12 lg:flex">
             <Logos />
           </div>
         ) : (

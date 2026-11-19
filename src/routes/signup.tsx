@@ -30,7 +30,7 @@ function SignupPage() {
   // redirect via callbackURL rather than a client-side one. So the only way a
   // session can appear here is `beforeLoad`, which already handled it.
   return (
-    <AuthLayout>
+    <AuthLayout panel="mesh">
       <SignupForm callbackURL={safeCallbackURL(callbackURL)} />
     </AuthLayout>
   )

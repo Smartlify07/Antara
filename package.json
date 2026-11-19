@@ -15,7 +15,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed:demo": "tsx src/db/seed-demo.ts"
+    "db:seed:demo": "tsx src/db/seed-demo.ts",
+    "db:seed:tour": "tsx scripts/seed-demo-tour.ts"
   },
   "dependencies": {
     "@animate-ui/react": "^2.0.0",

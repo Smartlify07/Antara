@@ -29,11 +29,13 @@ export function GoogleButton({
   label,
   callbackURL = "/dashboard",
   onError,
+  className,
 }: {
   label: string
   /** Post-auth landing page, mirroring email sign-in's callbackURL. */
   callbackURL?: string | null
   onError: (message: string) => void
+  className?: string
 }) {
   const [pending, setPending] = useState(false)
 
@@ -55,6 +57,7 @@ export function GoogleButton({
       variant="outline"
       onClick={handleClick}
       disabled={pending}
+      className={className}
     >
       <GoogleIcon />
       {pending ? "Redirecting…" : label}

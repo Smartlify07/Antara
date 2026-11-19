@@ -4,7 +4,6 @@ import { Loader2 } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
-import { Logo } from "@/components/logo"
 import { GoogleButton } from "@/components/auth/google-button"
 import { ResendVerification } from "@/components/auth/resend-verification"
 import {
@@ -80,19 +79,18 @@ export function SignupForm({ callbackURL }: { callbackURL?: string | null }) {
       noValidate
     >
       <FieldGroup>
-        <div className="flex flex-col items-center gap-2 text-center">
-          <Logo className="size-10 text-primary" />
-          <h1 className="font-sans text-2xl font-medium tracking-tighter">
-            Create your account
+        <div className="flex flex-col gap-1.5 text-center">
+          <h1 className="text-[2rem] leading-[1.05] font-semibold tracking-[-0.05em]">
+            Create your account.
           </h1>
-          <p className="text-sm tracking-tight text-balance text-muted-foreground">
-            Set up your Antara workspace in under a minute.
+          <p className="font-display text-[1.75rem] leading-none italic">
+            Start in one minute.
           </p>
         </div>
 
         {done ? (
           <>
-            <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm">
+            <p role="status" className="rounded-xl bg-muted px-3 py-2 text-sm">
               {SIGNUP_MESSAGE}
             </p>
             <ResendVerification defaultEmail={sentTo} hideInput />
@@ -112,7 +110,7 @@ export function SignupForm({ callbackURL }: { callbackURL?: string | null }) {
             {serverError && (
               <p
                 role="alert"
-                className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive"
               >
                 {serverError}
               </p>
@@ -172,7 +170,11 @@ export function SignupForm({ callbackURL }: { callbackURL?: string | null }) {
             </Field>
 
             <Field>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="h-11 rounded-xl text-[15px]"
+              >
                 {isSubmitting && <Loader2 className="animate-spin" />}
                 {isSubmitting ? "Creating account…" : "Create account"}
               </Button>
@@ -185,6 +187,7 @@ export function SignupForm({ callbackURL }: { callbackURL?: string | null }) {
                 label="Continue with Google"
                 callbackURL={callbackURL}
                 onError={(message) => setServerError(message)}
+                className="h-11 rounded-xl text-[15px]"
               />
               <FieldDescription className="px-6 text-center">
                 Already have an account?{" "}

@@ -1,13 +1,35 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/inter";
+
+/* Daylight Native: self-hosted display and machine voices. The sans is the
+   fact, the serif is the feeling, the mono is the metadata. */
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/instrument-serif-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fragment Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/fragment-mono-regular.woff2") format("woff2");
+}
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Bricolage Grotesque Variable", sans-serif;
+  --font-sans: "Inter Variable", Inter, sans-serif;
+  --font-display: "Instrument Serif", "Times New Roman", serif;
+  --font-mono: "Fragment Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,72 +71,79 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #f7f7f7;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #111111;
+  --primary-foreground: #fafafa;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #111111;
+  --muted: #f7f7f7;
+  --muted-foreground: #6b6b6b;
+  --accent: #f0f0f0;
+  --accent-foreground: #111111;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: #e3e3e3;
+  --input: #e3e3e3;
+  --ring: #0080ff;
+  --brand: #0080ff;
+  /* The landing hero ramps to this, and the mockup section starts from it.
+     Shared so the seam between the two sections cannot drift. */
+  --hero-lift: #f0f9ff;
+  --brand-foreground: #ffffff;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.875rem;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #111111;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f0f0f0;
+  --sidebar-accent-foreground: #111111;
+  --sidebar-border: #e3e3e3;
+  --sidebar-ring: #0080ff;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #161616;
+  --card-foreground: #fafafa;
+  --popover: #1a1a1a;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #111111;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #1f1f1f;
+  --muted-foreground: #a3a3a3;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+  --ring: #0a84ff;
+  --brand: #0a84ff;
+  --brand-foreground: #ffffff;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #0f0f0f;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #fafafa;
+  --sidebar-primary-foreground: #111111;
+  --sidebar-accent: #1f1f1f;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar-ring: #0a84ff;
 }
 
 /* View Transitions: name the sidebar and content so they cross-fade
@@ -181,9 +210,89 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background tracking-tight text-foreground;
+    @apply bg-background text-foreground;
+    letter-spacing: -0.011em;
   }
   html {
-    @apply font-sans;
+    @apply font-sans antialiased;
   }
+  ::selection {
+    background: var(--brand);
+    color: var(--brand-foreground);
+  }
+  /* The serif is a display voice only: large, italic, once per screen. */
+  .font-display {
+    font-feature-settings: "liga" 1;
+  }
+}
+
+/* ── MacBook notch ─────────────────────────────────────────────────────────
+   The notch is pinned to the top edge of the viewport for the whole page. Its
+   body is a plain block with rounded bottom corners; these two squares sit
+   outside its top corners and paint the notch colour *around* a quarter
+   circle. That inverse radius is what turns the junction from a hard step
+   into the machined fillet a real display has. Both read --notch-ink, so the body and the fillets can
+   never drift apart. */
+.notch-fillet {
+  --fillet: var(--notch-fillet, 16px);
+  position: absolute;
+  top: 0;
+  width: var(--fillet);
+  height: var(--fillet);
+  pointer-events: none;
+}
+
+.notch-fillet--left {
+  left: calc(var(--fillet) * -1);
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent calc(var(--fillet) - 0.5px),
+    var(--notch-ink, #0a0a0a) var(--fillet)
+  );
+}
+
+.notch-fillet--right {
+  right: calc(var(--fillet) * -1);
+  background: radial-gradient(
+    circle at 100% 100%,
+    transparent calc(var(--fillet) - 0.5px),
+    var(--notch-ink, #0a0a0a) var(--fillet)
+  );
+}
+
+/* -- Hero mesh + grain ----------------------------------------------------
+   Three sky colours, no dark stop: #38bdf8, #bae6fd, #f0f9ff. They are laid
+   down as overlapping radial fields over one diagonal base, so no two areas
+   meet at an edge. The grain film is load-bearing: a ramp this shallow bands
+   visibly on 8-bit displays, and the speckle is what dissolves the steps.
+   The bottom resolves to exactly #f0f9ff (= --hero-lift) at any aspect ratio,
+   so the mockup section below starts on the same pixel colour. */
+.hero-mesh {
+  background-color: var(--hero-lift);
+  background-image:
+    linear-gradient(180deg, rgb(240 249 255 / 0) 60%, #f0f9ff 100%),
+    radial-gradient(58% 50% at 30% 66%, #f0f9ff 0%, rgb(240 249 255 / 0) 76%),
+    radial-gradient(64% 58% at 88% 44%, #bae6fd 0%, rgb(186 230 253 / 0) 72%),
+    radial-gradient(52% 46% at 78% 4%, #38bdf8 0%, rgb(56 189 248 / 0) 68%),
+    radial-gradient(62% 54% at 6% 0%, #38bdf8 0%, rgb(56 189 248 / 0) 72%),
+    linear-gradient(
+      var(--mesh-angle, 145deg),
+      #38bdf8 0%,
+      #bae6fd 50%,
+      #f0f9ff 100%
+    );
+}
+
+/* The auth screen reuses the hero mesh as-is; only the base ramp's direction
+   changes, so the flow runs up-right (30deg) instead of down-right. Use
+   alongside `.hero-mesh` — it carries every layer; this only rotates it. */
+.auth-mesh {
+  --mesh-angle: 30deg;
+}
+
+.hero-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: overlay;
+  opacity: 0.75;
 }
